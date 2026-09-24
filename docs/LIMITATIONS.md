@@ -6,7 +6,7 @@ These are the places where the architecture has **no clean answer yet**, or wher
 **Problem.** Some payment screens are WebViews, use `FLAG_SECURE`, or draw their own UI. They may expose almost no accessibility nodes, so keyword and field checks see nothing.
 
 **Mitigation.**
-- A WebView-dominant or near-empty tree reached after the last taught step is classified `OPAQUE_UNKNOWN`, which fails closed.
+- A WebView that fills most of the screen but exposes 3 or fewer readable nodes, or a screen with no readable content and no loading spinner, is classified `OPAQUE_UNKNOWN`, which fails closed. As implemented in step 1, this applies to *every* screen, not only after the last taught step. That is stricter than the design, so an unreadable promo screen partway through a flow will stop the replay too.
 - Payment-gateway and bank packages are on a denylist.
 - Replay always ends at `Boundary(PAYMENT)`.
 
@@ -15,9 +15,15 @@ These are the places where the architecture has **no clean answer yet**, or wher
 ## L2. Cash-on-delivery commits without a payment screen (T11)
 **Problem.** If cash on delivery is preselected, tapping "Place order" places a real order, and no payment screen ever appears.
 
-**Mitigation.** COMMIT verbs are never tapped, even if one was demonstrated.
+**Mitigation.** COMMIT verbs are never tapped, even if one was demonstrated. The ActionRiskClassifier puts a button in one of two groups:
 
-**Still open.** The verb list only covers English and Hindi, and wording differs between apps.
+- **Always blocked:** pay buttons ("Pay", "Pay ₹349", "Pay now"), "Place order", "Confirm order", "Confirm & pay", "Buy now", and slide-to-pay controls. Tapping one of these trips a hand-off.
+- **Allowed, flagged as moving toward payment:** "Proceed to pay", "Checkout", "Proceed to buy", "Continue to payment". The screen that follows is then checked.
+
+**Still open.**
+- The verb list only covers English and Hindi, and wording differs between apps.
+- Some apps use a commit verb for a button that only navigates. Myntra's bag button "PLACE ORDER" opens address selection, and Amazon's "Buy Now" opens checkout. Flows through those buttons end with a hand-off at the button, which is safe but earlier than the real payment screen.
+- If an app's "Proceed to pay" charged a saved method directly, the only protection would be the next screen's check. UPI PIN, OTP and CVV prompts all trip.
 
 ## L3. Item-dependent flow shape (T4)
 **Problem.** Different items can lead through different screens. For example, Margherita may open a customization sheet while garlic bread doesn't, or opens a different one.
@@ -95,3 +101,18 @@ These are the places where the architecture has **no clean answer yet**, or wher
 **Problem.** `SpeechRecognizer` does not support always-on listening.
 
 **Mitigation.** Voice input is push-to-talk, using the overlay bubble. There is no wake word.
+
+## L13. False hand-offs from payment and offer text (T2–T9)
+**Problem.** Menu, product and home pages mention payment methods in offers ("10% off with HDFC Credit Card", "Amazon Pay", "Pay on Delivery").
+
+**Mitigation.**
+- Strong payment phrases only count in short labels (6 tokens or fewer).
+- Medium ones (UPI, Cards, Wallets…) only count in labels of 4 tokens or fewer, and 3 distinct ones are needed.
+- Unit tests cover typical menu, product, wallet-widget and bag pages.
+
+**Still open.** A page with several short payment-method tiles, such as a wallet-heavy home page, could still stop a replay early. Real dumps will show this ([SAFETY_FIXTURES.md](SAFETY_FIXTURES.md)).
+
+## L14. Guard is always watching (build step 1)
+**Problem.** In step 1 the SafetyGuard watches every screen, not just the screens during a replay. So when the user visits a payment screen by hand, it trips and stays tripped until someone taps **Re-arm** on a safe screen.
+
+**Mitigation.** In step 1 this is only visible in the monitor. The ReplayEngine (build step 3) must arm the guard when a run starts and check it before every step.

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EchoFlow</string>
+    <string name="accessibility_service_label">EchoFlow automation</string>
+    <string name="accessibility_service_description">EchoFlow reads the screen and performs taps to replay flows you teach it by voice. It stops and hands control back to you on any payment, OTP, password or login screen, and never records what you type into those fields.</string>
+</resources>

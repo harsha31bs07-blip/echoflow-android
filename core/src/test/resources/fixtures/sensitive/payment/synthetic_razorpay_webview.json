@@ -1,0 +1,14 @@
+{
+  "id": 101,
+  "timestampMs": 0,
+  "packageName": "in.swiggy.android",
+  "windows": [{ "id": 1, "type": "APPLICATION", "packageName": "in.swiggy.android", "bounds": { "left": 0, "top": 0, "right": 1080, "bottom": 2400 } }],
+  "elements": [
+    { "index": 0, "windowId": 1, "className": "android.webkit.WebView", "bounds": { "left": 0, "top": 200, "right": 1080, "bottom": 2400 } },
+    { "index": 1, "parent": 0, "windowId": 1, "className": "android.view.View", "text": "Cards, UPI & More", "bounds": { "left": 0, "top": 200, "right": 1080, "bottom": 300 } },
+    { "index": 2, "parent": 0, "windowId": 1, "className": "android.view.View", "text": "UPI", "clickable": true, "bounds": { "left": 0, "top": 300, "right": 1080, "bottom": 400 } },
+    { "index": 3, "parent": 0, "windowId": 1, "className": "android.view.View", "text": "Card", "clickable": true, "bounds": { "left": 0, "top": 400, "right": 1080, "bottom": 500 } },
+    { "index": 4, "parent": 0, "windowId": 1, "className": "android.view.View", "text": "Netbanking", "clickable": true, "bounds": { "left": 0, "top": 500, "right": 1080, "bottom": 600 } },
+    { "index": 5, "parent": 0, "windowId": 1, "className": "android.view.View", "text": "Wallet", "clickable": true, "bounds": { "left": 0, "top": 600, "right": 1080, "bottom": 700 } }
+  ]
+}

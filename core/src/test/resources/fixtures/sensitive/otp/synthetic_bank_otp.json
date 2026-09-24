@@ -1,0 +1,10 @@
+{
+  "id": 102,
+  "timestampMs": 0,
+  "packageName": "in.amazon.mShop.android.shopping",
+  "elements": [
+    { "index": 0, "className": "android.widget.TextView", "text": "Enter the 6-digit OTP sent to your registered mobile number ending ####" },
+    { "index": 1, "className": "android.widget.EditText", "editable": true, "inputType": 2, "maxTextLength": 6 },
+    { "index": 2, "className": "android.widget.Button", "text": "Submit", "clickable": true }
+  ]
+}

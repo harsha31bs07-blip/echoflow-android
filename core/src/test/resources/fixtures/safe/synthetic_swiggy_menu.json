@@ -1,0 +1,13 @@
+{
+  "id": 103,
+  "timestampMs": 0,
+  "packageName": "in.swiggy.android",
+  "elements": [
+    { "index": 0, "className": "android.widget.EditText", "editable": true, "hintText": "Search for dishes" },
+    { "index": 1, "className": "android.widget.TextView", "text": "Deals for you" },
+    { "index": 2, "className": "android.widget.TextView", "text": "Flat ₹75 off with Paytm UPI on orders above ₹349" },
+    { "index": 3, "className": "android.widget.TextView", "text": "Margherita Pizza" },
+    { "index": 4, "className": "android.widget.TextView", "text": "₹199" },
+    { "index": 5, "className": "android.widget.Button", "text": "ADD", "clickable": true }
+  ]
+}

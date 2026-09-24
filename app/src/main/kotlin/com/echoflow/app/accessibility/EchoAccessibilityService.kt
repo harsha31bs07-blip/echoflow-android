@@ -15,6 +15,7 @@ import com.echoflow.app.monitor.SnapshotExporter
 import com.echoflow.core.bus.EchoEvent
 import com.echoflow.core.gateway.ActionGateway
 import com.echoflow.core.safety.ResumeResult
+import com.echoflow.core.safety.ScreenVerdict
 import com.echoflow.core.safety.SensitiveKind
 import com.echoflow.core.safety.Trip
 
@@ -33,13 +34,15 @@ class EchoAccessibilityService : AccessibilityService() {
     @Volatile private var lastActivity: String? = null
     private var pendingSince = 0L
     private var emptyRetries = 0
+    private var recheckStage = 0
 
     // Main-thread state for announcements.
     private var lastAnnouncedKind: SensitiveKind? = null
     private var hasAnnounced = false
     @Volatile private var pendingHandOff: Trip? = null
 
-    private val captureRunnable = Runnable { captureNow() }
+    private val captureRunnable = Runnable { captureNow("event") }
+    private val recheckRunnable = Runnable { captureNow("recheck") }
     private val tripListener: (Trip) -> Unit = { trip ->
         pendingHandOff = trip
         EchoRuntime.bus.emit(EchoEvent.SafetyTripped(trip))
@@ -99,20 +102,42 @@ class EchoAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun captureNow() {
-        pendingSince = 0L
-        val live = capturer.capture(lastActivity)
+    private fun captureNow(trigger: String) {
+        if (trigger == "event") pendingSince = 0L
+        val live = capturer.capture(lastActivity, trigger)
         if (live == null) {
             if (emptyRetries++ < EMPTY_RETRIES) captureHandler.postDelayed(captureRunnable, EMPTY_RETRY_MS)
             return
         }
         emptyRetries = 0
+        process(live)
+        scheduleRecheckIfUnreadable(live, trigger)
+    }
+
+    /**
+     * Some apps (Lynx/Compose/React Native screens) render content without firing accessibility
+     * events, so the last event-driven capture can be an empty shell. Re-capture a screen with
+     * nothing readable a few times before believing it.
+     */
+    private fun scheduleRecheckIfUnreadable(live: LiveSnapshot, trigger: String) {
+        captureHandler.removeCallbacks(recheckRunnable)
+        if (trigger == "event") recheckStage = 0
+        val readable = live.snapshot.diagnostics?.labeledNodes ?: return
+        if (readable > 0) {
+            recheckStage = 0
+        } else if (recheckStage < RECHECK_DELAYS_MS.size) {
+            captureHandler.postDelayed(recheckRunnable, RECHECK_DELAYS_MS[recheckStage++])
+        }
+    }
+
+    /** Publishes a capture, runs the guard on it, and updates the overlay and voice. Capture thread. */
+    private fun process(live: LiveSnapshot): ScreenVerdict {
         EchoRuntime.snapshots.publish(live)
         val verdict = EchoRuntime.guard.onSnapshot(live.snapshot)
         EchoRuntime.bus.emit(EchoEvent.SnapshotUpdated(live.snapshot, verdict))
 
         mainHandler.post {
-            overlay?.render(live.snapshot.packageName, verdict, EchoRuntime.guard.currentState)
+            overlay?.render(live.snapshot, verdict, EchoRuntime.guard.currentState)
             val handOff = pendingHandOff
             pendingHandOff = null
             if (!EchoRuntime.prefs.monitorEnabled || !EchoRuntime.prefs.speakEnabled) return@post
@@ -124,6 +149,7 @@ class EchoAccessibilityService : AccessibilityService() {
             hasAnnounced = true
             lastAnnouncedKind = verdict.primaryKind
         }
+        return verdict
     }
 
     private fun applyPrefs() {
@@ -131,26 +157,38 @@ class EchoAccessibilityService : AccessibilityService() {
             val o = overlay ?: SafetyMonitorOverlay(this, ::dumpCurrent, ::rearm) { EchoRuntime.prefs.monitorEnabled = false }
                 .also { overlay = it }
             o.show()
-            o.render(EchoRuntime.snapshots.current()?.packageName, EchoRuntime.guard.lastVerdict, EchoRuntime.guard.currentState)
+            o.render(EchoRuntime.snapshots.current(), EchoRuntime.guard.lastVerdict, EchoRuntime.guard.currentState)
         } else {
             overlay?.hide()
             overlay = null
         }
     }
 
-    /** Monitor "Dump" button: saves a redacted snapshot of the current screen as a test fixture. */
+    /**
+     * Monitor "Dump" button: captures the screen fresh (a few tries, keeping the most readable one)
+     * rather than trusting the last event-driven capture, then saves it redacted as a test fixture.
+     */
     private fun dumpCurrent() {
         captureHandler.post {
-            val snapshot = EchoRuntime.snapshots.current()
-            val message = if (snapshot == null) {
-                "No screen captured yet"
+            var best: LiveSnapshot? = null
+            repeat(DUMP_ATTEMPTS) { attempt ->
+                if (attempt > 0) Thread.sleep(DUMP_ATTEMPT_GAP_MS)
+                val live = capturer.capture(lastActivity, "dump") ?: return@repeat
+                if (best == null || readable(live) > readable(best!!)) best = live
+            }
+            val chosen = best
+            val message = if (chosen == null) {
+                "Nothing to capture on this screen"
             } else {
-                runCatching { "Saved ${SnapshotExporter.export(this, snapshot, EchoRuntime.guard.classify(snapshot))}" }
+                val verdict = process(chosen)
+                runCatching { "Saved ${SnapshotExporter.export(this, chosen.snapshot, verdict)}" }
                     .getOrElse { "Dump failed: ${it.message}" }
             }
             mainHandler.post { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
         }
     }
+
+    private fun readable(live: LiveSnapshot): Int = live.snapshot.diagnostics?.labeledNodes ?: 0
 
     /** Monitor "Re-arm" button: the same rule as saying "continue" — only works on a safe screen. */
     private fun rearm() {
@@ -162,7 +200,7 @@ class EchoAccessibilityService : AccessibilityService() {
             is ResumeResult.StillSensitive -> "Still ${r.verdict.primaryKind?.spoken ?: "sensitive"} — leave this screen first"
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        overlay?.render(snapshot.packageName, EchoRuntime.guard.lastVerdict, EchoRuntime.guard.currentState)
+        overlay?.render(snapshot, EchoRuntime.guard.lastVerdict, EchoRuntime.guard.currentState)
     }
 
     private companion object {
@@ -170,5 +208,8 @@ class EchoAccessibilityService : AccessibilityService() {
         const val MAX_LATENCY_MS = 1_000L
         const val EMPTY_RETRIES = 3
         const val EMPTY_RETRY_MS = 150L
+        val RECHECK_DELAYS_MS = longArrayOf(500L, 500L, 1_000L) // re-capture at ~0.5 s, 1 s, 2 s
+        const val DUMP_ATTEMPTS = 3
+        const val DUMP_ATTEMPT_GAP_MS = 400L
     }
 }

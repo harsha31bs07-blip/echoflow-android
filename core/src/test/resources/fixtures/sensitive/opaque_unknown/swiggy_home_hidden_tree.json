@@ -1,0 +1,145 @@
+{
+    "id": 37,
+    "timestampMs": 1790273568948,
+    "packageName": "in.swiggy.android",
+    "activityName": "in.swiggy.android.activities.HomeActivity",
+    "screenHeight": 2340,
+    "windows": [
+        {
+            "id": 465,
+            "type": "ACCESSIBILITY_OVERLAY",
+            "packageName": "com.echoflow",
+            "bounds": {
+                "left": 0,
+                "top": 92,
+                "right": 1080,
+                "bottom": 428
+            },
+            "layer": 3
+        },
+        {
+            "id": 453,
+            "type": "SYSTEM",
+            "packageName": "com.sec.android.app.launcher",
+            "bounds": {
+                "left": 1033,
+                "top": 312,
+                "right": 1080,
+                "bottom": 637
+            },
+            "layer": 2
+        },
+        {
+            "id": 451,
+            "type": "SYSTEM",
+            "packageName": "com.android.systemui",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 92
+            },
+            "layer": 1
+        },
+        {
+            "id": 470,
+            "type": "APPLICATION",
+            "packageName": "in.swiggy.android",
+            "title": "Swiggy",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            },
+            "isActive": true,
+            "isFocused": true
+        }
+    ],
+    "elements": [
+        {
+            "index": 0,
+            "windowId": 470,
+            "className": "android.widget.FrameLayout",
+            "packageName": "in.swiggy.android",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        },
+        {
+            "index": 1,
+            "parent": 0,
+            "windowId": 470,
+            "depth": 1,
+            "className": "android.widget.LinearLayout",
+            "packageName": "in.swiggy.android",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        },
+        {
+            "index": 2,
+            "parent": 1,
+            "windowId": 470,
+            "depth": 2,
+            "className": "android.widget.FrameLayout",
+            "packageName": "in.swiggy.android",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        },
+        {
+            "index": 3,
+            "parent": 2,
+            "windowId": 470,
+            "depth": 3,
+            "className": "android.widget.LinearLayout",
+            "packageName": "in.swiggy.android",
+            "viewId": "in.swiggy.android:id/action_bar_root",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        },
+        {
+            "index": 4,
+            "parent": 3,
+            "windowId": 470,
+            "depth": 4,
+            "className": "android.widget.FrameLayout",
+            "packageName": "in.swiggy.android",
+            "viewId": "android:id/content",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        },
+        {
+            "index": 5,
+            "parent": 4,
+            "windowId": 470,
+            "depth": 5,
+            "className": "android.widget.FrameLayout",
+            "packageName": "in.swiggy.android",
+            "bounds": {
+                "left": 0,
+                "top": 0,
+                "right": 1080,
+                "bottom": 2340
+            }
+        }
+    ]
+}

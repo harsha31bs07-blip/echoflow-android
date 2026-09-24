@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.echoflow.core.model.Bounds
+import com.echoflow.core.model.CaptureDiagnostics
 import com.echoflow.core.model.ScreenSnapshot
 import com.echoflow.core.model.UiElement
 import com.echoflow.core.model.WindowInfo
@@ -20,11 +21,22 @@ class SnapshotCapturer(private val service: AccessibilityService) {
     private val ownPackage = service.packageName
     private val nextId = AtomicLong(1)
 
-    /** Returns null when no application window content is available yet (transient during transitions). */
-    fun capture(activityName: String?): LiveSnapshot? {
+    /** Per-capture counters for [CaptureDiagnostics]. */
+    private class Stats {
+        var withheld = 0
+        val withheldAt = ArrayList<String>()
+        var truncated = false
+    }
+
+    /**
+     * Returns null when no application window content is available yet (transient during transitions).
+     * [trigger] is recorded in the diagnostics: "event", "recheck" or "dump".
+     */
+    fun capture(activityName: String?, trigger: String = "event"): LiveSnapshot? {
         val elements = ArrayList<UiElement>()
         val nodes = ArrayList<AccessibilityNodeInfo>()
         val windowInfos = ArrayList<WindowInfo>()
+        val stats = Stats()
         var topPackage: String? = null
 
         val windows = runCatching { service.windows }.getOrDefault(emptyList()).sortedByDescending { it.layer }
@@ -39,13 +51,13 @@ class SnapshotCapturer(private val service: AccessibilityService) {
             )
             if (type != WindowType.APPLICATION || root == null || pkg == ownPackage) continue
             if (topPackage == null) topPackage = pkg
-            walk(root, window.id, elements, nodes)
+            walk(root, window.id, elements, nodes, stats)
         }
 
         if (windows.isEmpty()) {
             service.rootInActiveWindow?.takeIf { it.packageName?.toString() != ownPackage }?.let { root ->
                 topPackage = root.packageName?.toString()
-                walk(root, root.windowId, elements, nodes)
+                walk(root, root.windowId, elements, nodes, stats)
             }
         }
         if (elements.isEmpty()) return null
@@ -60,23 +72,52 @@ class SnapshotCapturer(private val service: AccessibilityService) {
             screenHeight = metrics.heightPixels,
             windows = windowInfos,
             elements = elements,
+            diagnostics = CaptureDiagnostics(
+                totalNodes = elements.size,
+                labeledNodes = elements.count { it.visible && it.label != null },
+                withheldChildren = stats.withheld,
+                withheldAt = stats.withheldAt,
+                truncated = stats.truncated,
+                trigger = trigger,
+            ),
         )
         return LiveSnapshot(snapshot, nodes)
     }
 
-    private fun walk(root: AccessibilityNodeInfo, windowId: Int, elements: MutableList<UiElement>, nodes: MutableList<AccessibilityNodeInfo>) {
+    private fun walk(
+        root: AccessibilityNodeInfo,
+        windowId: Int,
+        elements: MutableList<UiElement>,
+        nodes: MutableList<AccessibilityNodeInfo>,
+        stats: Stats,
+    ) {
         data class Frame(val node: AccessibilityNodeInfo, val parent: Int, val depth: Int)
 
         val stack = ArrayDeque<Frame>()
         stack.addLast(Frame(root, -1, 0))
-        while (stack.isNotEmpty() && elements.size < MAX_NODES) {
+        while (stack.isNotEmpty()) {
+            if (elements.size >= MAX_NODES) {
+                stats.truncated = true
+                break
+            }
             val (node, parent, depth) = stack.removeLast()
             val index = elements.size
             elements += toElement(node, index, parent, windowId, depth)
             nodes += node
-            if (depth >= MAX_DEPTH) continue
+            if (depth >= MAX_DEPTH) {
+                if (node.childCount > 0) stats.truncated = true
+                continue
+            }
+            var missing = 0
             for (i in node.childCount - 1 downTo 0) {
-                node.getChild(i)?.let { stack.addLast(Frame(it, index, depth + 1)) }
+                val child = node.getChild(i)
+                if (child == null) missing++ else stack.addLast(Frame(child, index, depth + 1))
+            }
+            if (missing > 0) {
+                stats.withheld += missing
+                if (stats.withheldAt.size < 10) {
+                    stats.withheldAt += node.viewIdResourceName ?: node.className?.toString() ?: "?"
+                }
             }
         }
     }

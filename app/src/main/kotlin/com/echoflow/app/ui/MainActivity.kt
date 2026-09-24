@@ -118,7 +118,9 @@ class MainActivity : Activity() {
             GuardState.Armed -> "armed"
             is GuardState.Tripped -> "handed off (${state.trip.kind})"
         }
-        lastScreen.text = "Last screen: ${EchoRuntime.snapshots.current()?.packageName ?: "—"}\n" +
+        val snapshot = EchoRuntime.snapshots.current()
+        lastScreen.text = "Last screen: ${snapshot?.packageName ?: "—"}\n" +
+            "Capture: ${snapshot?.diagnostics?.summary() ?: "—"}\n" +
             "Verdict: ${verdict?.summary() ?: "—"}\nGuard: $guard"
     }
 }

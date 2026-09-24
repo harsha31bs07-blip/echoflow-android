@@ -67,6 +67,27 @@ data class UiElement(
     val simpleClassName: String get() = className.substringAfterLast('.')
 }
 
+/**
+ * How complete a capture was. Lets us tell "the app hides its UI from accessibility services"
+ * (children reported but withheld, or nothing readable) apart from a capture bug.
+ */
+@Serializable
+data class CaptureDiagnostics(
+    val totalNodes: Int,
+    val labeledNodes: Int,
+    /** Children a node reported via childCount that came back null from getChild(). */
+    val withheldChildren: Int = 0,
+    /** View ids (or class names) of up to 10 nodes that withheld children. */
+    val withheldAt: List<String> = emptyList(),
+    /** Capture stopped at the node or depth cap. */
+    val truncated: Boolean = false,
+    /** What caused this capture: "event", "recheck" or "dump". */
+    val trigger: String = "event",
+) {
+    fun summary(): String = "$totalNodes nodes · $labeledNodes readable · $withheldChildren withheld" +
+        if (truncated) " · truncated" else ""
+}
+
 @Serializable
 data class ScreenSnapshot(
     val id: Long,
@@ -78,6 +99,7 @@ data class ScreenSnapshot(
     val screenHeight: Int = 2400,
     val windows: List<WindowInfo> = emptyList(),
     val elements: List<UiElement> = emptyList(),
+    val diagnostics: CaptureDiagnostics? = null,
     val schemaVersion: Int = SCHEMA_VERSION,
 ) {
     val screenArea: Long get() = screenWidth.toLong() * screenHeight.toLong()

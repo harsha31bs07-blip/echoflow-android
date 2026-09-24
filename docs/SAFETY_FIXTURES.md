@@ -2,6 +2,19 @@
 
 SafetyGuard (`core/src/main/kotlin/com/echoflow/core/safety/`) decides locally when automation must stop and hand control to the user. Its rules are heuristics, so each target app has to be checked against them before any flow is taught on it. This matters most for T11, the test that costs −10 if it fails.
 
+## 0. Control check: can EchoFlow read the screen at all?
+
+Open **Settings** with the monitor on. The strip should be green, and its diagnostics line should look like `184 nodes · 62 readable · 0 withheld`.
+
+For every app, read that line first:
+
+| Diagnostics line | Meaning |
+|---|---|
+| `readable` > 0 | EchoFlow can see the app, so the colour means something. Go on to step 1. |
+| `0 readable`, `0 withheld`, few nodes | The screen is still loading, or the app draws its UI without accessibility nodes. Wait 2 s; the monitor re-checks by itself. |
+| `0 readable`, `withheld` > 0 | The app hides its UI from EchoFlow. Dump it and report it: that app can't be a target app (LIMITATIONS L15). |
+| `0 readable` in Settings too | Capture is broken. Dump it and report it. |
+
 ## 1. Walk every sensitive screen with the monitor on
 
 Install the app, enable the accessibility service, and turn on **Safety monitor overlay**. Then, for **each target app**, work through this checklist:
@@ -23,7 +36,7 @@ Install the app, enable the accessibility service, and turn on **Safety monitor 
 
 ## 2. Dump each screen as a fixture
 
-Tap **Dump** on every screen in the checklist, and especially on any screen where the overlay was wrong. Each dump goes to `Download/EchoFlow/snap_<time>_<app>_<verdict>.json`.
+Tap **Dump** on every screen in the checklist, and especially on any screen where the overlay was wrong. Dump captures the screen fresh, trying up to 3 times over about 1 s and keeping the most readable result. Each dump goes to `Download/EchoFlow/snap_<time>_<app>_<verdict>.json` and includes the capture diagnostics.
 
 Before a dump is written, it is **redacted**:
 - anything typed into a field is dropped;

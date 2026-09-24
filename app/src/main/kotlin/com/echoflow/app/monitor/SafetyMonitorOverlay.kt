@@ -10,6 +10,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.echoflow.core.model.ScreenSnapshot
 import com.echoflow.core.safety.GuardState
 import com.echoflow.core.safety.ScreenVerdict
 import com.echoflow.core.safety.SensitiveKind
@@ -29,6 +30,7 @@ class SafetyMonitorOverlay(
     private var root: LinearLayout? = null
     private lateinit var title: TextView
     private lateinit var detail: TextView
+    private lateinit var diagnosticsLine: TextView
     private lateinit var guardLine: TextView
     private var atTop = true
 
@@ -39,6 +41,7 @@ class SafetyMonitorOverlay(
         title = TextView(service).apply { setTextColor(Color.WHITE); textSize = 15f }
         detail = TextView(service).apply { setTextColor(Color.WHITE); textSize = 11f; maxLines = 3 }
         guardLine = TextView(service).apply { setTextColor(Color.WHITE); textSize = 11f }
+        diagnosticsLine = TextView(service).apply { setTextColor(Color.WHITE); textSize = 11f }
         val buttons = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(smallButton("Dump") { onDump() })
@@ -52,6 +55,7 @@ class SafetyMonitorOverlay(
             setBackgroundColor(SAFE_BG)
             addView(title)
             addView(detail)
+            addView(diagnosticsLine)
             addView(guardLine)
             addView(buttons)
         }
@@ -63,8 +67,9 @@ class SafetyMonitorOverlay(
         root = null
     }
 
-    fun render(packageName: String?, verdict: ScreenVerdict?, guardState: GuardState) {
+    fun render(snapshot: ScreenSnapshot?, verdict: ScreenVerdict?, guardState: GuardState) {
         val r = root ?: return
+        val packageName = snapshot?.packageName
         val kind = verdict?.primaryKind
         title.text = when {
             verdict == null -> "Waiting for a screen…"
@@ -73,6 +78,8 @@ class SafetyMonitorOverlay(
         }
         detail.text = verdict?.takeIf { it.isSensitive }?.summary() ?: ""
         detail.visibility = if (detail.text.isNullOrEmpty()) View.GONE else View.VISIBLE
+        // Always visible: "0 readable" with withheld children means the app hides its UI from us.
+        diagnosticsLine.text = snapshot?.diagnostics?.summary() ?: ""
         guardLine.text = when (guardState) {
             GuardState.Armed -> "Guard: armed"
             is GuardState.Tripped -> "Guard: HANDED OFF (${guardState.trip.kind}) — leave this screen, then Re-arm"

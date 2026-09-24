@@ -116,3 +116,18 @@ These are the places where the architecture has **no clean answer yet**, or wher
 **Problem.** In step 1 the SafetyGuard watches every screen, not just the screens during a replay. So when the user visits a payment screen by hand, it trips and stays tripped until someone taps **Re-arm** on a safe screen.
 
 **Mitigation.** In step 1 this is only visible in the monitor. The ReplayEngine (build step 3) must arm the guard when a run starts and check it before every step.
+
+## L15. Apps that hide their UI from accessibility services
+**Observed (validation round 1, Samsung phone).** Every Swiggy screen (home, menu, cart) exposed only 6–19 empty layout containers below `android:id/content`: no text, no buttons. SafetyGuard correctly failed closed (`OPAQUE_UNKNOWN`, see the fixtures in `fixtures/sensitive/opaque_unknown/`), but no flow could be taught or replayed on Swiggy in that state.
+
+**Possible causes.**
+1. On Android 14+, the app marks views `accessibilityDataSensitive`, which hides them from services that don't declare `isAccessibilityTool`.
+2. Content that renders without firing accessibility events (Lynx, Compose, React Native), so the last capture is an empty shell.
+3. The app draws its UI without accessibility nodes, or detects accessibility services and hides.
+
+**Mitigation.**
+- The service declares `android:isAccessibilityTool="true"`. EchoFlow is a voice-control tool, in the same category as Google's Voice Access. The declaration only matters for Play Store review, not for a sideloaded APK.
+- Unreadable screens are re-captured at about 0.5 s, 1 s and 2 s without waiting for events, and Dump always captures fresh.
+- The overlay shows `N nodes · M readable · K withheld` for every screen, so a hidden app is visible immediately.
+
+**Still open.** If an app is still unreadable with these changes, it can't be a target app. Flow 1 then moves to another food app (Zomato first), and the README's target list gets updated.

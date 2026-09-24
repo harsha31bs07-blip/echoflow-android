@@ -1,5 +1,6 @@
 package com.echoflow.core.safety
 
+import com.echoflow.core.model.CaptureDiagnostics
 import com.echoflow.core.model.SnapshotJson
 import com.echoflow.core.testing.screen
 import kotlin.test.Test
@@ -39,5 +40,8 @@ class RedactorTest {
     @Test fun `snapshot JSON round-trips`() {
         val s = screen { text("Hello"); edit(hint = "Search") }
         assertEquals(s, SnapshotJson.decode(SnapshotJson.encode(s)))
+        val withDiagnostics = s.copy(diagnostics = CaptureDiagnostics(6, 0, withheldChildren = 3, withheldAt = listOf("android:id/content"), trigger = "dump"))
+        assertEquals(withDiagnostics, SnapshotJson.decode(SnapshotJson.encode(withDiagnostics)))
+        assertEquals("6 nodes · 0 readable · 3 withheld", withDiagnostics.diagnostics?.summary())
     }
 }

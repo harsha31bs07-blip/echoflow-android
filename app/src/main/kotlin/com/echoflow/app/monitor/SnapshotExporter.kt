@@ -22,7 +22,7 @@ object SnapshotExporter {
     fun export(context: Context, snapshot: ScreenSnapshot, verdict: ScreenVerdict): String {
         val json = SnapshotJson.encode(Redactor.redact(snapshot))
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(snapshot.timestampMs))
-        val app = snapshot.packageName?.substringAfterLast('.') ?: "unknown"
+        val app = appSlug(snapshot.packageName)
         val kind = verdict.primaryKind?.name?.lowercase() ?: "safe"
         val name = "snap_${stamp}_${app}_$kind.json"
 
@@ -41,5 +41,17 @@ object SnapshotExporter {
         values.put(MediaStore.MediaColumns.IS_PENDING, 0)
         resolver.update(uri, values, null, null)
         return "${Environment.DIRECTORY_DOWNLOADS}/$FOLDER/$name"
+    }
+
+    private val genericSegments = setOf(
+        "com", "in", "org", "net", "co", "io", "android", "app", "apps", "application", "mobile", "google",
+    )
+
+    /** "in.swiggy.android" -> "swiggy", "com.application.zomato" -> "zomato", "in.amazon.mShop.android.shopping" -> "amazon". */
+    internal fun appSlug(packageName: String?): String {
+        val segments = packageName?.split('.')?.filter { it.isNotBlank() }.orEmpty()
+        return segments.firstOrNull { it.lowercase() !in genericSegments }?.lowercase()
+            ?: segments.lastOrNull()?.lowercase()
+            ?: "unknown"
     }
 }

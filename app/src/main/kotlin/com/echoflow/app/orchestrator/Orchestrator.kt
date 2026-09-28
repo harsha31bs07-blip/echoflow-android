@@ -59,6 +59,9 @@ class Orchestrator(context: Context) {
     val flows = FlowStore(app)
     val runs = RunStore(app)
 
+    /** Replay memory, e.g. the delivery address picked last time per app. */
+    val memory: android.content.SharedPreferences = app.getSharedPreferences("echoflow_memory", Context.MODE_PRIVATE)
+
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> get() = _state
 
@@ -325,6 +328,7 @@ class Orchestrator(context: Context) {
 
     suspend fun askUser(question: String, choices: List<String> = emptyList()): String? = withContext(Dispatchers.Main) {
         val previous = _state.value
+        Log.i(TAG, "ask: $question | choices=$choices")
         _state.value = previous.copy(mode = Mode.ASKING, question = question, choices = choices, status = question)
         val deferred = kotlinx.coroutines.CompletableDeferred<String?>()
         typedAnswer = deferred
@@ -347,6 +351,7 @@ class Orchestrator(context: Context) {
     private suspend fun listen(): String? = voice?.listen()
 
     suspend fun say(text: String) {
+        Log.i(TAG, "say: $text")
         status(text)
         voice?.speak(text)
     }

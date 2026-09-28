@@ -37,6 +37,10 @@ interface ReplayHost {
 
     fun progress(step: Int, total: Int, description: String) {}
 
+    /** Small persistent memory (e.g. the delivery address chosen last time, per app). */
+    fun recall(key: String): String? = null
+    fun remember(key: String, value: String) {}
+
     fun nowMs(): Long = System.currentTimeMillis()
 }
 
@@ -68,9 +72,13 @@ class ReplayEngine(
     /** Field typed into most recently, for "press enter" when results don't appear. */
     private var lastTyped: ElementDescriptor? = null
 
+    /** The address sheet is answered at most once per run. */
+    private var addressHandled = false
+
     suspend fun run(flow: Flow, slotValues: Map<String, String>): ReplayResult {
         events.clear()
         lastTyped = null
+        addressHandled = false
         val slots = slotValues.toMutableMap()
         val steps = flow.steps
         var i = 0
@@ -176,6 +184,12 @@ class ReplayEngine(
                 handleCustomisation(snap, slots)?.let { return it }
                 continue
             }
+            // "Select delivery address" sheet: pick the {address} slot, or last time's, or ask (T6).
+            if (addressOptions(snap).isNotEmpty() && !addressHandled) {
+                addressHandled = true
+                handleAddressSheet(snap, flow, slots)?.let { return it }
+                continue
+            }
 
             val resolution = resolve(step, snap, slots)
             if (resolution != null) {
@@ -256,7 +270,9 @@ class ReplayEngine(
         repeat(4) { attempt ->
             val snap = readable(host.current()) ?: return StepResult.Done
             tripped()?.let { return it }
-            if (resolve(first, snap, slots) != null || decisionDialog(snap) != null || dismissButton(snap) != null) return StepResult.Done
+            if (resolve(first, snap, slots) != null || decisionDialog(snap) != null || dismissButton(snap) != null ||
+                addressOptions(snap).isNotEmpty() || customisationSheet(snap) != null
+            ) return StepResult.Done
             if (snap.packageName != step.packageName) {
                 host.awaitSettled(snap.id, 1_500)
                 return@repeat
@@ -324,6 +340,50 @@ class ReplayEngine(
 
     private fun tripped(): StepResult.Stop? =
         (guard.currentState as? GuardState.Tripped)?.let { StepResult.Stop(RunStatus.HANDED_OFF, it.trip.handOffMessage) }
+
+    /**
+     * Saved-address rows of a "Select delivery address" sheet/screen: label (e.g. "Home") → row
+     * element. Rows are clickable elements whose first short label is a saved-address name.
+     */
+    private fun addressOptions(snap: ScreenSnapshot): Map<String, UiElement> {
+        val all = snap.appElements().filter { it.visible }
+        val heading = all.any { e -> e.label?.let { TextNormalizer.normalize(it) }?.let { l -> ADDRESS_HEADINGS.any { l.contains(it) } } == true }
+        if (!heading) return emptyMap()
+        val out = linkedMapOf<String, UiElement>()
+        for (row in all.filter { it.clickable }) {
+            val labels = snap.descendants(row.index, maxDepth = 3).filter { it.visible }.sortedBy { it.index }.mapNotNull { it.label }.toList()
+            if (labels.size < 2) continue // a name plus the full address line
+            val name = labels.first().trim()
+            val n = TextNormalizer.tokens(name)
+            if (n.isEmpty() || n.size > 3 || NOT_ADDRESS.any { TextNormalizer.normalize(name).contains(it) }) continue
+            if (labels.drop(1).none { it.length > 20 }) continue // must have a real address line
+            out.putIfAbsent(name, row)
+        }
+        return out
+    }
+
+    private suspend fun handleAddressSheet(snap: ScreenSnapshot, flow: Flow, slots: MutableMap<String, String>): StepResult.Stop? {
+        val options = addressOptions(snap)
+        val key = "address:${flow.appPackage}"
+        fun find(want: String?) = want?.let { w -> options.entries.firstOrNull { ElementResolver.valueMatch(w, it.key, emptyList()) > 0 } }
+        var chosen = find(slots["address"])
+        if (chosen == null && slots["address"] == null) {
+            chosen = find(host.recall(key))?.also { events += "used last time's address \"${it.key}\"" }
+        }
+        if (chosen == null) {
+            val names = options.keys.toList()
+            val q = (slots["address"]?.let { "I can't find a saved address called \"$it\". " } ?: "") +
+                "Which delivery address should I use: ${names.joinToString(" or ")}?"
+            val answer = host.ask(q, names) ?: return StepResult.Stop(RunStatus.NO_ANSWER, "I needed a delivery address and didn't get one.")
+            chosen = find(answer) ?: return StepResult.Stop(RunStatus.HALTED, "\"$answer\" isn't one of your saved addresses (${names.joinToString(", ")}).")
+        }
+        val (name, row) = chosen
+        slots["address"] = name
+        host.remember(key, name)
+        events += "delivery address: $name"
+        val o = act(PlannedAction.Click(snap.id, row.index), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+        return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't select the address $name.")
+    }
 
     /** The "add" button of an item-options sheet ("Choose customization for …" + "Add Item | ₹511"). */
     private fun customisationSheet(snap: ScreenSnapshot): UiElement? {
@@ -502,7 +562,10 @@ class ReplayEngine(
         const val LOOKAHEAD_SCORE = 0.85
         const val MAX_SCROLLS = 3
         const val OPAQUE_GRACE_MS = 6_000L
-        private val CUSTOMISE_WORDS = listOf("customization", "customisation", "customize", "customise", "choose your", "add ons", "addons")
+        private val ADDRESS_HEADINGS = listOf("select delivery address", "select a delivery address", "choose a delivery address",
+            "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
+        private val NOT_ADDRESS = listOf("enter location", "add address", "add new", "use current location", "grant", "search")
+        private val CUSTOMISE_WORDS =listOf("customization", "customisation", "customize", "customise", "choose your", "add ons", "addons")
         private val ADD_ITEM_WORDS = listOf("add item", "add to cart", "add to bag")
         private val CART_WORDS =listOf("view cart", "checkout", "go to cart", "view bag", "go to bag", "proceed to cart")
         private val POPUP_CLASSES = listOf("Dialog", "BottomSheet", "PopupWindow")

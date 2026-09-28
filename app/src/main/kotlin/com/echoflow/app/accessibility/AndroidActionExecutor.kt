@@ -42,7 +42,7 @@ internal class AndroidActionExecutor(
 
     /** Only acts on nodes from the exact snapshot the gate approved, and only if they still exist. */
     private fun resolveNode(action: PlannedAction.Targeted): AccessibilityNodeInfo? {
-        val live = store.live()?.takeIf { it.snapshot.id == action.snapshotId } ?: return null
+        val live = store.liveById(action.snapshotId) ?: return null
         val node = live.nodes.getOrNull(action.elementIndex) ?: return null
         return node.takeIf { it.refresh() }
     }

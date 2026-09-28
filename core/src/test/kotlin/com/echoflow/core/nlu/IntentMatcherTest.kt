@@ -37,6 +37,13 @@ class IntentMatcherTest {
         assertEquals(mapOf("qty" to "3", "item" to "paneer tikka"), d.candidate.slots)
     }
 
+    @Test fun `address is split out of a greedy item slot (T6)`() {
+        val itemOnly = food.copy(template = "order {item}", slots = listOf(SlotDef("item", SlotType.TEXT, "garlic bread")), examples = listOf("order garlic bread"))
+        val d = assertIs<Decision.Proceed>(DecisionLayer.decide("x", m.match("order paneer tikka to hostel", listOf(itemOnly))))
+        assertEquals("paneer tikka", d.candidate.slots["item"])
+        assertEquals("hostel", d.candidate.slots["address"])
+    }
+
     @Test fun `offline paraphrase is matched but confirmed (T3 without LLM)`() {
         val d = assertIs<Decision.Confirm>(decide("can you get me garlic bread from swiggy"))
         assertEquals("food", d.candidate.flow.id)

@@ -15,18 +15,33 @@ class LiveSnapshot(val snapshot: ScreenSnapshot, internal val nodes: List<Access
 class LiveSnapshotStore : SnapshotSource {
     private val state = MutableStateFlow<LiveSnapshot?>(null)
 
+    /** The last few captures, so an action planned on one can still find its node. */
+    private val recent = ArrayDeque<LiveSnapshot>()
+
     val latest: StateFlow<LiveSnapshot?> get() = state
 
     internal fun publish(live: LiveSnapshot) {
+        synchronized(recent) {
+            recent.addLast(live)
+            while (recent.size > KEEP) recent.removeFirst()
+        }
         state.value = live
     }
 
     internal fun live(): LiveSnapshot? = state.value
 
+    internal fun liveById(id: Long): LiveSnapshot? = synchronized(recent) { recent.lastOrNull { it.snapshot.id == id } }
+
     override fun current(): ScreenSnapshot? = state.value?.snapshot
+
+    override fun byId(id: Long): ScreenSnapshot? = liveById(id)?.snapshot
 
     override suspend fun awaitNewerThan(snapshotId: Long, timeoutMs: Long): ScreenSnapshot? =
         withTimeoutOrNull(timeoutMs) {
             state.filterNotNull().first { it.snapshot.id > snapshotId }.snapshot
         }
+
+    private companion object {
+        const val KEEP = 8
+    }
 }

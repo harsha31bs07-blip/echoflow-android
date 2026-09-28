@@ -65,6 +65,31 @@ class ActionGatewayTest {
         assertFalse(guard.isTripped)
     }
 
+    @Test fun `an action planned on a slightly older capture is carried to the same element`() = runTest {
+        val newer = cart.copy(id = 7)
+        val exec = FakeExecutor()
+        val src = object : SnapshotSource {
+            override fun current() = newer
+            override suspend fun awaitNewerThan(snapshotId: Long, timeoutMs: Long): ScreenSnapshot? = null
+            override fun byId(id: Long) = if (id == 1L) cart else null
+        }
+        assertIs<ActionOutcome.Performed>(ActionGateway(guard, exec, src).perform(PlannedAction.Click(1, proceed), taught))
+        assertEquals(PlannedAction.Click(7, proceed), exec.executed.single())
+    }
+
+    @Test fun `an older capture whose element is gone stays stale`() = runTest {
+        val changed = screen(id = 8) { text("Something else entirely") }
+        val src = object : SnapshotSource {
+            override fun current() = changed
+            override suspend fun awaitNewerThan(snapshotId: Long, timeoutMs: Long): ScreenSnapshot? = null
+            override fun byId(id: Long) = if (id == 1L) cart else null
+        }
+        val exec = FakeExecutor()
+        val o = assertIs<ActionOutcome.Blocked>(ActionGateway(guard, exec, src).perform(PlannedAction.Click(1, proceed), taught))
+        assertEquals(BlockReason.STALE_SNAPSHOT, o.decision.reason)
+        assertTrue(exec.executed.isEmpty())
+    }
+
     @Test fun `platform refusal is reported as failure`() = runTest {
         val gateway = ActionGateway(guard, FakeExecutor(result = false), FakeSource(cart))
         assertIs<ActionOutcome.Failed>(gateway.perform(PlannedAction.Back))

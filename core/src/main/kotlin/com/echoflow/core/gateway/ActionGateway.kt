@@ -20,6 +20,9 @@ interface ActionExecutor {
 interface SnapshotSource {
     fun current(): ScreenSnapshot?
     suspend fun awaitNewerThan(snapshotId: Long, timeoutMs: Long): ScreenSnapshot?
+
+    /** A recent snapshot by id, if still kept (used to carry an action onto a newer capture). */
+    fun byId(id: Long): ScreenSnapshot? = null
 }
 
 sealed interface ActionOutcome {
@@ -48,9 +51,25 @@ class ActionGateway(
 ) {
     private val mutex = Mutex()
 
-    suspend fun perform(action: PlannedAction, context: GateContext = GateContext()): ActionOutcome = mutex.withLock {
+    /**
+     * Screens with timers or carousels produce a new capture every second, so an action planned
+     * on capture N often arrives when N+1 is current. If the very same element (identical bounds,
+     * class, id and label) is in the current capture, retarget the action to it; otherwise leave
+     * it, and the gate refuses it as stale.
+     */
+    private fun carryOver(action: PlannedAction, current: ScreenSnapshot): PlannedAction {
+        if (action !is PlannedAction.Targeted || action.snapshotId == current.id) return action
+        val old = snapshots.byId(action.snapshotId)?.elements?.getOrNull(action.elementIndex) ?: return action
+        val same = current.elements.filter {
+            it.bounds == old.bounds && it.className == old.className && it.viewId == old.viewId && it.label == old.label
+        }
+        return if (same.size == 1) action.retarget(current.id, same.single().index) else action
+    }
+
+    suspend fun perform(requested: PlannedAction, context: GateContext = GateContext()): ActionOutcome = mutex.withLock {
         val snapshot = snapshots.current()
             ?: return@withLock ActionOutcome.Failed("no screen captured yet")
+        val action = carryOver(requested, snapshot)
 
         when (val decision = guard.gate(action, snapshot, context)) {
             is GateDecision.Block -> return@withLock ActionOutcome.Blocked(decision)

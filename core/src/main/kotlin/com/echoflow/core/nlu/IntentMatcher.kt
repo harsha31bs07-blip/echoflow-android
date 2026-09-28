@@ -68,7 +68,12 @@ class IntentMatcher {
         // 2. Template regex: same shape, different values (T4–T6).
         templateRegex(flow.template)?.let { (regex, names) ->
             regex.matchEntire(norm)?.let { m ->
-                val slots = names.mapIndexed { i, n -> n to normaliseSlot(n, m.groupValues[i + 1]) }.toMap()
+                val slots = names.mapIndexed { i, n -> n to normaliseSlot(n, m.groupValues[i + 1]) }.toMap().toMutableMap()
+                // A greedy item slot swallows "to home" / "on swiggy": split those back out.
+                val p = Utterances.parse(norm)
+                val item = slots["item"]
+                if (item != null && p.item != null && item != p.item && item.contains(p.item)) slots["item"] = p.item
+                if (p.address != null && "address" !in names) slots["address"] = p.address
                 if (slots.values.none { it.isBlank() }) return Candidate(flow, 0.95, slots, "template")
             }
         }

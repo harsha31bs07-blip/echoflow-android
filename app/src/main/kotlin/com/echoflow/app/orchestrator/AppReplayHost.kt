@@ -35,6 +35,10 @@ class AppReplayHost(
     override fun progress(step: Int, total: Int, description: String) =
         orchestrator.status("Step $step/$total: $description")
 
+    override fun recall(key: String): String? = orchestrator.memory.getString(key, null)
+
+    override fun remember(key: String, value: String) = orchestrator.memory.edit().putString(key, value).apply()
+
     private companion object {
         const val QUIET_MS = 700L
         const val MAX_EXTRA_MS = 2_500L

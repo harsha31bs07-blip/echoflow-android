@@ -8,18 +8,29 @@ sealed interface PlannedAction {
     sealed interface Targeted : PlannedAction {
         val snapshotId: Long
         val elementIndex: Int
+
+        /** The same action aimed at element [elementIndex] of snapshot [snapshotId]. */
+        fun retarget(snapshotId: Long, elementIndex: Int): Targeted
     }
 
-    data class Click(override val snapshotId: Long, override val elementIndex: Int) : Targeted
+    data class Click(override val snapshotId: Long, override val elementIndex: Int) : Targeted {
+        override fun retarget(snapshotId: Long, elementIndex: Int) = copy(snapshotId = snapshotId, elementIndex = elementIndex)
+    }
 
     class SetText(override val snapshotId: Long, override val elementIndex: Int, val text: String) : Targeted {
+        override fun retarget(snapshotId: Long, elementIndex: Int) = SetText(snapshotId, elementIndex, text)
+
         // Never print the typed value.
         override fun toString() = "SetText(snapshotId=$snapshotId, elementIndex=$elementIndex, text=<${text.length} chars>)"
     }
 
-    data class ImeEnter(override val snapshotId: Long, override val elementIndex: Int) : Targeted
+    data class ImeEnter(override val snapshotId: Long, override val elementIndex: Int) : Targeted {
+        override fun retarget(snapshotId: Long, elementIndex: Int) = copy(snapshotId = snapshotId, elementIndex = elementIndex)
+    }
 
-    data class Scroll(override val snapshotId: Long, override val elementIndex: Int, val forward: Boolean) : Targeted
+    data class Scroll(override val snapshotId: Long, override val elementIndex: Int, val forward: Boolean) : Targeted {
+        override fun retarget(snapshotId: Long, elementIndex: Int) = copy(snapshotId = snapshotId, elementIndex = elementIndex)
+    }
 
     data object Back : PlannedAction
 

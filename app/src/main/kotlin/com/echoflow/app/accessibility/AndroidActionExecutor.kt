@@ -1,7 +1,12 @@
 package com.echoflow.app.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
+import android.graphics.Rect
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.echoflow.core.gateway.ActionExecutor
@@ -26,7 +31,9 @@ internal class AndroidActionExecutor(
             is PlannedAction.Targeted -> {
                 val node = resolveNode(action) ?: return@withContext false
                 when (action) {
-                    is PlannedAction.Click -> node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    // Views that handle touches themselves (Lynx/Compose/custom) refuse ACTION_CLICK;
+                    // then tap the centre of the same, gate-approved element with a gesture.
+                    is PlannedAction.Click -> node.performAction(AccessibilityNodeInfo.ACTION_CLICK) || tapCentre(node)
                     is PlannedAction.SetText -> node.performAction(
                         AccessibilityNodeInfo.ACTION_SET_TEXT,
                         Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, action.text) },
@@ -45,6 +52,19 @@ internal class AndroidActionExecutor(
         val live = store.liveById(action.snapshotId) ?: return null
         val node = live.nodes.getOrNull(action.elementIndex) ?: return null
         return node.takeIf { it.refresh() }
+    }
+
+    private suspend fun tapCentre(node: AccessibilityNodeInfo): Boolean {
+        val r = Rect().also(node::getBoundsInScreen)
+        if (r.isEmpty) return false
+        val path = Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()) }
+        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 60)).build()
+        val done = CompletableDeferred<Boolean>()
+        val sent = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(d: GestureDescription?) { done.complete(true) }
+            override fun onCancelled(d: GestureDescription?) { done.complete(false) }
+        }, null)
+        return sent && (withTimeoutOrNull(1_500) { done.await() } ?: false)
     }
 
     private fun launch(packageName: String): Boolean {

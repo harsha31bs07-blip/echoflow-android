@@ -41,7 +41,8 @@ while (((Get-Date) - $start).TotalSeconds -lt $TimeoutSec) {
 if (-not $NoRun) {
     "--- run:"
     & $adb shell "run-as com.echoflow sh -c 'cat files/runs/*.json'" | Select-String -Pattern '"status"|"message"|"stoppedAtStep"|"slots"'
-    & $adb shell "run-as com.echoflow sh -c 'cat files/runs/*.json'" | Select-String -Pattern '^\s+"[a-z].*",?$' | Where-Object { $_.Line -notmatch ':' } | ForEach-Object { "  event: " + $_.Line.Trim() }
+    $json = (& $adb shell "run-as com.echoflow sh -c 'cat files/runs/*.json'") -join "`n"
+    if ($json -match '(?s)"events": \[(.*?)\]') { $Matches[1].Trim() -split "`n" | ForEach-Object { "  event: " + $_.Trim().TrimEnd(',') } }
 }
 & $adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --ez snap true | Out-Null
 Start-Sleep 1

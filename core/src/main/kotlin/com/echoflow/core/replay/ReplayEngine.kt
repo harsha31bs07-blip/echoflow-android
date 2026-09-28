@@ -87,7 +87,10 @@ class ReplayEngine(
                 val step = steps[i]
                 host.progress(i + 1, steps.size, step.description)
                 when (val r = runStep(flow, steps, i, slots)) {
-                    is StepResult.Done -> i++
+                    is StepResult.Done -> {
+                        if (step is Step.LaunchApp) ensureAddress(flow, slots)?.let { return result(it.status, it.message, i, steps) }
+                        i++
+                    }
                     is StepResult.SkipTo -> {
                         events += "step ${i + 1} not needed this time; continued at step ${r.index + 1}"
                         i = r.index
@@ -372,9 +375,14 @@ class ReplayEngine(
         val all = snap.appElements().filter { it.visible }
         val heading = all.any { e -> e.label?.let { TextNormalizer.normalize(it) }?.let { l -> ADDRESS_HEADINGS.any { l.contains(it) } } == true }
         if (!heading) return emptyMap()
+        // Rows below a "recently searched" heading are past searches, not saved addresses.
+        val recentTop = all.filter { TextNormalizer.normalize(it.label).startsWith("recent") }.minOfOrNull { it.bounds.top } ?: Int.MAX_VALUE
         val out = linkedMapOf<String, UiElement>()
-        for (row in all.filter { it.clickable }) {
-            val labels = snap.descendants(row.index, maxDepth = 3).filter { it.visible }.sortedBy { it.index }.mapNotNull { it.label }.toList()
+        for (row in all.filter { it.clickable && it.bounds.top < recentTop }) {
+            val labels = snap.descendants(row.index, maxDepth = 3).filter { it.visible }.sortedBy { it.index }
+                .mapNotNull { it.label }
+                .filter { l -> !l.contains("icon", ignoreCase = true) && TextNormalizer.normalize(l) !in setOf("selected", "default") }
+                .toList()
             if (labels.size < 2) continue // a name plus the full address line
             val name = labels.first().trim()
             val n = TextNormalizer.tokens(name)
@@ -383,6 +391,42 @@ class ReplayEngine(
             out.putIfAbsent(name, row)
         }
         return out
+    }
+
+    /**
+     * T6 when the taught flow had no address step: the command named an address ("… to home")
+     * that isn't the one selected. Open the app's delivery-address bar ("Selected address is
+     * Hostel, …") and pick the saved address from the list.
+     */
+    private suspend fun ensureAddress(flow: Flow, slots: MutableMap<String, String>): StepResult.Stop? {
+        val want = slots["address"] ?: return null
+        if (flow.steps.any { it is Step.Tap && it.slot == "address" }) return null // taught explicitly
+        val snap = readable(host.current()) ?: return null
+        val bar = snap.appElements().firstOrNull { e ->
+            e.visible && TextNormalizer.normalize(e.label).let { l -> ADDRESS_BARS.any { l.startsWith(it) } }
+        } ?: return null // no address bar on this app's start screen; nothing to do
+        if (ElementResolver.valueMatch(want, bar.label, emptyList()) > 0) {
+            events += "delivery address already $want"
+            return null
+        }
+        // The bar's centre can be empty space; tap the short address name shown inside it.
+        val b = bar.bounds
+        val name = snap.appElements().filter { e ->
+            e.visible && e.index != bar.index && (e.label?.length ?: 99) <= 24 &&
+                e.bounds.left >= b.left && e.bounds.right <= b.right && e.bounds.top >= b.top - 60 && e.bounds.bottom <= b.bottom + 120
+        }.minByOrNull { it.bounds.top * 10 + it.bounds.left } ?: bar
+        val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, name.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.9), snap)
+        if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't open the delivery address list (${describe(o)}).")
+        var list = readable(host.awaitSettled(snap.id, 3_000) ?: host.current()) ?: return null
+        val started = host.nowMs()
+        while (addressOptions(list).isEmpty() && host.nowMs() - started < 4_000) {
+            list = readable(host.awaitSettled(list.id, 1_000) ?: host.current()) ?: return null
+        }
+        if (addressOptions(list).isEmpty()) return StepResult.Stop(RunStatus.HALTED, "I opened the address list but couldn't read the saved addresses.")
+        addressHandled = true
+        handleAddressSheet(list, flow, slots)?.let { return it }
+        host.awaitSettled(list.id, 3_000)
+        return null
     }
 
     private suspend fun handleAddressSheet(snap: ScreenSnapshot, flow: Flow, slots: MutableMap<String, String>): StepResult.Stop? {
@@ -638,7 +682,8 @@ class ReplayEngine(
         const val OPAQUE_GRACE_MS = 6_000L
         private val ADDRESS_HEADINGS = listOf("select delivery address", "select a delivery address", "choose a delivery address",
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
-        private val NOT_ADDRESS = listOf("enter location", "add address", "add new", "use current location", "grant", "search")
+        private val ADDRESS_BARS = listOf("selected address is", "delivering to", "deliver to", "delivery address")
+        private val NOT_ADDRESS =listOf("enter location", "add address", "add new", "use current location", "grant", "search")
         private val CUSTOMISE_WORDS =listOf("customization", "customisation", "customize", "customise", "choose your", "add ons", "addons")
         private val ADD_ITEM_WORDS = listOf("add item", "add to cart", "add to bag")
         private val CART_WORDS =listOf("view cart", "checkout", "go to cart", "view bag", "go to bag", "proceed to cart")

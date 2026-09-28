@@ -1,0 +1,3103 @@
+{
+    "id":  47,
+    "timestampMs":  1790589160758,
+    "packageName":  "in.swiggy.android",
+    "activityName":  "in.swiggy.android.foodcart.ViewCartLynxActivity",
+    "screenHeight":  2340,
+    "windows":  [
+                    {
+                        "id":  505,
+                        "type":  "ACCESSIBILITY_OVERLAY",
+                        "packageName":  "com.echoflow",
+                        "bounds":  {
+                                       "left":  0,
+                                       "top":  92,
+                                       "right":  1080,
+                                       "bottom":  472
+                                   },
+                        "layer":  3
+                    },
+                    {
+                        "id":  494,
+                        "type":  "SYSTEM",
+                        "packageName":  "com.sec.android.app.launcher",
+                        "bounds":  {
+                                       "left":  1033,
+                                       "top":  312,
+                                       "right":  1080,
+                                       "bottom":  637
+                                   },
+                        "layer":  2
+                    },
+                    {
+                        "id":  486,
+                        "type":  "SYSTEM",
+                        "packageName":  "com.android.systemui",
+                        "bounds":  {
+                                       "left":  0,
+                                       "top":  0,
+                                       "right":  1080,
+                                       "bottom":  92
+                                   },
+                        "layer":  1
+                    },
+                    {
+                        "id":  513,
+                        "type":  "APPLICATION",
+                        "packageName":  "in.swiggy.android",
+                        "title":  "Swiggy",
+                        "bounds":  {
+                                       "left":  0,
+                                       "top":  0,
+                                       "right":  1080,
+                                       "bottom":  2340
+                                   },
+                        "isActive":  true,
+                        "isFocused":  true
+                    }
+                ],
+    "elements":  [
+                     {
+                         "index":  0,
+                         "windowId":  513,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  1,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  2,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.widget.LinearLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  3,
+                         "parent":  2,
+                         "windowId":  513,
+                         "depth":  2,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  4,
+                         "parent":  3,
+                         "windowId":  513,
+                         "depth":  3,
+                         "className":  "android.widget.LinearLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/action_bar_root",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  5,
+                         "parent":  4,
+                         "windowId":  513,
+                         "depth":  4,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "android:id/content",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  6,
+                         "parent":  5,
+                         "windowId":  513,
+                         "depth":  5,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/base_layout",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  7,
+                         "parent":  6,
+                         "windowId":  513,
+                         "depth":  6,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/main_content_container",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  8,
+                         "parent":  7,
+                         "windowId":  513,
+                         "depth":  7,
+                         "className":  "android.view.ViewGroup",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/container",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  9,
+                         "parent":  8,
+                         "windowId":  513,
+                         "depth":  8,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/viewCartActivityContainer",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  10,
+                         "parent":  9,
+                         "windowId":  513,
+                         "depth":  9,
+                         "className":  "android.view.ViewGroup",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  11,
+                         "parent":  10,
+                         "windowId":  513,
+                         "depth":  10,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "viewId":  "in.swiggy.android:id/webContainer",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  12,
+                         "parent":  11,
+                         "windowId":  513,
+                         "depth":  11,
+                         "className":  "android.webkit.WebView",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  13,
+                         "parent":  12,
+                         "windowId":  513,
+                         "depth":  12,
+                         "className":  "android.webkit.WebView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "focusable":  true,
+                         "focused":  true
+                     },
+                     {
+                         "index":  14,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "root",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  15,
+                         "parent":  14,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  16,
+                         "parent":  15,
+                         "windowId":  513,
+                         "depth":  15,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  17,
+                         "parent":  16,
+                         "windowId":  513,
+                         "depth":  16,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  18,
+                         "parent":  17,
+                         "windowId":  513,
+                         "depth":  17,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  19,
+                         "parent":  18,
+                         "windowId":  513,
+                         "depth":  18,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  20,
+                         "parent":  19,
+                         "windowId":  513,
+                         "depth":  19,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  45,
+                                        "top":  138,
+                                        "right":  120,
+                                        "bottom":  213
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  21,
+                         "parent":  19,
+                         "windowId":  513,
+                         "depth":  19,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  156,
+                                        "top":  138,
+                                        "right":  1080,
+                                        "bottom":  255
+                                    }
+                     },
+                     {
+                         "index":  22,
+                         "parent":  21,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Paris Panini - Gourmet Sandwiches \u0026 Wraps",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  162,
+                                        "top":  144,
+                                        "right":  912,
+                                        "bottom":  195
+                                    }
+                     },
+                     {
+                         "index":  23,
+                         "parent":  21,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  162,
+                                        "top":  201,
+                                        "right":  912,
+                                        "bottom":  255
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  24,
+                         "parent":  23,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  162,
+                                        "top":  201,
+                                        "right":  210,
+                                        "bottom":  255
+                                    }
+                     },
+                     {
+                         "index":  25,
+                         "parent":  23,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "[address redacted]",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  222,
+                                        "top":  201,
+                                        "right":  339,
+                                        "bottom":  255
+                                    }
+                     },
+                     {
+                         "index":  26,
+                         "parent":  23,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "|",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  348,
+                                        "top":  201,
+                                        "right":  360,
+                                        "bottom":  255
+                                    }
+                     },
+                     {
+                         "index":  27,
+                         "parent":  23,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "[address redacted]",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  369,
+                                        "top":  204,
+                                        "right":  912,
+                                        "bottom":  255
+                                    }
+                     },
+                     {
+                         "index":  28,
+                         "parent":  21,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Click here to change delivery address",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  912,
+                                        "top":  195,
+                                        "right":  972,
+                                        "bottom":  255
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  29,
+                         "parent":  21,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "More options",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  996,
+                                        "top":  144,
+                                        "right":  1044,
+                                        "bottom":  204
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  30,
+                         "parent":  19,
+                         "windowId":  513,
+                         "depth":  19,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "33 rupees saved! With Swiggy One benefits",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  978,
+                                        "top":  327,
+                                        "right":  981,
+                                        "bottom":  333
+                                    }
+                     },
+                     {
+                         "index":  31,
+                         "parent":  19,
+                         "windowId":  513,
+                         "depth":  19,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cart-renderer-container",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  408,
+                                        "right":  1080,
+                                        "bottom":  2295
+                                    },
+                         "scrollable":  true
+                     },
+                     {
+                         "index":  32,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Ordering for someone else?",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  528,
+                                        "right":  630,
+                                        "bottom":  582
+                                    }
+                     },
+                     {
+                         "index":  33,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  768,
+                                        "top":  528,
+                                        "right":  984,
+                                        "bottom":  582
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  34,
+                         "parent":  33,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Add Details",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  768,
+                                        "top":  528,
+                                        "right":  984,
+                                        "bottom":  582
+                                    }
+                     },
+                     {
+                         "index":  35,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.ListView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  750,
+                                        "right":  984,
+                                        "bottom":  912
+                                    }
+                     },
+                     {
+                         "index":  36,
+                         "parent":  35,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Egg Item Hugo (Fried Chicken \u0026 Mozza Sandwich) Boiled Egg, Garlic Aioli, Fried Onions, Full Panini (10 inch), Classic Quantity 1 Item Total 560 Rupees",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  750,
+                                        "right":  99,
+                                        "bottom":  753
+                                    }
+                     },
+                     {
+                         "index":  37,
+                         "parent":  35,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Hugo (Fried Chicken \u0026 Mozza Sandwich)",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  753,
+                                        "right":  609,
+                                        "bottom":  861
+                                    }
+                     },
+                     {
+                         "index":  38,
+                         "parent":  35,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Boiled Egg, Garlic Aioli, Fried Onions, Full Panini (10 inch), Classic",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  861,
+                                        "right":  567,
+                                        "bottom":  912
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  39,
+                         "parent":  35,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  579,
+                                        "top":  867,
+                                        "right":  609,
+                                        "bottom":  912
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  40,
+                         "parent":  35,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  669,
+                                        "top":  789,
+                                        "right":  861,
+                                        "bottom":  873
+                                    }
+                     },
+                     {
+                         "index":  41,
+                         "parent":  40,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "−",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  672,
+                                        "top":  792,
+                                        "right":  741,
+                                        "bottom":  870
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  42,
+                         "parent":  40,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  672,
+                                        "top":  792,
+                                        "right":  858,
+                                        "bottom":  870
+                                    }
+                     },
+                     {
+                         "index":  43,
+                         "parent":  42,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "1",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  672,
+                                        "top":  792,
+                                        "right":  858,
+                                        "bottom":  870
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  44,
+                         "parent":  40,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "+",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  789,
+                                        "top":  792,
+                                        "right":  858,
+                                        "bottom":  870
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  45,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  948,
+                                        "right":  1032,
+                                        "bottom":  1128
+                                    }
+                     },
+                     {
+                         "index":  46,
+                         "parent":  45,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  948,
+                                        "right":  1032,
+                                        "bottom":  1128
+                                    },
+                         "scrollable":  true
+                     },
+                     {
+                         "index":  47,
+                         "parent":  46,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add more items",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  972,
+                                        "right":  390,
+                                        "bottom":  1080
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  48,
+                         "parent":  46,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Cooking requests",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  411,
+                                        "top":  972,
+                                        "right":  837,
+                                        "bottom":  1080
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  49,
+                         "parent":  46,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Cutlery Needed",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  858,
+                                        "top":  972,
+                                        "right":  1080,
+                                        "bottom":  1080
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  50,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  1176,
+                                        "right":  1032,
+                                        "bottom":  1923
+                                    }
+                     },
+                     {
+                         "index":  51,
+                         "parent":  50,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "COMPLETE YOUR MEAL",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  51,
+                                        "top":  1227,
+                                        "right":  1029,
+                                        "bottom":  1275
+                                    }
+                     },
+                     {
+                         "index":  52,
+                         "parent":  50,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  75,
+                                        "top":  1299,
+                                        "right":  1005,
+                                        "bottom":  1422
+                                    }
+                     },
+                     {
+                         "index":  53,
+                         "parent":  52,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  75,
+                                        "top":  1299,
+                                        "right":  1005,
+                                        "bottom":  1422
+                                    }
+                     },
+                     {
+                         "index":  54,
+                         "parent":  53,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  162,
+                                        "top":  2340,
+                                        "right":  1005,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  55,
+                         "parent":  53,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  87,
+                                        "top":  1311,
+                                        "right":  372,
+                                        "bottom":  1410
+                                    }
+                     },
+                     {
+                         "index":  56,
+                         "parent":  53,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "POPULAR",
+                         "bounds":  {
+                                        "left":  87,
+                                        "top":  1311,
+                                        "right":  375,
+                                        "bottom":  1410
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  57,
+                         "parent":  53,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "BEVERAGE",
+                         "bounds":  {
+                                        "left":  396,
+                                        "top":  1311,
+                                        "right":  684,
+                                        "bottom":  1410
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  58,
+                         "parent":  53,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "SIDE",
+                         "bounds":  {
+                                        "left":  705,
+                                        "top":  1311,
+                                        "right":  993,
+                                        "bottom":  1410
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  59,
+                         "parent":  50,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  51,
+                                        "top":  1422,
+                                        "right":  1029,
+                                        "bottom":  1860
+                                    },
+                         "scrollable":  true
+                     },
+                     {
+                         "index":  60,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  1470,
+                                        "right":  324,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  61,
+                         "parent":  60,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  1701,
+                                        "right":  324,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  62,
+                         "parent":  61,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Diet Coke - 300ml Can",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  105,
+                                        "top":  1701,
+                                        "right":  297,
+                                        "bottom":  1797
+                                    }
+                     },
+                     {
+                         "index":  63,
+                         "parent":  61,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹130",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  105,
+                                        "top":  1809,
+                                        "right":  186,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  64,
+                         "parent":  60,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Diet Coke - 300ml Can for Rupees 130",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  264,
+                                        "top":  1464,
+                                        "right":  336,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  65,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  360,
+                                        "top":  1470,
+                                        "right":  585,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  66,
+                         "parent":  65,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  360,
+                                        "top":  1701,
+                                        "right":  585,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  67,
+                         "parent":  66,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Chunky Chocolate Cookie",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  366,
+                                        "top":  1701,
+                                        "right":  558,
+                                        "bottom":  1797
+                                    }
+                     },
+                     {
+                         "index":  68,
+                         "parent":  66,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹180",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  366,
+                                        "top":  1809,
+                                        "right":  447,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  69,
+                         "parent":  65,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Chunky Chocolate Cookie for Rupees 180",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  525,
+                                        "top":  1464,
+                                        "right":  597,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  70,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  621,
+                                        "top":  1470,
+                                        "right":  846,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  71,
+                         "parent":  70,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  621,
+                                        "top":  1701,
+                                        "right":  846,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  72,
+                         "parent":  71,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Spiced Potato Wedges",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  627,
+                                        "top":  1701,
+                                        "right":  819,
+                                        "bottom":  1797
+                                    }
+                     },
+                     {
+                         "index":  73,
+                         "parent":  71,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹290",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  627,
+                                        "top":  1809,
+                                        "right":  714,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  74,
+                         "parent":  70,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Spiced Potato Wedges for Rupees 290",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  786,
+                                        "top":  1464,
+                                        "right":  858,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  75,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  882,
+                                        "top":  1470,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  76,
+                         "parent":  75,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  882,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  77,
+                         "parent":  76,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Coke - 300ml Can",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  888,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1797
+                                    }
+                     },
+                     {
+                         "index":  78,
+                         "parent":  76,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹130",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  888,
+                                        "top":  1809,
+                                        "right":  969,
+                                        "bottom":  1860
+                                    }
+                     },
+                     {
+                         "index":  79,
+                         "parent":  75,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Coke - 300ml Can for Rupees 130",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1047,
+                                        "top":  1464,
+                                        "right":  1080,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  80,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1470,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  81,
+                         "parent":  80,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  82,
+                         "parent":  81,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Europe -\nan Hot Chocolate",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1797
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  83,
+                         "parent":  81,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹320",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1809,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  84,
+                         "parent":  80,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add European Hot Chocolate for Rupees 320",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1464,
+                                        "right":  1080,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  85,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1470,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  86,
+                         "parent":  85,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  87,
+                         "parent":  86,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Corn Ribs",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1797
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  88,
+                         "parent":  86,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹335",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1809,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  89,
+                         "parent":  85,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Corn Ribs for Rupees 335",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1464,
+                                        "right":  1080,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  90,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1470,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  91,
+                         "parent":  90,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  92,
+                         "parent":  91,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Fresh Watermelon \u0026 Mint Juice",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1797
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  93,
+                         "parent":  91,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹190",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1809,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  94,
+                         "parent":  90,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Fresh Watermelon \u0026 Mint Juice for Rupees 190",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1464,
+                                        "right":  1080,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  95,
+                         "parent":  59,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1470,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  96,
+                         "parent":  95,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  97,
+                         "parent":  96,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Brocco -\nli AOP",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1701,
+                                        "right":  1080,
+                                        "bottom":  1797
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  98,
+                         "parent":  96,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹315",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1809,
+                                        "right":  1080,
+                                        "bottom":  1860
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  99,
+                         "parent":  95,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Add Broccoli AOP for Rupees 315",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  1080,
+                                        "top":  1464,
+                                        "right":  1080,
+                                        "bottom":  1548
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  100,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Savings Corner",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  51,
+                                        "top":  2022,
+                                        "right":  1029,
+                                        "bottom":  2070
+                                    }
+                     },
+                     {
+                         "index":  101,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  51,
+                                        "top":  2070,
+                                        "right":  1029,
+                                        "bottom":  2280
+                                    }
+                     },
+                     {
+                         "index":  102,
+                         "parent":  101,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  2118,
+                                        "right":  981,
+                                        "bottom":  2232
+                                    }
+                     },
+                     {
+                         "index":  103,
+                         "parent":  102,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Save ₹140 on this order",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  195,
+                                        "top":  2121,
+                                        "right":  624,
+                                        "bottom":  2175
+                                    }
+                     },
+                     {
+                         "index":  104,
+                         "parent":  102,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  195,
+                                        "top":  2178,
+                                        "right":  522,
+                                        "bottom":  2232
+                                    },
+                         "clickable":  true
+                     },
+                     {
+                         "index":  105,
+                         "parent":  104,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  195,
+                                        "top":  2178,
+                                        "right":  522,
+                                        "bottom":  2232
+                                    }
+                     },
+                     {
+                         "index":  106,
+                         "parent":  105,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "View all coupons",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  195,
+                                        "top":  2181,
+                                        "right":  480,
+                                        "bottom":  2229
+                                    }
+                     },
+                     {
+                         "index":  107,
+                         "parent":  102,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Click to Apply",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  801,
+                                        "top":  2118,
+                                        "right":  981,
+                                        "bottom":  2220
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  108,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  51,
+                                        "top":  2280,
+                                        "right":  1029,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  109,
+                         "parent":  108,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  2328,
+                                        "right":  981,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  110,
+                         "parent":  109,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Free delivery savings of ₹33",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  195,
+                                        "top":  2331,
+                                        "right":  699,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  111,
+                         "parent":  109,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  294,
+                                        "top":  2340,
+                                        "right":  723,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  112,
+                         "parent":  111,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  2328,
+                                        "right":  723,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  113,
+                         "parent":  112,
+                         "windowId":  513,
+                         "depth":  24,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  99,
+                                        "top":  2328,
+                                        "right":  723,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  114,
+                         "parent":  109,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  798,
+                                        "top":  2325,
+                                        "right":  849,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  115,
+                         "parent":  109,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Applied",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  846,
+                                        "top":  2328,
+                                        "right":  981,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  116,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "delivery-section-container",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  117,
+                         "parent":  116,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  72,
+                                        "top":  2340,
+                                        "right":  1008,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  118,
+                         "parent":  117,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  69,
+                                        "top":  2340,
+                                        "right":  219,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  119,
+                         "parent":  117,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  861,
+                                        "top":  2340,
+                                        "right":  1011,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  120,
+                         "parent":  117,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  72,
+                                        "top":  2340,
+                                        "right":  1008,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  121,
+                         "parent":  120,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  156,
+                                        "top":  2340,
+                                        "right":  1008,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  122,
+                         "parent":  120,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  84,
+                                        "top":  2340,
+                                        "right":  387,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  123,
+                         "parent":  120,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "DELIVERY_SPEED",
+                         "bounds":  {
+                                        "left":  84,
+                                        "top":  2340,
+                                        "right":  387,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  124,
+                         "parent":  120,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "CARD_INFORMATION",
+                         "bounds":  {
+                                        "left":  408,
+                                        "top":  2340,
+                                        "right":  693,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  125,
+                         "parent":  120,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "DELIVERY_INSTRUCTIONS",
+                         "bounds":  {
+                                        "left":  714,
+                                        "top":  2340,
+                                        "right":  996,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  126,
+                         "parent":  116,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Delivering superfast!",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  120,
+                                        "top":  2340,
+                                        "right":  444,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  127,
+                         "parent":  116,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  128,
+                         "parent":  127,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Click here to select Express delivery in ##-## mins with ((strikethrough|₹29)) ₹19",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  129,
+                         "parent":  116,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  130,
+                         "parent":  129,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Standard delivery in ##-## mins is selected",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  131,
+                         "parent":  116,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  132,
+                         "parent":  131,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Click here to select Eco Saver delivery in ##-## mins",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  133,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "bill-details-container",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  134,
+                         "parent":  133,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2340,
+                                        "right":  1032,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  135,
+                         "parent":  134,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "To Pay ₹665 ₹632 ₹33 saved on the total!",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "focusable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  136,
+                         "parent":  134,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  137,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  138,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Item Total",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  276,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  139,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹560",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  891,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  140,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Delivery Fee|1.5kms",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  600,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  141,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹33",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  819,
+                                        "top":  2340,
+                                        "right":  885,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  142,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "FREE",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  894,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  143,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Delivery Tip",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  309,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  144,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Add tip",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  849,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  145,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "GST \u0026 Other Charges",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  489,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  146,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹72.23",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  870,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  147,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "To Pay",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  96,
+                                        "top":  2340,
+                                        "right":  216,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  148,
+                         "parent":  136,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "₹632",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  894,
+                                        "top":  2340,
+                                        "right":  984,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  149,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Cancellation policy:",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  72,
+                                        "top":  2340,
+                                        "right":  1008,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  150,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "Please double-check your order and address details. Orders are non-refundable once placed.",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  72,
+                                        "top":  2340,
+                                        "right":  1008,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  151,
+                         "parent":  31,
+                         "windowId":  513,
+                         "depth":  20,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2067,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  152,
+                         "parent":  151,
+                         "windowId":  513,
+                         "depth":  21,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2067,
+                                        "right":  1080,
+                                        "bottom":  2247
+                                    }
+                     },
+                     {
+                         "index":  153,
+                         "parent":  152,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Currently paying using Debit card ####, Change payment method",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  48,
+                                        "top":  2112,
+                                        "right":  516,
+                                        "bottom":  2226
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  154,
+                         "parent":  152,
+                         "windowId":  513,
+                         "depth":  22,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  564,
+                                        "top":  2091,
+                                        "right":  1032,
+                                        "bottom":  2247
+                                    }
+                     },
+                     {
+                         "index":  155,
+                         "parent":  154,
+                         "windowId":  513,
+                         "depth":  23,
+                         "className":  "android.widget.Button",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "contentDescription":  "Pay ₹632 using Debit card",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  564,
+                                        "top":  2091,
+                                        "right":  1032,
+                                        "bottom":  2247
+                                    },
+                         "clickable":  true,
+                         "focusable":  true
+                     },
+                     {
+                         "index":  156,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  157,
+                         "parent":  156,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_109167450",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  158,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  159,
+                         "parent":  158,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_65265589",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  160,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  161,
+                         "parent":  160,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_110729177",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  162,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  163,
+                         "parent":  162,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_109167449",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  164,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  165,
+                         "parent":  164,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_65265593",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  166,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  167,
+                         "parent":  166,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_164614850",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  168,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  169,
+                         "parent":  168,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_78627683",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  170,
+                         "parent":  13,
+                         "windowId":  513,
+                         "depth":  13,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "clickable":  true,
+                         "visible":  false
+                     },
+                     {
+                         "index":  171,
+                         "parent":  170,
+                         "windowId":  513,
+                         "depth":  14,
+                         "className":  "android.widget.TextView",
+                         "packageName":  "in.swiggy.android",
+                         "text":  "",
+                         "hintText":  "",
+                         "viewId":  "cross-sell-m2-item-details-bs-container_124596248",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  2340,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  172,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  173,
+                         "parent":  172,
+                         "windowId":  513,
+                         "depth":  2,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  92
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  174,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  175,
+                         "parent":  174,
+                         "windowId":  513,
+                         "depth":  2,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  92
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  176,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  177,
+                         "parent":  176,
+                         "windowId":  513,
+                         "depth":  2,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  92
+                                    },
+                         "visible":  false
+                     },
+                     {
+                         "index":  178,
+                         "parent":  0,
+                         "windowId":  513,
+                         "depth":  1,
+                         "className":  "android.widget.FrameLayout",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  2340
+                                    }
+                     },
+                     {
+                         "index":  179,
+                         "parent":  178,
+                         "windowId":  513,
+                         "depth":  2,
+                         "className":  "android.view.View",
+                         "packageName":  "in.swiggy.android",
+                         "bounds":  {
+                                        "left":  0,
+                                        "top":  0,
+                                        "right":  1080,
+                                        "bottom":  92
+                                    },
+                         "visible":  false
+                     }
+                 ],
+    "diagnostics":  {
+                        "totalNodes":  180,
+                        "labeledNodes":  39,
+                        "trigger":  "dump"
+                    }
+}

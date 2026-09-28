@@ -92,6 +92,14 @@ class EchoAccessibilityService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) {
             val o = EchoRuntime.orchestrator
             when {
+                intent.getBooleanExtra("snap", false) -> captureHandler.post {
+                    val s = capturer.capture(lastActivity, "debug")?.snapshot ?: return@post
+                    val lines = s.elements.filter { it.visible && (it.label != null || it.clickable || it.editable) }.joinToString("\n") { e ->
+                        val b = e.bounds
+                        "${e.index}\t${(b.left + b.right) / 2},${(b.top + b.bottom) / 2}\t${e.simpleClassName}\t${if (e.clickable) "C" else ""}${if (e.editable) "E" else ""}\t${e.viewId?.substringAfter(":id/") ?: ""}\t${(e.text ?: e.contentDescription ?: "").replace('\n', ' ').take(90)}"
+                    }
+                    java.io.File(filesDir, "debug_snap.txt").writeText("${s.packageName} ${s.activityName} ${EchoRuntime.guard.classify(s).label}\n$lines")
+                }
                 intent.getBooleanExtra("done", false) -> o.onDonePressed()
                 intent.getBooleanExtra("stop", false) -> o.onStopPressed()
                 else -> intent.getStringExtra("text")?.let(o::onTyped)

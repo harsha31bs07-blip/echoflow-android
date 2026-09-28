@@ -44,6 +44,27 @@ object SafetyLexicon {
         val next = tokens[1]
         return next in setOf("now", "₹", "rs", "inr", "securely", "and") || next.first().isDigit()
     }
+
+    /**
+     * Labels that mark a screen as CHECKOUT: one tap from spending money or placing an order.
+     * "Buy now" is left out on purpose — it sits on product pages and only leads to checkout.
+     */
+    val checkoutButtonStart = phrases(
+        "place order", "place your order", "confirm order", "confirm and pay", "complete purchase",
+        "complete order", "submit order", "slide to pay", "swipe to pay", "make payment", "order and pay",
+        "ऑर्डर करें",
+    )
+
+    /** The amount on a pay button: [pay, ₹, 1, 299] -> "₹1,299"; [pay, rs, 632] -> "₹632". */
+    fun amountOf(tokens: List<String>): String? {
+        val start = tokens.indexOfFirst { it == "₹" || it == "rs" || it == "inr" }
+        if (start < 0) return null
+        val digits = tokens.drop(start + 1).takeWhile { it.all(Char::isDigit) }
+        if (digits.isEmpty()) return null
+        // "1,299" normalizes to [1, 299]; "349.00" to [349, 00]. Only join thousands groups.
+        val groups = listOf(digits.first()) + digits.drop(1).takeWhile { it.length == 3 }
+        return "₹" + groups.joinToString(",")
+    }
     /** Editable-field labels (hint, content description, view id) that are payment credentials. */
     val paymentFieldLabels = phrases(
         "card number", "card no", "cvv", "cvc", "expiry", "exp date", "mm yy", "valid thru",

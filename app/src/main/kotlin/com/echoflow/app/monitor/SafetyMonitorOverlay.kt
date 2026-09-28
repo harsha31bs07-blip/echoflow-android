@@ -73,10 +73,10 @@ class SafetyMonitorOverlay(
         val kind = verdict?.primaryKind
         title.text = when {
             verdict == null -> "Waiting for a screen…"
-            kind == null -> "SAFE · ${packageName ?: "?"}"
+            kind == null -> "${verdict.label} · ${packageName ?: "?"}"
             else -> "${verdict.kinds.joinToString(" + ")} · ${packageName ?: "?"}"
         }
-        detail.text = verdict?.takeIf { it.isSensitive }?.summary() ?: ""
+        detail.text = verdict?.takeIf { it.isSensitive || it.isCheckout }?.summary() ?: ""
         detail.visibility = if (detail.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         // Always visible: "0 readable" with withheld children means the app hides its UI from us.
         diagnosticsLine.text = snapshot?.diagnostics?.summary() ?: ""
@@ -86,7 +86,7 @@ class SafetyMonitorOverlay(
         }
         r.setBackgroundColor(
             when (kind) {
-                null -> SAFE_BG
+                null -> if (verdict?.isCheckout == true) CHECKOUT_BG else SAFE_BG
                 SensitiveKind.OPAQUE_UNKNOWN -> OPAQUE_BG
                 else -> SENSITIVE_BG
             },
@@ -117,5 +117,6 @@ class SafetyMonitorOverlay(
         val SAFE_BG = Color.argb(225, 27, 94, 32)
         val SENSITIVE_BG = Color.argb(235, 183, 28, 28)
         val OPAQUE_BG = Color.argb(235, 230, 81, 0)
+        val CHECKOUT_BG = Color.argb(235, 21, 101, 192)
     }
 }

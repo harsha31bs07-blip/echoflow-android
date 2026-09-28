@@ -34,11 +34,12 @@ class ActionGatewayTest {
     }
     private val paymentPage = screen(id = 2) { text("Select payment method"); button("Pay ₹297") }
     private val guard = SafetyGuard(ScreenSafetyClassifier())
+    private val taught = GateContext(explicitlyTaught = true, resolverConfidence = 0.95)
 
     @Test fun `allowed action runs and the resulting payment screen hands off`() = runTest {
         val exec = FakeExecutor()
         val gateway = ActionGateway(guard, exec, FakeSource(cart, paymentPage))
-        val outcome = assertIs<ActionOutcome.Performed>(gateway.perform(PlannedAction.Click(1, proceed)))
+        val outcome = assertIs<ActionOutcome.Performed>(gateway.perform(PlannedAction.Click(1, proceed), taught))
         assertEquals(1, exec.executed.size)
         assertTrue(outcome.handedOff)
         assertTrue(guard.isTripped)
@@ -50,9 +51,18 @@ class ActionGatewayTest {
     @Test fun `blocked action never reaches the executor`() = runTest {
         val exec = FakeExecutor()
         val gateway = ActionGateway(guard, exec, FakeSource(cart))
-        val outcome = assertIs<ActionOutcome.Blocked>(gateway.perform(PlannedAction.Click(1, place)))
+        val outcome = assertIs<ActionOutcome.Blocked>(gateway.perform(PlannedAction.Click(1, place), taught))
         assertEquals(BlockReason.COMMIT_ACTION, outcome.decision.reason)
         assertTrue(exec.executed.isEmpty())
+    }
+
+    @Test fun `untaught tap on a checkout screen never reaches the executor`() = runTest {
+        val exec = FakeExecutor()
+        val gateway = ActionGateway(guard, exec, FakeSource(cart))
+        val outcome = assertIs<ActionOutcome.Blocked>(gateway.perform(PlannedAction.Click(1, proceed)))
+        assertEquals(BlockReason.CHECKOUT_UNTAUGHT, outcome.decision.reason)
+        assertTrue(exec.executed.isEmpty())
+        assertFalse(guard.isTripped)
     }
 
     @Test fun `platform refusal is reported as failure`() = runTest {

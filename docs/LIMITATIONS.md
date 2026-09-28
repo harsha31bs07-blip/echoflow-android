@@ -24,6 +24,7 @@ These are the places where the architecture has **no clean answer yet**, or wher
 - The verb list only covers English and Hindi, and wording differs between apps.
 - Some apps use a commit verb for a button that only navigates. Myntra's bag button "PLACE ORDER" opens address selection, and Amazon's "Buy Now" opens checkout. Flows through those buttons end with a hand-off at the button, which is safe but earlier than the real payment screen.
 - If an app's "Proceed to pay" charged a saved method directly, the only protection would be the next screen's check. UPI PIN, OTP and CVV prompts all trip.
+- Since validation round 2, a screen with one of these buttons but no credential fields is `CHECKOUT` (ARCHITECTURE § CHECKOUT screens). Only taught steps run there, and the button itself is still never tapped. The protection now depends on the commit-verb list recognising that button. An app whose one-tap pay button uses unusual wording, and whose screen has no other payment signal, would show as SAFE, not CHECKOUT, and its button would not be blocked. Every new target app's cart must be dumped and checked (SAFETY_FIXTURES.md).
 
 ## L3. Item-dependent flow shape (T4)
 **Problem.** Different items can lead through different screens. For example, Margherita may open a customization sheet while garlic bread doesn't, or opens a different one.
@@ -131,3 +132,10 @@ These are the places where the architecture has **no clean answer yet**, or wher
 - The overlay shows `N nodes · M readable · K withheld` for every screen, so a hidden app is visible immediately.
 
 **Still open.** If an app is still unreadable with these changes, it can't be a target app. Flow 1 then moves to another food app (Zomato first), and the README's target list gets updated.
+
+## L16. Carts with a "Pay using" selector are still PAYMENT (T6)
+**Problem.** CHECKOUT only covers screens whose sole payment signal is the pay or place-order button. A cart that also shows a short "Pay using …" / "Pay with …" label (a Zomato-style cart, in the synthetic tests) still trips `PAYMENT` on that label. So the address and quantity controls on that cart can't be taught or replayed.
+
+**Mitigation.** None yet. This is on purpose: loosening one signal at a time, backed by real dumps, keeps T11 safe.
+
+**Still open.** Once Zomato's real cart has been dumped: if it looks like Swiggy's (a pay button plus a method selector, but no credential fields or method list), extend CHECKOUT to cover a "Pay using" selector too, with a fixture proving it.

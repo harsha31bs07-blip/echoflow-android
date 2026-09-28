@@ -80,6 +80,49 @@ class SafetyGuardTest {
         assertTrue(guard.isTripped)
     }
 
+    private var changeAddressIdx = -1
+    private var cartPayIdx = -1
+    private val swiggyCart: ScreenSnapshot = screen(id = 40) {
+        text("Hugo (Fried Chicken & Mozza Sandwich)")
+        changeAddressIdx = icon("Click here to change delivery address")
+        cartPayIdx = icon("Pay ₹632 using Debit card")
+    }
+
+    @Test fun `checkout screen allows taught safe taps without tripping`() {
+        assertTrue(guard.onSnapshot(swiggyCart).isCheckout)
+        assertFalse(guard.isTripped, "arriving on checkout is not a hand-off")
+        assertIs<GateDecision.Allow>(guard.gate(PlannedAction.Click(40, changeAddressIdx), swiggyCart, taught))
+        assertIs<GateDecision.Allow>(guard.gate(PlannedAction.Click(40, changeAddressIdx), swiggyCart, GateContext(isRecovery = true)))
+        assertIs<GateDecision.Allow>(guard.gate(PlannedAction.Scroll(40, changeAddressIdx, forward = true), swiggyCart, GateContext()))
+    }
+
+    @Test fun `checkout screen blocks untaught taps`() {
+        val d = block(guard.gate(PlannedAction.Click(40, changeAddressIdx), swiggyCart, GateContext()))
+        assertEquals(BlockReason.CHECKOUT_UNTAUGHT, d.reason)
+        assertFalse(guard.isTripped)
+    }
+
+    @Test fun `the pay button on checkout is never tapped, even when taught`() {
+        val d = block(guard.gate(PlannedAction.Click(40, cartPayIdx), swiggyCart, taught))
+        assertEquals(BlockReason.COMMIT_ACTION, d.reason)
+        assertEquals(SensitiveKind.PAYMENT, d.handOff)
+        assertTrue(guard.isTripped)
+    }
+
+    @Test fun `finishing a run on checkout hands off with the amount`() {
+        val trip = guard.handOffAtCheckout(swiggyCart)
+        assertEquals(SensitiveKind.CHECKOUT, trip?.kind)
+        assertEquals("₹632", trip?.amount)
+        assertTrue(trip!!.handOffMessage.contains("₹632"), trip.handOffMessage)
+        assertTrue(guard.isTripped)
+        assertEquals(BlockReason.GUARD_TRIPPED, block(guard.gate(PlannedAction.Click(40, changeAddressIdx), swiggyCart, taught)).reason)
+    }
+
+    @Test fun `finishing a run elsewhere is not a checkout hand-off`() {
+        assertNull(guard.handOffAtCheckout(menu))
+        assertFalse(guard.isTripped)
+    }
+
     @Test fun `destructive taps need a taught step and high confidence, never recovery`() {
         val click = PlannedAction.Click(10, removeIdx)
         assertEquals(BlockReason.DESTRUCTIVE_ACTION, block(guard.gate(click, menu, GateContext())).reason)

@@ -22,7 +22,7 @@ Install the app, enable the accessibility service, and turn on **Safety monitor 
 | Screen | Expected overlay |
 |---|---|
 | Home, search results, product/restaurant page, menu with bank offers | green SAFE |
-| Cart / bag (before payment) | green SAFE, or red PAYMENT if the cart has a "Pay using" selector (see LIMITATIONS L2) |
+| Cart / bag (before payment) | green SAFE; **blue CHECKOUT** if it shows a pay or place-order button; red PAYMENT if it shows a "Pay using" selector (see LIMITATIONS L2, L16) |
 | Address selection | green SAFE |
 | Payment options page (UPI / cards / net banking / wallets) | red PAYMENT |
 | Card entry form, UPI ID entry | red PAYMENT |
@@ -60,6 +60,7 @@ core/src/test/resources/fixtures/
   sensitive/password/<name>.json   must classify as PASSWORD
   sensitive/login/<name>.json      must classify as LOGIN
   sensitive/opaque_unknown/<name>.json
+  checkout/<name>.json             must classify as CHECKOUT (pay button, no credential fields)
   safe/<name>.json                 must classify as SAFE
 ```
 

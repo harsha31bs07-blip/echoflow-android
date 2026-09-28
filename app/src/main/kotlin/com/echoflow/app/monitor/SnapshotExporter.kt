@@ -23,7 +23,7 @@ object SnapshotExporter {
         val json = SnapshotJson.encode(Redactor.redact(snapshot))
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(snapshot.timestampMs))
         val app = appSlug(snapshot.packageName)
-        val kind = verdict.primaryKind?.name?.lowercase() ?: "safe"
+        val kind = verdict.label.lowercase()
         val name = "snap_${stamp}_${app}_$kind.json"
 
         val resolver = context.contentResolver

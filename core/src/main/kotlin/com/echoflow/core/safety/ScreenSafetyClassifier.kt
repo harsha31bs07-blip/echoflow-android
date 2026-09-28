@@ -30,7 +30,28 @@ class ScreenSafetyClassifier(
         val kinds = distinct.groupBy { it.kind }
             .filterValues { list -> list.sumOf { it.strength.weight } >= ScreenVerdict.TRIP_THRESHOLD }
             .keys
-        return ScreenVerdict(snapshot.id, snapshot.packageName, kinds, distinct)
+        return ScreenVerdict(snapshot.id, snapshot.packageName, kinds, distinct, checkoutSignal(ctx))
+    }
+
+    /**
+     * A visible pay / place-order button. This used to make the whole screen PAYMENT, which also
+     * blocked safe taps next to it (Swiggy's cart has "change address" beside "Pay ₹632 using
+     * Debit card"). Now it marks the screen CHECKOUT; the button itself stays a COMMIT action
+     * that is never tapped. Screens with card/UPI fields or a payment-method list still trip
+     * PAYMENT on those signals.
+     */
+    private fun checkoutSignal(ctx: Ctx): CheckoutSignal? {
+        for ((e, tokens) in ctx.visibleLabeled) {
+            if (tokens.size > SafetyLexicon.SHORT_LABEL_MAX_TOKENS) continue
+            if (lex.isPayButton(tokens)) {
+                val amount = lex.amountOf(tokens)
+                return CheckoutSignal(if (amount != null) "pay ₹" else "pay", amount, e.index)
+            }
+            lex.checkoutButtonStart.firstOrNull { it.startsOf(tokens) }?.let {
+                return CheckoutSignal(it.source, lex.amountOf(tokens), e.index)
+            }
+        }
+        return null
     }
 
     private class Ctx(val snapshot: ScreenSnapshot, val elements: List<UiElement>) {
@@ -113,9 +134,6 @@ class ScreenSafetyClassifier(
                 lex.paymentStrong.firstOrNull { it.foundIn(tokens) }?.let {
                     out += SafetySignal(SensitiveKind.PAYMENT, "payment-phrase", STRONG, it.source, e.index)
                 }
-                if (isPayButtonLabel(tokens)) {
-                    out += SafetySignal(SensitiveKind.PAYMENT, "pay-button", STRONG, tokens.take(2).joinToString(" "), e.index)
-                }
                 lex.otpTerms.firstOrNull { it.foundIn(tokens) }?.let {
                     out += SafetySignal(SensitiveKind.OTP, "otp-term", if (hasEditable) STRONG else MEDIUM, it.source, e.index)
                 }
@@ -141,8 +159,6 @@ class ScreenSafetyClassifier(
             }
         }
     }
-
-    private fun isPayButtonLabel(tokens: List<String>): Boolean = lex.isPayButton(tokens)
 
     private fun opaqueSignals(ctx: Ctx, out: MutableList<SafetySignal>) {
         val screenArea = ctx.snapshot.screenArea.coerceAtLeast(1)

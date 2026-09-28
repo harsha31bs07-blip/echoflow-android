@@ -9,6 +9,7 @@ import kotlin.test.fail
 /**
  * Runs every snapshot dump under src/test/resources/fixtures:
  *   fixtures/sensitive/<kind>/<name>.json  must be classified as <kind> (e.g. payment, otp);
+ *   fixtures/checkout/<name>.json           must be CHECKOUT (commit button, not a hand-off screen);
  *   fixtures/safe/<name>.json               must be classified SAFE.
  * Dumps come from the on-device safety monitor ("Dump" button); see docs/SAFETY_FIXTURES.md.
  */
@@ -32,9 +33,17 @@ class FixtureHarnessTest {
     @Test fun `safe fixtures stay safe`() {
         val failures = File(root, "safe").jsonFiles().mapNotNull { file ->
             val verdict = classifier.classify(SnapshotJson.decode(file.readText()))
-            if (verdict.isSensitive) "${file.name}: ${verdict.summary()}" else null
+            if (verdict.label != "SAFE") "${file.name}: ${verdict.summary()}" else null
         }
         if (failures.isNotEmpty()) fail("False hand-offs:\n" + failures.joinToString("\n"))
+    }
+
+    @Test fun `checkout fixtures are checkout, not payment`() {
+        val failures = File(root, "checkout").jsonFiles().mapNotNull { file ->
+            val verdict = classifier.classify(SnapshotJson.decode(file.readText()))
+            if (verdict.isCheckout) null else "${file.name}: ${verdict.summary()}"
+        }
+        if (failures.isNotEmpty()) fail("Not classified CHECKOUT:\n" + failures.joinToString("\n"))
     }
 
     private fun File.jsonFiles(): List<File> = listFiles { f -> f.extension == "json" }.orEmpty().sortedBy { it.name }

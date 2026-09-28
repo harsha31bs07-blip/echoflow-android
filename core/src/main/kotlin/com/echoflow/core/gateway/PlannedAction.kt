@@ -43,6 +43,8 @@ enum class BlockReason {
     COMMIT_ACTION,
     DESTRUCTIVE_ACTION,
     SENSITIVE_FIELD,
+    /** Untaught, non-recovery tap or typing on a CHECKOUT screen. */
+    CHECKOUT_UNTAUGHT,
     STALE_SNAPSHOT,
     UNKNOWN_TARGET,
 }

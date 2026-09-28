@@ -276,6 +276,18 @@ The signals are OR-ed, so any single hit trips the guard:
 - The foreground package is on the denylist: payment gateways and wallets (Razorpay, Paytm, PhonePe, GPay, PayU, CRED), bank apps, and Google account auth. → `PAYMENT` / `LOGIN`
 - The tree is mostly WebView, or nearly empty, *after* the flow's last taught step. → `OPAQUE_UNKNOWN`, which fails closed.
 
+### CHECKOUT screens (not a hand-off)
+
+A screen showing a pay or place-order button ("Pay ₹632 using Debit card", "Place order") **with no card, UPI, OTP or password fields and no payment-method list** is classified `CHECKOUT`, not `PAYMENT`. Swiggy's cart is the motivating case: the "change delivery address" and quantity controls sit next to a one-tap pay button, and a `PAYMENT` verdict would block them and make T6 impossible there.
+
+On a `CHECKOUT` screen:
+- **Taught steps run normally.** For example, choosing a different saved address, or changing the quantity.
+- **Untaught taps and typing are blocked** (`CHECKOUT_UNTAUGHT`). The only exceptions are scrolling and recovery dismissals, such as closing a popup.
+- **The commit button is never tapped.** It's a `COMMIT` action, and trying it trips a `PAYMENT` hand-off.
+- **When a replay finishes its taught steps here,** the engine calls `SafetyGuard.handOffAtCheckout()`. This trips with kind `CHECKOUT` and says a fixed line: *"Everything is ready at checkout, total ₹632. I won't pay. Please check the order and pay yourself."*
+
+If a screen shows `PAYMENT` signals too, `PAYMENT` wins. For example, Swiggy's Payment Options page has a "Pay ₹632" button, but its "Payment Options" heading trips `PAYMENT`.
+
 ### Action classification
 
 - **`COMMIT`**: the target's text or content-desc matches an irreversible verb, such as *Pay*, *Place order*, *Confirm order*, *Slide to pay* or *Complete purchase*. The app **never** taps these, even if one was demonstrated.
@@ -293,8 +305,11 @@ stateDiagram-v2
 ```
 
 - **Replay:** the guard cancels the run, freezes the gateway (any further `perform` throws), speaks a fixed hand-off message, and logs `HANDED_OFF(kind, step)`.
-- **Teaching:** the guard stops recording at the first sensitive screen and inserts `Boundary(PAYMENT)`. This is T1's "stop before payment".
-- **Payment boundary definition:** T2's "reaches payment" means arriving on a `PAYMENT` screen or reaching a COMMIT tap, whichever happens first.
+- **Teaching:** the guard stops recording at the first sensitive screen, or at a tap on a COMMIT button, and inserts `Boundary(PAYMENT)`. This is T1's "stop before payment". Recording carries on through `CHECKOUT` screens, so steps like picking an address can be taught. The teaching guide tells the teacher to say "stop" before tapping pay.
+- **Payment boundary definition:** T2's "reaches payment" means whichever of these happens first:
+  - arriving on a `PAYMENT` screen;
+  - reaching a COMMIT tap;
+  - finishing the taught steps on a `CHECKOUT` screen.
 - **Redaction:** snapshots of sensitive screens are reduced to their classification before they reach the RunLog, the recorder or the LLMGateway.
 
 ---

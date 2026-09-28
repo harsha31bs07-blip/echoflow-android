@@ -16,7 +16,6 @@ import com.echoflow.core.bus.EchoEvent
 import com.echoflow.core.gateway.ActionGateway
 import com.echoflow.core.safety.ResumeResult
 import com.echoflow.core.safety.ScreenVerdict
-import com.echoflow.core.safety.SensitiveKind
 import com.echoflow.core.safety.Trip
 
 /**
@@ -37,8 +36,7 @@ class EchoAccessibilityService : AccessibilityService() {
     private var recheckStage = 0
 
     // Main-thread state for announcements.
-    private var lastAnnouncedKind: SensitiveKind? = null
-    private var hasAnnounced = false
+    private var lastAnnounced: String? = null
     @Volatile private var pendingHandOff: Trip? = null
 
     private val captureRunnable = Runnable { captureNow("event") }
@@ -143,11 +141,15 @@ class EchoAccessibilityService : AccessibilityService() {
             if (!EchoRuntime.prefs.monitorEnabled || !EchoRuntime.prefs.speakEnabled) return@post
             when {
                 handOff != null -> announcer.speak(handOff.handOffMessage)
-                !hasAnnounced || verdict.primaryKind != lastAnnouncedKind ->
-                    announcer.speak(verdict.primaryKind?.let { "Sensitive: ${it.spoken}" } ?: "Safe screen")
+                verdict.label != lastAnnounced -> announcer.speak(
+                    when {
+                        verdict.primaryKind != null -> "Sensitive: ${verdict.primaryKind!!.spoken}"
+                        verdict.isCheckout -> "Checkout screen" + (verdict.checkout?.amount?.let { ", $it" } ?: "")
+                        else -> "Safe screen"
+                    },
+                )
             }
-            hasAnnounced = true
-            lastAnnouncedKind = verdict.primaryKind
+            lastAnnounced = verdict.label
         }
         return verdict
     }

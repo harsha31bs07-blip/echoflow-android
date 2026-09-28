@@ -100,7 +100,48 @@ class ScreenSafetyClassifierTest {
 
     @Test fun `Hindi payment heading trips`() = assertKind(PAYMENT, screen { text("भुगतान विकल्प"); text("यूपीआई") })
 
-    @Test fun `bare pay button trips`() = assertKind(PAYMENT, screen { text("Order summary"); button("Pay now") })
+    // ---------- CHECKOUT (commit button, no credentials) ----------
+
+    private fun assertCheckout(s: ScreenSnapshot, amount: String? = null) {
+        val v = classifier.classify(s)
+        assertTrue(v.isCheckout, "expected CHECKOUT but got ${v.summary()}")
+        assertEquals("CHECKOUT", v.label)
+        if (amount != null) assertEquals(amount, v.checkout?.amount)
+    }
+
+    @Test fun `bare pay button is checkout, not a payment hand-off`() =
+        assertCheckout(screen { text("Order summary"); button("Pay now") })
+
+    @Test fun `swiggy-style cart with one-tap saved-card pay is checkout`() = assertCheckout(screen {
+        text("Hugo (Fried Chicken & Mozza Sandwich)"); text("−"); text("1"); text("+")
+        icon("Click here to change delivery address")
+        icon("Currently paying using Debit card ####, Change payment method")
+        icon("Pay ₹632 using Debit card")
+    }, amount = "₹632")
+
+    @Test fun `place order bag is checkout`() = assertCheckout(screen(pkg = "com.myntra.android") {
+        text("BAG"); text("ADDRESS"); text("PAYMENT"); text("Men Running Shoes"); button("PLACE ORDER")
+    })
+
+    @Test fun `payment options page with a pay button is still PAYMENT`() {
+        val s = screen { text("Payment Options"); text("Preferred Payment"); icon("Saved card"); text("Pay₹632"); text("Google Pay") }
+        assertKind(PAYMENT, s)
+        assertFalse(classifier.classify(s).isCheckout, "PAYMENT wins over CHECKOUT")
+    }
+
+    @Test fun `product page with buy now is not checkout`() {
+        val v = classifier.classify(screen(pkg = "in.amazon.mShop.android.shopping") { text("Running Shoes"); button("Add to Cart"); button("Buy Now") })
+        assertFalse(v.isCheckout, v.summary())
+        assertEquals("SAFE", v.label)
+    }
+
+    @Test fun `amounts are read from pay buttons`() {
+        fun amount(label: String) = SafetyLexicon.amountOf(com.echoflow.core.text.TextNormalizer.tokens(label))
+        assertEquals("₹632", amount("Pay ₹632 using Debit card"))
+        assertEquals("₹1,299", amount("Pay ₹1,299"))
+        assertEquals("₹349", amount("Pay Rs. 349.00"))
+        assertEquals(null, amount("Pay now"))
+    }
 
     @Test fun `restaurant menu with bank and wallet offers is safe`() = assertSafe(screen {
         edit(hint = "Search for dishes")

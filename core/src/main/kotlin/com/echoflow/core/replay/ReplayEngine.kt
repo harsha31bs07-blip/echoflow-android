@@ -75,10 +75,14 @@ class ReplayEngine(
     /** The address sheet is answered at most once per run. */
     private var addressHandled = false
 
+    /** The options sheet is asked about at most once per run. */
+    private var customisationHandled = false
+
     suspend fun run(flow: Flow, slotValues: Map<String, String>): ReplayResult {
         events.clear()
         lastTyped = null
         addressHandled = false
+        customisationHandled = false
         val slots = slotValues.toMutableMap()
         val steps = flow.steps
         var i = 0
@@ -133,7 +137,7 @@ class ReplayEngine(
         if (final != null) {
             if (guard.classify(final).isCheckout) {
                 adjustQuantity(final, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
-                final = readable(host.current()) ?: final
+                final = awaitCheckout(readable(host.current()) ?: final)
             }
             guard.handOffAtCheckout(final)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
             // Taught to end at checkout, but the app's cart button didn't report its tap while
@@ -141,14 +145,10 @@ class ReplayEngine(
             if (flow.endedAt == "CHECKOUT") {
                 openCart(final)?.let { opened ->
                     var cart = readable(opened) ?: opened
-                    // The cart draws its pay button last; give it a moment.
-                    val waitStart = host.nowMs()
-                    while (!guard.classify(cart).isCheckout && guard.classify(cart).kinds.isEmpty() && host.nowMs() - waitStart < 5_000) {
-                        cart = host.awaitSettled(cart.id, 1_000) ?: host.current() ?: cart
-                    }
+                    cart = awaitCheckout(cart)
                     if (guard.classify(cart).isCheckout) {
                         adjustQuantity(cart, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
-                        cart = readable(host.current()) ?: cart
+                        cart = awaitCheckout(readable(host.current()) ?: cart)
                     }
                     guard.handOffAtCheckout(cart)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
                 }
@@ -517,6 +517,16 @@ class ReplayEngine(
      * one the taught flow didn't set. Reads the displayed count after every tap; never goes
      * below 1 ("−" at 1 removes the item).
      */
+    /** The cart draws (and, after a quantity change, redraws) its pay button last: wait for it. */
+    private suspend fun awaitCheckout(start: ScreenSnapshot): ScreenSnapshot {
+        var cart = start
+        val waitStart = host.nowMs()
+        while (!guard.classify(cart).isCheckout && guard.classify(cart).kinds.isEmpty() && host.nowMs() - waitStart < 5_000) {
+            cart = host.awaitSettled(cart.id, 1_000) ?: host.current() ?: cart
+        }
+        return cart
+    }
+
     private suspend fun adjustQuantity(start: ScreenSnapshot, flow: Flow, slots: Map<String, String>): StepResult.Stop? {
         val want = slots["qty"]?.toIntOrNull() ?: return null
         if (flow.steps.any { it is Step.RepeatTap }) return null // the flow sets quantity itself
@@ -565,6 +575,11 @@ class ReplayEngine(
     private suspend fun handleCustomisation(snap: ScreenSnapshot, slots: Map<String, String>): StepResult.Stop? {
         val button = customisationSheet(snap) ?: return null
         val item = slots["item"] ?: "This item"
+        if (customisationHandled) {
+            // Still open after "Add Item": the dish has a required choice with no default.
+            return StepResult.Stop(RunStatus.HALTED, "$item needs you to pick some options, like size or type. I've left them open for you to choose.")
+        }
+        customisationHandled = true
         val price = SafetyLexicon.amountOf(TextNormalizer.tokens(button.label))
         val answer = host.ask(
             "$item has extra options. Should I add it with the default choices" + (price?.let { " for $it" } ?: "") + "?",
@@ -577,7 +592,18 @@ class ReplayEngine(
         val now = host.current() ?: snap
         val fresh = customisationSheet(now) ?: return StepResult.Stop(RunStatus.HALTED, "The options sheet closed before I could add $item.")
         val o = act(PlannedAction.Click(now.id, Descriptors.clickableFor(now, fresh.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
-        return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add $item.")
+        if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add $item.")
+        // Give the sheet time to close; if it stays, a required choice is missing.
+        var after = host.current() ?: return null
+        val waitStart = host.nowMs()
+        while (customisationSheet(after) != null && host.nowMs() - waitStart < 2_500) {
+            after = host.awaitSettled(after.id, 800) ?: host.current() ?: return null
+        }
+        return if (customisationSheet(after) != null) {
+            StepResult.Stop(RunStatus.HALTED, "$item needs you to pick some options, like size or type. I've left them open for you to choose.")
+        } else {
+            null
+        }
     }
 
     /** A non-editable "Search" box/button (upper part of the screen) that opens the search field. */

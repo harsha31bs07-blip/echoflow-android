@@ -17,6 +17,8 @@ object EchoRuntime {
         private set
     lateinit var guard: SafetyGuard
         private set
+    lateinit var orchestrator: com.echoflow.app.orchestrator.Orchestrator
+        private set
 
     val bus = EchoBus()
     val snapshots = LiveSnapshotStore()
@@ -38,6 +40,7 @@ object EchoRuntime {
         prefs = EchoPrefs(app)
         guard = SafetyGuard(ScreenSafetyClassifier(ownPackage = app.packageName))
         initialized = true
+        orchestrator = com.echoflow.app.orchestrator.Orchestrator(app)
     }
 
     internal fun attach(service: EchoAccessibilityService, gateway: ActionGateway) {

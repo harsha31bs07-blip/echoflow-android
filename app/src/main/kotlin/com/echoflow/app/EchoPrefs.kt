@@ -1,4 +1,4 @@
-package com.echoflow.app
+﻿package com.echoflow.app
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -7,11 +7,11 @@ class EchoPrefs(context: Context) {
     private val sp: SharedPreferences = context.getSharedPreferences("echoflow", Context.MODE_PRIVATE)
 
     var monitorEnabled: Boolean
-        get() = sp.getBoolean(KEY_MONITOR, true)
+        get() = sp.getBoolean(KEY_MONITOR, false)
         set(value) = sp.edit().putBoolean(KEY_MONITOR, value).apply()
 
     var speakEnabled: Boolean
-        get() = sp.getBoolean(KEY_SPEAK, true)
+        get() = sp.getBoolean(KEY_SPEAK, false)
         set(value) = sp.edit().putBoolean(KEY_SPEAK, value).apply()
 
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) = sp.registerOnSharedPreferenceChangeListener(listener)

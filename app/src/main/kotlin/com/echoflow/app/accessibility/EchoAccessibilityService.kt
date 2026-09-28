@@ -12,7 +12,18 @@ import com.echoflow.app.EchoRuntime
 import com.echoflow.app.monitor.Announcer
 import com.echoflow.app.monitor.SafetyMonitorOverlay
 import com.echoflow.app.monitor.SnapshotExporter
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import com.echoflow.app.BuildConfig
+import com.echoflow.app.ui.EchoBubble
+import com.echoflow.app.voice.VoiceIO
 import com.echoflow.core.bus.EchoEvent
+import com.echoflow.core.model.ScreenSnapshot
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import com.echoflow.core.gateway.ActionGateway
 import com.echoflow.core.safety.ResumeResult
 import com.echoflow.core.safety.ScreenVerdict
@@ -29,6 +40,12 @@ class EchoAccessibilityService : AccessibilityService() {
     private lateinit var capturer: SnapshotCapturer
     private lateinit var announcer: Announcer
     private var overlay: SafetyMonitorOverlay? = null
+    private var bubble: EchoBubble? = null
+    private val uiScope = MainScope()
+
+    /** Speech in/out for the orchestrator; lives as long as the service. */
+    lateinit var voice: VoiceIO
+        private set
 
     @Volatile private var lastActivity: String? = null
     private var pendingSince = 0L
@@ -58,12 +75,36 @@ class EchoAccessibilityService : AccessibilityService() {
         EchoRuntime.attach(this, ActionGateway(EchoRuntime.guard, executor, EchoRuntime.snapshots))
         EchoRuntime.guard.addTripListener(tripListener)
         EchoRuntime.prefs.register(prefListener)
+        voice = VoiceIO(this)
+        voice.onStatus = { s -> EchoRuntime.orchestrator.status(s) }
+        bubble = EchoBubble(this, EchoRuntime.orchestrator).also { it.show() }
+        uiScope.launch { EchoRuntime.orchestrator.state.collect { bubble?.render(it) } }
+        if (BuildConfig.DEBUG) {
+            // Debug builds only: `adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "..."`
+            // stands in for speech during automated device testing. Never present in release APKs.
+            registerReceiver(debugReceiver, IntentFilter(DEBUG_ACTION), RECEIVER_EXPORTED)
+        }
         applyPrefs()
         scheduleCapture(0)
     }
 
+    private val debugReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val o = EchoRuntime.orchestrator
+            when {
+                intent.getBooleanExtra("done", false) -> o.onDonePressed()
+                intent.getBooleanExtra("stop", false) -> o.onStopPressed()
+                else -> intent.getStringExtra("text")?.let(o::onTyped)
+            }
+        }
+    }
+
+    /** Synchronous capture for the teaching recorder (the screen *before* a tap changes it). */
+    fun captureNow(): ScreenSnapshot? = capturer.capture(lastActivity, "teach")?.snapshot
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.packageName?.toString() == packageName) return
+        EchoRuntime.orchestrator.activeRecorder?.let { rec -> runCatching { rec.onEvent(event) } }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             event.className?.toString()?.takeIf { it.contains('.') }?.let { lastActivity = it }
         }
@@ -78,6 +119,11 @@ class EchoAccessibilityService : AccessibilityService() {
         EchoRuntime.detach(this)
         overlay?.hide()
         overlay = null
+        bubble?.hide()
+        bubble = null
+        if (BuildConfig.DEBUG) runCatching { unregisterReceiver(debugReceiver) }
+        uiScope.cancel()
+        if (::voice.isInitialized) voice.shutdown()
         if (::announcer.isInitialized) announcer.shutdown()
         if (::captureThread.isInitialized) captureThread.quitSafely()
         super.onDestroy()
@@ -133,12 +179,14 @@ class EchoAccessibilityService : AccessibilityService() {
         EchoRuntime.snapshots.publish(live)
         val verdict = EchoRuntime.guard.onSnapshot(live.snapshot)
         EchoRuntime.bus.emit(EchoEvent.SnapshotUpdated(live.snapshot, verdict))
+        EchoRuntime.orchestrator.activeRecorder?.onSnapshot(live.snapshot)
 
         mainHandler.post {
             overlay?.render(live.snapshot, verdict, EchoRuntime.guard.currentState)
             val handOff = pendingHandOff
             pendingHandOff = null
-            if (!EchoRuntime.prefs.monitorEnabled || !EchoRuntime.prefs.speakEnabled) return@post
+            // The orchestrator does the talking while teaching or running.
+            if (!EchoRuntime.prefs.monitorEnabled || !EchoRuntime.prefs.speakEnabled || EchoRuntime.orchestrator.busy) return@post
             when {
                 handOff != null -> announcer.speak(handOff.handOffMessage)
                 verdict.label != lastAnnounced -> announcer.speak(
@@ -213,5 +261,6 @@ class EchoAccessibilityService : AccessibilityService() {
         val RECHECK_DELAYS_MS = longArrayOf(500L, 500L, 1_000L) // re-capture at ~0.5 s, 1 s, 2 s
         const val DUMP_ATTEMPTS = 3
         const val DUMP_ATTEMPT_GAP_MS = 400L
+        const val DEBUG_ACTION = "com.echoflow.DEBUG_COMMAND"
     }
 }

@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Voice commands (push-to-talk) and the optional Gemini call for paraphrases. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <!-- Resolve launcher activities of target apps (LaunchApp uses the launcher intent, not deep links). -->
     <queries>
         <intent>
@@ -24,6 +37,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.FlowInspectorActivity"
+            android:exported="false"
+            android:label="Flow" />
 
         <service
             android:name=".accessibility.EchoAccessibilityService"

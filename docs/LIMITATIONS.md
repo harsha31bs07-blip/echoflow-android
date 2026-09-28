@@ -127,7 +127,8 @@ These are the places where the architecture has **no clean answer yet**, or wher
 3. The app draws its UI without accessibility nodes, or detects accessibility services and hides.
 
 **Mitigation.**
-- The service declares `android:isAccessibilityTool="true"`. EchoFlow is a voice-control tool, in the same category as Google's Voice Access. The declaration only matters for Play Store review, not for a sideloaded APK.
+- The service declares `android:isAccessibilityTool="true"`. EchoFlow is a voice-control tool, in the same category as Google's Voice Access. Google's policy lists "voice-based input tools" as eligible. **Validation round 2 confirmed this fixes Swiggy** (0 → 70 readable nodes).
+- **Risk:** Google says apps that declare the flag without being genuine accessibility tools are rejected by Play *and may be blocked by Play Protect on devices*. That includes sideloaded installs ([RESEARCH.md §3](RESEARCH.md#3-android-platform-constraints)). If a judge's phone shows a Play Protect warning while installing, choose **More details → Install anyway**. If Play Protect later disables EchoFlow, reinstall it with Play Protect scanning paused for the demo.
 - Unreadable screens are re-captured at about 0.5 s, 1 s and 2 s without waiting for events, and Dump always captures fresh.
 - The overlay shows `N nodes · M readable · K withheld` for every screen, so a hidden app is visible immediately.
 

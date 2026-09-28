@@ -46,6 +46,7 @@ If the Android SDK or Google Maven isn't available (some CI machines), you can s
 1. Open **EchoFlow** and tap **Open Accessibility settings**.
 2. Enable **EchoFlow automation**.
 3. **Android 13+ with a sideloaded APK:** the toggle may be greyed out ("restricted setting"). Go to **Settings → Apps → EchoFlow → ⋮ (top right) → Allow restricted settings**, then repeat step 2.
+4. **If Play Protect warns during install:** tap **More details → Install anyway**. EchoFlow declares itself an accessibility tool (it's operated by voice), and some apps, Swiggy for example, only show their screens to accessibility tools. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) L15.
 
 ## Safety monitor (build step 1)
 

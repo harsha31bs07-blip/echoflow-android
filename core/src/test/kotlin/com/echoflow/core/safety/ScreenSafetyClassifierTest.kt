@@ -129,6 +129,14 @@ class ScreenSafetyClassifierTest {
         assertFalse(classifier.classify(s).isCheckout, "PAYMENT wins over CHECKOUT")
     }
 
+    @Test fun `a navigation tab called Pay is not checkout`() {
+        val s = screen(pkg = "in.amazon.mShop.android.shopping") {
+            add { com.echoflow.core.model.UiElement(it, className = "android.widget.TextView", text = "Pay", viewId = "in.amazon.mShop.android.shopping:id/tiles_nav_item_text", bounds = com.echoflow.core.model.Bounds(0, 0, 200, 100)) }
+            text("Deliver to 560054")
+        }
+        assertEquals("SAFE", classifier.classify(s).label, classifier.classify(s).summary())
+    }
+
     @Test fun `product page with buy now is not checkout`() {
         val v = classifier.classify(screen(pkg = "in.amazon.mShop.android.shopping") { text("Running Shoes"); button("Add to Cart"); button("Buy Now") })
         assertFalse(v.isCheckout, v.summary())

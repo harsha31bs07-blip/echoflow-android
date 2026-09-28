@@ -102,6 +102,17 @@ class ReplayEngine(
         } catch (e: CancellationException) {
             throw e
         }
+        // A flow that ends by typing a search: submit it (the teacher pressed enter/search, which
+        // isn't reported as a tap).
+        val typedLast = lastTyped
+        if (typedLast != null && steps.lastOrNull() is Step.TypeText) {
+            host.current()?.let { s ->
+                resolver.resolve(s, typedLast, slots, editableOnly = true)?.let { f ->
+                    events += "pressed enter on the search field"
+                    act(PlannedAction.ImeEnter(s.id, f.index), GateContext(explicitlyTaught = true, resolverConfidence = f.score), s)
+                }
+            }
+        }
         // All steps done: are we at the payment boundary?
         var final = readable(host.awaitSettled(host.current()?.id ?: 0, 1_500) ?: host.current())
         // The last tap can open a dialog (replace cart), an options sheet or an address sheet.
@@ -176,14 +187,23 @@ class ReplayEngine(
         var triedDismiss = 0
         var askedAboutValue = false
         var staleRetries = 0
+        var blankSince: Long? = null
+        var triedOpenSearch = false
+        var triedOpenResult = false
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
             val preview = guard.classify(snap)
-            if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN) && host.nowMs() - started < OPAQUE_GRACE_MS) {
-                // Blank frames during screen transitions: give the app a moment to draw.
-                host.awaitSettled(snap.id, 1_000)
-                continue
+            if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) {
+                // Blank frames during loading: give the app time to draw, counted from when the
+                // screen went blank; only a screen that stays unreadable ends the run.
+                val since = blankSince ?: host.nowMs().also { blankSince = it }
+                if (host.nowMs() - since < OPAQUE_GRACE_MS) {
+                    host.awaitSettled(snap.id, 1_000)
+                    continue
+                }
+            } else {
+                blankSince = null
             }
             if (preview.isSensitive && guard.onSnapshot(snap).isSensitive) return tripped() ?: StepResult.Stop(RunStatus.HANDED_OFF, "Sensitive screen.")
             if (snap.packageName != null && snap.packageName != flow.appPackage && !isOwnOrSystem(snap.packageName)) {
@@ -219,8 +239,6 @@ class ReplayEngine(
                 return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
             }
 
-            // Lookahead: the screen already matches a later step (optional screen skipped).
-            lookahead(steps, i, snap, slots)?.let { return StepResult.SkipTo(it) }
 
             // A popup covering the screen (promo, rating, location): dismiss via whitelist.
             if (triedDismiss < 2) {
@@ -244,6 +262,37 @@ class ReplayEngine(
                     act(PlannedAction.ImeEnter(snap.id, field.index), GateContext(explicitlyTaught = true, resolverConfidence = field.score), snap)
                     continue
                 }
+            }
+
+            // Typing step, but the field is hidden behind a "Search" button (its tap wasn't reported
+            // while teaching): open search first.
+            if (step is Step.TypeText && !triedOpenSearch) {
+                triedOpenSearch = true
+                val opener = searchOpener(snap)
+                if (opener != null) {
+                    events += "opened search via \"${opener.label ?: opener.viewId}\""
+                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, opener.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    continue
+                }
+            }
+            // After a search, the taught next element isn't on the results list: open the first
+            // result that matches {item} (a result tap that wasn't reported while teaching).
+            val item = slots["item"]
+            if (!triedOpenResult && item != null && step is Step.Tap && step.slot == null && steps.take(i).any { it is Step.TypeText }) {
+                triedOpenResult = true
+                val result = firstResult(snap, item)
+                if (result != null) {
+                    events += "opened the first result matching \"$item\""
+                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, result.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    continue
+                }
+            }
+
+            // Lookahead, last resort before scrolling: a later step is on screen, so this one was
+            // optional this time. Only after a short wait, because persistent elements (bottom
+            // navigation tabs, a cart icon) are visible on every screen.
+            if (host.nowMs() - started > LOOKAHEAD_AFTER_MS && (scrolls >= MAX_SCROLLS || scrollableList(snap) == null)) {
+                lookahead(steps, i, snap, slots)?.let { return StepResult.SkipTo(it) }
             }
 
             // A slot value that isn't on screen: scroll a bit, then ask with what we see.
@@ -285,22 +334,13 @@ class ReplayEngine(
             is ActionOutcome.Performed -> Unit
         }
         host.awaitSettled(before?.id ?: 0, 4_000)
-        // Normalise the start: back out until the first real step is visible (max 3 backs).
-        val first = steps.drop(1).firstOrNull() ?: return StepResult.Done
-        repeat(4) { attempt ->
+        // The launch starts a fresh task (the app's home screen), so no backing out is needed;
+        // wait for the app's first real screen (past splash / blank frames), then carry on.
+        repeat(6) {
             val snap = readable(host.current()) ?: return StepResult.Done
             tripped()?.let { return it }
-            if (resolve(first, snap, slots) != null || decisionDialog(snap) != null || dismissButton(snap) != null ||
-                addressOptions(snap).isNotEmpty() || customisationSheet(snap) != null
-            ) return StepResult.Done
-            if (snap.packageName != step.packageName) {
-                host.awaitSettled(snap.id, 1_500)
-                return@repeat
-            }
-            if (attempt < 3) {
-                events += "pressed back to reach the start screen"
-                act(PlannedAction.Back, GateContext(isRecovery = true), snap)
-            }
+            if (snap.packageName == step.packageName && guard.classify(snap).kinds.isEmpty()) return StepResult.Done
+            host.awaitSettled(snap.id, 1_500)
         }
         return StepResult.Done
     }
@@ -346,7 +386,9 @@ class ReplayEngine(
         return when (outcome) {
             is ActionOutcome.Performed -> tripped() ?: StepResult.Done
             is ActionOutcome.Blocked -> tripped()
-                ?: if (outcome.decision.reason == com.echoflow.core.gateway.BlockReason.STALE_SNAPSHOT) StepResult.Retry
+                ?: if (outcome.decision.reason == com.echoflow.core.gateway.BlockReason.STALE_SNAPSHOT ||
+                    (outcome.decision.reason == com.echoflow.core.gateway.BlockReason.SENSITIVE_SCREEN && outcome.decision.handOff == null)
+                ) StepResult.Retry
                 else StepResult.Stop(RunStatus.HALTED, "I stopped: ${outcome.decision.detail}.")
             is ActionOutcome.Failed -> StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
         }
@@ -523,6 +565,23 @@ class ReplayEngine(
         return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add $item.")
     }
 
+    /** A non-editable "Search" box/button (upper part of the screen) that opens the search field. */
+    private fun searchOpener(snap: ScreenSnapshot): UiElement? = snap.appElements()
+        .filter { it.visible && !it.editable && it.bounds.top < snap.screenHeight / 2 }
+        .filter { e ->
+            val l = TextNormalizer.normalize(e.label)
+            l == "search" || l.startsWith("search for") || l.startsWith("search or") ||
+                (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it) })
+        }
+        .minByOrNull { if (it.clickable) 0 else 1 }
+
+    /** The first (top-most) result whose own label contains [item], below the search field. */
+    private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
+        .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) > item.length }
+        .filter { ElementResolver.valueMatch(item, it.label, emptyList()) >= 0.8 }
+        .filter { Descriptors.clickableFor(snap, it.index).let { c -> snap.elements[c].clickable } }
+        .minByOrNull { it.bounds.top * 10 + it.bounds.left }
+
     /** Waits (up to [OPAQUE_GRACE_MS]) for a blank loading frame to be replaced by real content. */
     private suspend fun readable(snap: ScreenSnapshot?): ScreenSnapshot? {
         var s = snap ?: return null
@@ -680,6 +739,7 @@ class ReplayEngine(
         const val LOOKAHEAD_SCORE = 0.85
         const val MAX_SCROLLS = 3
         const val OPAQUE_GRACE_MS = 6_000L
+        const val LOOKAHEAD_AFTER_MS = 2_500L
         private val ADDRESS_HEADINGS = listOf("select delivery address", "select a delivery address", "choose a delivery address",
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
         private val ADDRESS_BARS = listOf("selected address is", "delivering to", "deliver to", "delivery address")

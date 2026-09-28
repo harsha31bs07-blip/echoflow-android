@@ -96,6 +96,13 @@ class SafetyGuard(
             return GateDecision.Block(BlockReason.GUARD_TRIPPED, "handed off: ${it.trip.kind}", it.trip.kind)
         }
 
+        // Unreadable (blank/loading) screens: refuse to act, but don't hand off — the caller waits
+        // and retries, and decides when "still unreadable" means stop.
+        val preview = screenClassifier.classify(snapshot)
+        if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) {
+            lastVerdict = preview
+            return GateDecision.Block(BlockReason.SENSITIVE_SCREEN, "screen not readable yet", null)
+        }
         val verdict = onSnapshot(snapshot)
         verdict.primaryKind?.let {
             return GateDecision.Block(BlockReason.SENSITIVE_SCREEN, verdict.summary(), it)

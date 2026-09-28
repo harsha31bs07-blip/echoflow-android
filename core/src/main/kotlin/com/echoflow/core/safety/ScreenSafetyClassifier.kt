@@ -43,6 +43,8 @@ class ScreenSafetyClassifier(
     private fun checkoutSignal(ctx: Ctx): CheckoutSignal? {
         for ((e, tokens) in ctx.visibleLabeled) {
             if (tokens.size > SafetyLexicon.SHORT_LABEL_MAX_TOKENS) continue
+            // Navigation tabs named "Pay" (Amazon's Amazon Pay tile) aren't a checkout button.
+            if (TextNormalizer.viewIdTokens(e.viewId).any { it in NAV_ID_TOKENS }) continue
             if (lex.isPayButton(tokens)) {
                 val amount = lex.amountOf(tokens)
                 return CheckoutSignal(if (amount != null) "pay ₹" else "pay", amount, e.index)
@@ -173,6 +175,10 @@ class ScreenSafetyClassifier(
         if (ctx.visibleLabeled.isEmpty() && ctx.editables.isEmpty() && !loading) {
             out += SafetySignal(SensitiveKind.OPAQUE_UNKNOWN, "no-readable-content", STRONG, "${ctx.elements.size} nodes")
         }
+    }
+
+    private companion object {
+        val NAV_ID_TOKENS = setOf("nav", "tab", "tabs", "navigation", "menu", "tiles")
     }
 
     private fun matchesPackage(pkg: String, list: List<String>): Boolean =

@@ -13,7 +13,7 @@ class ScreenBuilder(private val pkg: String) {
     private val windows = mutableListOf(WindowInfo(1, WindowType.APPLICATION, pkg, bounds = Bounds(0, 0, 1080, 2400)))
     private var y = 0
 
-    private fun add(e: (Int) -> UiElement): Int {
+    fun add(e: (Int) -> UiElement): Int {
         val index = elements.size
         elements += e(index)
         return index

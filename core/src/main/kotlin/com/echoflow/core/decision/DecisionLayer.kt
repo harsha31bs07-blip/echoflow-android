@@ -49,8 +49,11 @@ object DecisionLayer {
         var s = c.flow.template
         c.slots.forEach { (k, v) -> s = s.replace("{$k}", v) }
         s = s.replace(Regex("\\{\\w+\\}"), "…")
+        // Values the template has no place for (set at the cart / address list).
+        if ("{qty}" !in c.flow.template) c.slots["qty"]?.takeIf { it != "1" }?.let { q -> s = s.replaceFirst(" ", " $q ") }
+        if ("{address}" !in c.flow.template) c.slots["address"]?.let { s += " to $it" }
         val app = c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
-        return "$s on $app"
+        return if (s.contains(app, ignoreCase = true)) s else "$s on $app"
     }
 
     private fun ordinal(i: Int) = listOf("first", "second", "third").getOrElse(i) { "next" }

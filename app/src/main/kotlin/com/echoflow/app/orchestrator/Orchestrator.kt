@@ -47,7 +47,13 @@ data class UiState(
  */
 class Orchestrator(context: Context) {
     private val app = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // A bug in one command must never take down the accessibility service with it.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main + kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+            Log.e(TAG, "command failed", e)
+            _state.value = UiState(Mode.IDLE, "Something went wrong: ${e.javaClass.simpleName}. Please try again.")
+        },
+    )
     private val matcher = IntentMatcher()
     private val gemini = GeminiClient()
     val flows = FlowStore(app)
@@ -191,6 +197,8 @@ class Orchestrator(context: Context) {
     private suspend fun finishTeaching(endedAt: String, note: String? = null) {
         val rec = recorder ?: return
         recorder = null
+        // Pressing Done on a cart/checkout screen means "the flow ends at checkout".
+        val endedAt = if (endedAt == "user" && EchoRuntime.snapshots.current()?.let { EchoRuntime.guard.classify(it).isCheckout } == true) "CHECKOUT" else endedAt
         _state.value = UiState(Mode.IDLE, "Saving…")
         val actions = rec.snapshotActions()
         if (actions.isEmpty()) {
@@ -205,6 +213,7 @@ class Orchestrator(context: Context) {
             say("Something went wrong saving that flow: ${it.message}")
             return
         }
+        Log.i(TAG, "compiled ${actions.size} actions -> ${result.flow.steps.size} steps; dropped=${result.dropped}")
         flows.save(result.flow)
         val f = result.flow
         val slotText = if (f.slots.isEmpty()) "no changeable values" else f.slots.joinToString(", ") { "${it.name} ${it.taughtValue}" }
@@ -220,7 +229,8 @@ class Orchestrator(context: Context) {
     }
 
     private fun onTrip(trip: Trip) {
-        if (recorder != null) {
+        // Teaching only ends on screens that need the user (payment, OTP, password, login).
+        if (recorder != null && trip.kind != com.echoflow.core.safety.SensitiveKind.OPAQUE_UNKNOWN) {
             scope.launch { finishTeaching(trip.kind.name, "This is ${trip.kind.spoken}, so I stopped recording.") }
         }
     }

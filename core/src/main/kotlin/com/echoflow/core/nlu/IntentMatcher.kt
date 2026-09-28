@@ -74,7 +74,7 @@ class IntentMatcher {
         }
         // 3. Similarity: intent verbs, app mention, and whether the slots are there. Capped at 0.75.
         val parsed = Utterances.parse(norm)
-        val templateTokens = TextNormalizer.tokens(flow.template.replace(Regex("\\{\\w+}"), " "))
+        val templateTokens = TextNormalizer.tokens(flow.template.replace(Regex("\\{\\w+\\}"), " "))
         val flowVerbs = templateTokens.mapNotNull(::verbGroup).toSet()
         val saidVerbs = parsed.tokens.mapNotNull(::verbGroup).toSet()
         var score = 0.0
@@ -117,7 +117,7 @@ class IntentMatcher {
         fun templateRegex(template: String): Pair<Regex, List<String>>? {
             val names = mutableListOf<String>()
             val pattern = template.trim().split(Regex("\\s+")).joinToString(" ") { token ->
-                val slot = Regex("^\\{(\\w+)}$").matchEntire(token)?.groupValues?.get(1)
+                val slot = Regex("^\\{(\\w+)\\}$").matchEntire(token)?.groupValues?.get(1)
                 if (slot != null) {
                     names += slot
                     if (slot == "qty") "(\\S+)" else "(.+?)"

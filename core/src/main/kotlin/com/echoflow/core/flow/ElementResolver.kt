@@ -17,8 +17,8 @@ object Descriptors {
         val cy = (e.bounds.top + e.bounds.bottom) / 2f / snapshot.screenHeight.coerceAtLeast(1)
         return ElementDescriptor(
             viewId = e.viewId,
-            text = e.text?.takeIf { !e.editable && !e.password }?.let(::clip),
-            contentDescription = e.contentDescription?.let(::clip),
+            text = e.text?.takeIf { !e.editable && !e.password && it.isNotBlank() }?.let(::clip),
+            contentDescription = e.contentDescription?.takeIf { it.isNotBlank() }?.let(::clip),
             className = e.className,
             parentSignature = parent?.let(::signature),
             context = rowContext(snapshot, index),
@@ -131,9 +131,9 @@ class ElementResolver(
             total += w * m
             weights += w
         }
-        d.viewId?.let { add(W_ID, if (it == e.viewId) 1.0 else 0.0) }
-        d.text?.let { add(W_TEXT, textMatch(it, if (e.editable) null else e.text)) }
-        d.contentDescription?.let { add(W_DESC, textMatch(it, e.contentDescription)) }
+        d.viewId?.takeIf { it.isNotBlank() }?.let { add(W_ID, if (it == e.viewId) 1.0 else 0.0) }
+        d.text?.takeIf { it.isNotBlank() }?.let { add(W_TEXT, textMatch(it, if (e.editable) null else e.text)) }
+        d.contentDescription?.takeIf { it.isNotBlank() }?.let { add(W_DESC, textMatch(it, e.contentDescription)) }
         if (d.className.isNotEmpty()) add(W_CLASS, if (d.className == e.className) 1.0 else 0.0)
         d.parentSignature?.let { sig ->
             val p = snapshot.elements.getOrNull(e.parent)
@@ -182,10 +182,14 @@ class ElementResolver(
             if (v.isEmpty()) return 0.0
             val own = stem(TextNormalizer.tokens(label))
             if (own.isNotEmpty() && own.toSet() == v.toSet()) return 1.0
-            if (own.containsAll(v)) return 0.8
-            if (context.any { stem(TextNormalizer.tokens(it)).containsAll(v) }) return 0.6
+            if (covers(own, v)) return 0.8
+            if (context.any { covers(stem(TextNormalizer.tokens(it)), v) }) return 0.6
             return 0.0
         }
+
+        /** Every value word appears in [label], exactly or as a word prefix ("bread" → "breadsticks"). */
+        private fun covers(label: List<String>, value: List<String>) =
+            value.all { w -> label.any { it == w || (w.length >= 4 && it.startsWith(w)) } }
 
         private fun stem(tokens: List<String>) = tokens.map { if (it.length > 3 && it.endsWith("s")) it.dropLast(1) else it }
     }

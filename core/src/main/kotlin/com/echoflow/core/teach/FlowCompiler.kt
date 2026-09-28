@@ -56,13 +56,8 @@ class FlowCompiler {
 
         // 1d. Detours: the teacher went somewhere and came back to the same screen.
         kept = removeDetours(kept, slotValues, dropped)
-        // 1e. Taps that changed nothing (unless a field or stepper follows).
-        kept = kept.filterIndexed { i, a ->
-            val noop = a.kind == RawKind.TAP && a.postFingerprint != null && a.postFingerprint == a.preFingerprint &&
-                !isStepper(a) && kept.getOrNull(i + 1)?.kind != RawKind.TYPE && mentions(a, slotValues) == null
-            if (noop) dropped += "tap on \"${a.target.display}\" changed nothing"
-            !noop
-        }
+        // (No "changed nothing" filter: the coarse fingerprint can't see tab switches or list
+        // updates, and on device it dropped a needed "Dishes" tab tap. Extra steps are cheaper.)
 
         val steps = buildSteps(appPackage, appLabel, kept, slotValues)
         val template = template(teachingUtterance, slots)

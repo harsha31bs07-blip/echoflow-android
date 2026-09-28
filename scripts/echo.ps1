@@ -17,5 +17,24 @@ switch ($cmd) {
     "done" { & $adb shell am broadcast -a $act --ez done true | Out-Null }
     "stop" { & $adb shell am broadcast -a $act --ez stop true | Out-Null }
     "tap"  { & $adb shell input tap $a1 $a2 }
+    "find" {
+        # Tap the first element whose view id or label contains $a1 (optionally only clickable: $a2 = "C").
+        & $adb shell am broadcast -a $act --ez snap true | Out-Null
+        Start-Sleep -Milliseconds 900
+        $line = & $adb shell run-as com.echoflow cat files/debug_snap.txt | Select-Object -Skip 1 |
+            Where-Object { $f = $_ -split "`t"; ($f[4] -like "*$a1*" -or $f[5] -like "*$a1*") -and (-not $a2 -or $f[3] -like "*$a2*") } |
+            Select-Object -First 1
+        if (-not $line) { "not found: $a1"; return }
+        $xy = ($line -split "`t")[1] -split ","
+        & $adb shell input tap $xy[0] $xy[1]
+        "tapped: $line"
+    }
+    "shot" {
+        $out = if ($a1) { $a1 } else { "$env:TEMP\echo_shot.png" }
+        & $adb shell screencap -p /sdcard/echo_shot.png
+        & $adb pull /sdcard/echo_shot.png $out | Out-Null
+        & $adb shell rm /sdcard/echo_shot.png
+        $out
+    }
     "log"  { & $adb logcat -d -t 400 | Select-String -Pattern "EchoOrchestrator|AndroidRuntime|FATAL|echoflow" | Select-Object -Last 25 }
 }

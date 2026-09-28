@@ -41,13 +41,14 @@ class EchoBubble(
         val pad = (8 * dp).toInt()
         status = TextView(service).apply {
             setTextColor(Color.WHITE)
-            textSize = 13f
-            maxLines = 3
+            textSize = 12f
+            maxLines = 2
+            maxWidth = (300 * dp).toInt()
         }
-        speak = button("🎤 Speak", 0xFF1E88E5.toInt()) { orchestrator.onSpeakPressed() }
+        speak = button("🎤", 0xFF1E88E5.toInt()) { orchestrator.onSpeakPressed() }
         done = button("✓ Done", 0xFF43A047.toInt()) { orchestrator.onDonePressed() }
-        stop = button("■ Stop", 0xFFE53935.toInt()) { orchestrator.onStopPressed() }
-        val home = button("EchoFlow", 0xFF546E7A.toInt()) {
+        stop = button("■", 0xFFE53935.toInt()) { orchestrator.onStopPressed() }
+        val home = button("E", 0xFF546E7A.toInt()) {
             service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
         val move = button("⇅", 0xFF546E7A.toInt()) {
@@ -112,14 +113,15 @@ class EchoBubble(
     }
 
     private fun params() = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        gravity = if (atBottom) Gravity.BOTTOM else Gravity.TOP
-        y = (if (atBottom) 72 else 48) * dp.toInt()
-        horizontalMargin = 0.02f
+        // Compact panel in a corner, clear of most apps' main buttons; ⇅ flips top/bottom.
+        gravity = (if (atBottom) Gravity.BOTTOM else Gravity.TOP) or Gravity.END
+        y = ((if (atBottom) 150 else 40) * dp).toInt()
+        x = (4 * dp).toInt()
     }
 }

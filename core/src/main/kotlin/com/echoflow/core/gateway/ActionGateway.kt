@@ -5,6 +5,7 @@ import com.echoflow.core.safety.GateDecision
 import com.echoflow.core.safety.GuardState
 import com.echoflow.core.safety.SafetyGuard
 import com.echoflow.core.safety.ScreenVerdict
+import com.echoflow.core.safety.SensitiveKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -71,6 +72,12 @@ class ActionGateway(
         if (!ok) return@withLock ActionOutcome.Failed("platform refused $action")
 
         val post = snapshots.awaitNewerThan(snapshot.id, postActionTimeoutMs)
-        ActionOutcome.Performed(post, post?.let(guard::onSnapshot))
+        // A blank frame right after an action is usually the next screen still drawing; the
+        // watcher confirms "unreadable" after its re-checks. Anything else trips immediately.
+        val postVerdict = post?.let { p ->
+            val preview = guard.classify(p)
+            if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) preview.copy(kinds = emptySet()) else guard.onSnapshot(p)
+        }
+        ActionOutcome.Performed(post, postVerdict)
     }
 }

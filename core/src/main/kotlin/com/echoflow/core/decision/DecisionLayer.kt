@@ -48,7 +48,7 @@ object DecisionLayer {
     fun describe(c: Candidate): String {
         var s = c.flow.template
         c.slots.forEach { (k, v) -> s = s.replace("{$k}", v) }
-        s = s.replace(Regex("\\{\\w+}"), "…")
+        s = s.replace(Regex("\\{\\w+\\}"), "…")
         val app = c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
         return "$s on $app"
     }

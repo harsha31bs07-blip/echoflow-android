@@ -58,6 +58,11 @@ class FlowCompilerTest {
         assertTrue(r.dropped.any { it.contains("launcher") }, r.dropped.toString())
     }
 
+    @Test fun `slot values match word prefixes`() {
+        assertTrue(com.echoflow.core.flow.ElementResolver.valueMatch("garlic bread", null, listOf("Garlic Breadsticks", "₹99")) > 0)
+        assertEquals(0.0, com.echoflow.core.flow.ElementResolver.valueMatch("garlic bread", null, listOf("Paneer Tikka")))
+    }
+
     @Test fun `detours back to the same screen are removed`() {
         val restaurant = screen(pkg, id = 9) { text("Wrong restaurant"); button("Back to list") }
         val actions = listOf(

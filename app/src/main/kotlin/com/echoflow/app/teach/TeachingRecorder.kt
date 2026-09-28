@@ -57,10 +57,13 @@ class TeachingRecorder(
     private fun onClick(event: AccessibilityEvent) {
         val bounds = Rect().also { event.source?.getBoundsInScreen(it) ?: return }
         val cls = event.className?.toString()
+        android.util.Log.i("EchoTeach", "click event $cls $bounds text=${event.text} desc=${event.contentDescription}")
         // Prefer the settled pre-tap screen; the click event can arrive after navigation.
         val (snap, index) = listOfNotNull(previous(), capture()).firstNotNullOfOrNull { s ->
             findByBounds(s, bounds, cls, editable = false, exactOnly = true)?.let { s to it }
-        } ?: capture()?.let { s -> findByBounds(s, bounds, cls, editable = false)?.let { s to it } } ?: return
+        } ?: capture()?.let { s -> findByBounds(s, bounds, cls, editable = false)?.let { s to it } }
+            ?: return android.util.Log.i("EchoTeach", "  -> no matching element; dropped").let { }
+        android.util.Log.i("EchoTeach", "  -> recorded #$index ${snap.elements[index].viewId} '${snap.elements[index].label}'")
         val assessment = risk.assess(snap, snap.elements[index])
         if (assessment.risk == ActionRisk.COMMIT) {
             onCommitTap(assessment.evidence ?: "pay")

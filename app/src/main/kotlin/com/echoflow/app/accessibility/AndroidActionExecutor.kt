@@ -49,7 +49,9 @@ internal class AndroidActionExecutor(
 
     private fun launch(packageName: String): Boolean {
         val intent = service.packageManager.getLaunchIntentForPackage(packageName) ?: return false
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        // Fresh task: every replay starts from the app's home screen, as it did when taught,
+        // instead of wherever the user left it. Still the plain launcher intent, not a deep link.
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         return runCatching { service.startActivity(intent) }.isSuccess
     }
 }

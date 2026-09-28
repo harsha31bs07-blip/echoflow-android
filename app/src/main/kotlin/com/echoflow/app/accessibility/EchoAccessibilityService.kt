@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import com.echoflow.core.gateway.ActionGateway
 import com.echoflow.core.safety.ResumeResult
 import com.echoflow.core.safety.ScreenVerdict
+import com.echoflow.core.safety.SensitiveKind
 import com.echoflow.core.safety.Trip
 
 /**
@@ -162,6 +163,7 @@ class EchoAccessibilityService : AccessibilityService() {
             return
         }
         emptyRetries = 0
+        if (trigger == "event") recheckStage = 0
         process(live)
         scheduleRecheckIfUnreadable(live, trigger)
     }
@@ -185,7 +187,11 @@ class EchoAccessibilityService : AccessibilityService() {
     /** Publishes a capture, runs the guard on it, and updates the overlay and voice. Capture thread. */
     private fun process(live: LiveSnapshot): ScreenVerdict {
         EchoRuntime.snapshots.publish(live)
-        val verdict = EchoRuntime.guard.onSnapshot(live.snapshot)
+        val preview = EchoRuntime.guard.classify(live.snapshot)
+        val onlyOpaque = preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)
+        // Blank/unreadable screens (splash, loading) never hand off from here. Acting on them is
+        // still refused: the gateway's gate re-checks the screen before every action.
+        val verdict = if (onlyOpaque) preview else EchoRuntime.guard.onSnapshot(live.snapshot)
         EchoRuntime.bus.emit(EchoEvent.SnapshotUpdated(live.snapshot, verdict))
         EchoRuntime.orchestrator.activeRecorder?.onSnapshot(live.snapshot)
 

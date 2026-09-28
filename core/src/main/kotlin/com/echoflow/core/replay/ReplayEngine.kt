@@ -16,6 +16,8 @@ import com.echoflow.core.model.WindowType
 import com.echoflow.core.runlog.RunStatus
 import com.echoflow.core.safety.GuardState
 import com.echoflow.core.safety.SafetyGuard
+import com.echoflow.core.safety.SafetyLexicon
+import com.echoflow.core.safety.SensitiveKind
 import com.echoflow.core.text.TextNormalizer
 import kotlinx.coroutines.CancellationException
 
@@ -63,8 +65,12 @@ class ReplayEngine(
 ) {
     private val events = mutableListOf<String>()
 
+    /** Field typed into most recently, for "press enter" when results don't appear. */
+    private var lastTyped: ElementDescriptor? = null
+
     suspend fun run(flow: Flow, slotValues: Map<String, String>): ReplayResult {
         events.clear()
+        lastTyped = null
         val slots = slotValues.toMutableMap()
         val steps = flow.steps
         var i = 0
@@ -79,18 +85,31 @@ class ReplayEngine(
                         i = r.index
                     }
                     is StepResult.Stop -> return result(r.status, r.message, i, steps)
+                    StepResult.Retry -> Unit // runStep resolves retries itself; never returned here
                 }
             }
         } catch (e: CancellationException) {
             throw e
         }
         // All steps done: are we at the payment boundary?
-        val final = host.awaitSettled(host.current()?.id ?: 0, 1_500) ?: host.current()
+        var final = readable(host.awaitSettled(host.current()?.id ?: 0, 1_500) ?: host.current())
+        if (final != null && customisationSheet(final) != null) {
+            handleCustomisation(final, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
+            final = readable(host.current())
+        }
         (guard.currentState as? GuardState.Tripped)?.let {
             return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps)
         }
         if (final != null) {
             guard.handOffAtCheckout(final)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
+            // Taught to end at checkout, but the app's cart button didn't report its tap while
+            // teaching (custom views): open the cart ourselves. Navigating toward payment is allowed.
+            if (flow.endedAt == "CHECKOUT") {
+                openCart(final)?.let { cart ->
+                    guard.handOffAtCheckout(readable(cart) ?: cart)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
+                }
+                (guard.currentState as? GuardState.Tripped)?.let { return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps) }
+            }
         }
         return result(RunStatus.COMPLETED, "Done. I finished all ${steps.size} steps.", steps.size - 1, steps)
     }
@@ -98,6 +117,7 @@ class ReplayEngine(
     private sealed interface StepResult {
         data object Done : StepResult
         data class SkipTo(val index: Int) : StepResult
+        data object Retry : StepResult
         data class Stop(val status: RunStatus, val message: String) : StepResult
     }
 
@@ -127,10 +147,17 @@ class ReplayEngine(
         var triedIme = false
         var triedDismiss = 0
         var askedAboutValue = false
+        var staleRetries = 0
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
-            if (guard.onSnapshot(snap).isSensitive) return tripped() ?: StepResult.Stop(RunStatus.HANDED_OFF, "Sensitive screen.")
+            val preview = guard.classify(snap)
+            if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN) && host.nowMs() - started < OPAQUE_GRACE_MS) {
+                // Blank frames during screen transitions: give the app a moment to draw.
+                host.awaitSettled(snap.id, 1_000)
+                continue
+            }
+            if (preview.isSensitive && guard.onSnapshot(snap).isSensitive) return tripped() ?: StepResult.Stop(RunStatus.HANDED_OFF, "Sensitive screen.")
             if (snap.packageName != null && snap.packageName != flow.appPackage && !isOwnOrSystem(snap.packageName)) {
                 // Some other app came to the front: try back once, then stop.
                 if (triedDismiss < 1) {
@@ -144,9 +171,19 @@ class ReplayEngine(
 
             // Dialogs that need the user's decision (T7): never auto-confirmed.
             decisionDialog(snap)?.let { return handleDecisionDialog(snap, it) ?: return@let }
+            // An options sheet this item has but the taught one didn't (L3): ask, then continue.
+            if (customisationSheet(snap) != null) {
+                handleCustomisation(snap, slots)?.let { return it }
+                continue
+            }
 
             val resolution = resolve(step, snap, slots)
-            if (resolution != null) return perform(step, snap, resolution, slots)
+            if (resolution != null) {
+                val r = perform(step, snap, resolution, slots)
+                // The screen changed between finding the element and tapping it: find it again.
+                if (r is StepResult.Retry && staleRetries++ < 3) continue
+                return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
+            }
 
             // Lookahead: the screen already matches a later step (optional screen skipped).
             lookahead(steps, i, snap, slots)?.let { return StepResult.SkipTo(it) }
@@ -163,10 +200,11 @@ class ReplayEngine(
             }
 
             // Typed text but the app wants "enter" before showing results.
-            val prev = steps.getOrNull(i - 1)
-            if (!triedIme && prev is Step.TypeText) {
+            val typedField = lastTyped
+            if (!triedIme && typedField != null) {
                 triedIme = true
-                val field = resolver.resolve(snap, prev.target, slots, editableOnly = true)
+                lastTyped = null
+                val field = resolver.resolve(snap, typedField, slots, editableOnly = true)
                 if (field != null) {
                     events += "pressed enter on the search field"
                     act(PlannedAction.ImeEnter(snap.id, field.index), GateContext(explicitlyTaught = true, resolverConfidence = field.score), snap)
@@ -216,7 +254,7 @@ class ReplayEngine(
         // Normalise the start: back out until the first real step is visible (max 3 backs).
         val first = steps.drop(1).firstOrNull() ?: return StepResult.Done
         repeat(4) { attempt ->
-            val snap = host.current() ?: return StepResult.Done
+            val snap = readable(host.current()) ?: return StepResult.Done
             tripped()?.let { return it }
             if (resolve(first, snap, slots) != null || decisionDialog(snap) != null || dismissButton(snap) != null) return StepResult.Done
             if (snap.packageName != step.packageName) {
@@ -248,7 +286,9 @@ class ReplayEngine(
             is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex), ctx, snap)
             is Step.TypeText -> {
                 val text = step.slot?.let { slots[it] } ?: step.literal.orEmpty()
-                act(PlannedAction.SetText(snap.id, r.index, text), ctx, snap)
+                act(PlannedAction.SetText(snap.id, r.index, text), ctx, snap).also {
+                    if (it is ActionOutcome.Performed) lastTyped = step.target
+                }
             }
             is Step.RepeatTap -> {
                 val times = (slots[step.slot]?.toIntOrNull() ?: 1) - step.offset
@@ -269,7 +309,9 @@ class ReplayEngine(
         }
         return when (outcome) {
             is ActionOutcome.Performed -> tripped() ?: StepResult.Done
-            is ActionOutcome.Blocked -> tripped() ?: StepResult.Stop(RunStatus.HALTED, "I stopped: ${outcome.decision.detail}.")
+            is ActionOutcome.Blocked -> tripped()
+                ?: if (outcome.decision.reason == com.echoflow.core.gateway.BlockReason.STALE_SNAPSHOT) StepResult.Retry
+                else StepResult.Stop(RunStatus.HALTED, "I stopped: ${outcome.decision.detail}.")
             is ActionOutcome.Failed -> StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
         }
     }
@@ -283,9 +325,57 @@ class ReplayEngine(
     private fun tripped(): StepResult.Stop? =
         (guard.currentState as? GuardState.Tripped)?.let { StepResult.Stop(RunStatus.HANDED_OFF, it.trip.handOffMessage) }
 
+    /** The "add" button of an item-options sheet ("Choose customization for …" + "Add Item | ₹511"). */
+    private fun customisationSheet(snap: ScreenSnapshot): UiElement? {
+        val labels = popupLabels(snap).map(TextNormalizer::normalize)
+        if (labels.none { l -> CUSTOMISE_WORDS.any { l.contains(it) } }) return null
+        return snap.appElements().firstOrNull { e ->
+            e.visible && e.label != null && TextNormalizer.normalize(e.label).let { l -> ADD_ITEM_WORDS.any { l.startsWith(it) } }
+        }
+    }
+
+    private suspend fun handleCustomisation(snap: ScreenSnapshot, slots: Map<String, String>): StepResult.Stop? {
+        val button = customisationSheet(snap) ?: return null
+        val item = slots["item"] ?: "This item"
+        val price = SafetyLexicon.amountOf(TextNormalizer.tokens(button.label))
+        val answer = host.ask(
+            "$item has extra options. Should I add it with the default choices" + (price?.let { " for $it" } ?: "") + "?",
+            listOf("yes", "no"),
+        )
+        if (answer == null || !isYes(answer)) {
+            return StepResult.Stop(if (answer == null) RunStatus.NO_ANSWER else RunStatus.HALTED, "Okay, I left the options open for you to choose.")
+        }
+        events += "added $item with default options"
+        val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+        return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add $item.")
+    }
+
+    /** Waits (up to [OPAQUE_GRACE_MS]) for a blank loading frame to be replaced by real content. */
+    private suspend fun readable(snap: ScreenSnapshot?): ScreenSnapshot? {
+        var s = snap ?: return null
+        val start = host.nowMs()
+        while (guard.classify(s).kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN) && host.nowMs() - start < OPAQUE_GRACE_MS) {
+            s = host.awaitSettled(s.id, 1_000) ?: host.current() ?: return s
+        }
+        return s
+    }
+
+    private suspend fun openCart(snap: ScreenSnapshot): ScreenSnapshot? {
+        val button = snap.appElements()
+            .filter { it.visible && it.label != null }
+            .firstOrNull { e -> TextNormalizer.normalize(e.label).let { l -> CART_WORDS.any { w -> l == w || l.startsWith("$w ") } } }
+            ?: return null
+        events += "opened the cart via \"${button.label}\""
+        val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.9), snap)
+        return if (o is ActionOutcome.Performed) host.awaitSettled(snap.id, 3_000) ?: host.current() else null
+    }
+
     private fun lookahead(steps: List<Step>, i: Int, snap: ScreenSnapshot, slots: Map<String, String>): Int? {
         for (j in i + 1 until minOf(steps.size, i + 4)) {
             val later = steps[j]
+            // Only plain taps may be skipped; typing or value-dependent steps must always run.
+            val skipped = steps.subList(i, j)
+            if (skipped.any { it !is Step.Tap || it.slot != null }) return null
             val r = resolve(later, snap, slots) ?: continue
             if (r.score >= LOOKAHEAD_SCORE) return j
         }
@@ -411,6 +501,10 @@ class ReplayEngine(
         const val FIELD_SCORE = 0.45
         const val LOOKAHEAD_SCORE = 0.85
         const val MAX_SCROLLS = 3
+        const val OPAQUE_GRACE_MS = 6_000L
+        private val CUSTOMISE_WORDS = listOf("customization", "customisation", "customize", "customise", "choose your", "add ons", "addons")
+        private val ADD_ITEM_WORDS = listOf("add item", "add to cart", "add to bag")
+        private val CART_WORDS =listOf("view cart", "checkout", "go to cart", "view bag", "go to bag", "proceed to cart")
         private val POPUP_CLASSES = listOf("Dialog", "BottomSheet", "PopupWindow")
         private val DISMISS = listOf("close", "not now", "no thanks", "skip", "later", "maybe later", "dismiss", "got it", "ok", "okay", "x", "×", "✕", "cancel")
         private val DISMISS_DESC = listOf("close", "dismiss", "cross", "close button", "navigate up")

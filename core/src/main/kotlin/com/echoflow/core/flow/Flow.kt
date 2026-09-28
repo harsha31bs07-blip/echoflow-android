@@ -26,9 +26,21 @@ data class ElementDescriptor(
     val display: String
         get() = text?.takeIf { it.isNotBlank() }
             ?: contentDescription?.takeIf { it.isNotBlank() }
-            ?: context.firstOrNull()?.let { "element near \"$it\"" }
-            ?: viewId?.substringAfter(":id/")
+            ?: readableId()
+            ?: context.firstOrNull { it.isNotBlank() }?.let { "the button near \"$it\"" }
             ?: className.substringAfterLast('.')
+
+    /** "in.swiggy.android:id/search_bar" -> "search bar"; null for generic ids ("container"). */
+    private fun readableId(): String? {
+        val words = viewId?.substringAfter(":id/")?.replace(Regex("([a-z])([A-Z])"), "$1 $2")
+            ?.split('_', '-', ' ')?.map { it.lowercase() }?.filter { it.isNotBlank() && it !in GENERIC_ID_WORDS }
+            ?: return null
+        return words.takeIf { it.isNotEmpty() && it.none { w -> w.any(Char::isDigit) } }?.joinToString(" ")
+    }
+
+    private companion object {
+        val GENERIC_ID_WORDS = setOf("container", "layout", "root", "view", "item", "itemlayout", "wrapper", "holder", "frame", "ll", "rl", "cl", "v2")
+    }
 }
 
 @Serializable

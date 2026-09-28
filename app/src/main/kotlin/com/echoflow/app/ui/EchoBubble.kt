@@ -74,6 +74,10 @@ class EchoBubble(
         wm.addView(root, params())
     }
 
+    fun setVisible(visible: Boolean) {
+        root?.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
     fun hide() {
         root?.let { runCatching { wm.removeViewImmediate(it) } }
         root = null

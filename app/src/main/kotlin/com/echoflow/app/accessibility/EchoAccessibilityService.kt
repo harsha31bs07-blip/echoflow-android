@@ -112,7 +112,12 @@ class EchoAccessibilityService : AccessibilityService() {
     fun captureNow(): ScreenSnapshot? = capturer.capture(lastActivity, "teach")?.snapshot
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.packageName?.toString() == packageName) return
+        val pkg = event.packageName?.toString()
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && !pkg.startsWith("com.android.systemui")) {
+            // The bubble is for other apps; EchoFlow's own screens have their own controls.
+            bubble?.setVisible(pkg != packageName)
+        }
+        if (pkg == packageName) return
         EchoRuntime.orchestrator.activeRecorder?.let { rec -> runCatching { rec.onEvent(event) } }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             event.className?.toString()?.takeIf { it.contains('.') }?.let { lastActivity = it }

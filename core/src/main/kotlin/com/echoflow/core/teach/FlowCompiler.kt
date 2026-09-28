@@ -150,7 +150,12 @@ class FlowCompiler {
             ?.key
 
     private fun templated(d: ElementDescriptor, slot: String, value: String): ElementDescriptor {
-        fun t(s: String?) = s?.let { if (sameValue(it, value)) "{$slot}" else replaceIgnoringCase(it, value, "{$slot}") }
+        fun t(s: String?) = s?.let {
+            if (sameValue(it, value)) return@let "{$slot}"
+            val r = replaceIgnoringCase(it, value, "{$slot}")
+            // "Garlic Breadsticks" with "garlic bread" would give "{item}sticks": use the whole label.
+            if (Regex("\\{$slot\\}\\p{L}").containsMatchIn(r) || (r == it && ElementResolver.valueMatch(value, it, emptyList()) > 0)) "{$slot}" else r
+        }
         return d.copy(text = t(d.text), contentDescription = t(d.contentDescription), context = d.context.map { t(it)!! })
     }
 

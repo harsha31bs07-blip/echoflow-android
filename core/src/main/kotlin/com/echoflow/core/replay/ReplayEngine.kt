@@ -101,9 +101,17 @@ class ReplayEngine(
         }
         // All steps done: are we at the payment boundary?
         var final = readable(host.awaitSettled(host.current()?.id ?: 0, 1_500) ?: host.current())
-        if (final != null && customisationSheet(final) != null) {
-            handleCustomisation(final, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
-            final = readable(host.current())
+        // The last tap can open a dialog (replace cart), an options sheet or an address sheet.
+        repeat(3) {
+            val s = final ?: return@repeat
+            val stop: StepResult.Stop? = when {
+                decisionDialog(s) != null -> handleDecisionDialog(s, decisionDialog(s)!!) as StepResult.Stop?
+                customisationSheet(s) != null -> handleCustomisation(s, slots)
+                !addressHandled && addressOptions(s).isNotEmpty() -> { addressHandled = true; handleAddressSheet(s, flow, slots) }
+                else -> return@repeat
+            }
+            if (stop != null) return result(stop.status, stop.message, steps.size - 1, steps)
+            final = readable(host.awaitSettled(s.id, 2_000) ?: host.current())
         }
         (guard.currentState as? GuardState.Tripped)?.let {
             return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps)
@@ -338,6 +346,12 @@ class ReplayEngine(
         return o
     }
 
+    private fun describe(o: ActionOutcome): String = when (o) {
+        is ActionOutcome.Blocked -> "blocked: ${o.decision.reason} ${o.decision.detail}"
+        is ActionOutcome.Failed -> "failed: ${o.message}"
+        is ActionOutcome.Performed -> "done"
+    }
+
     private fun tripped(): StepResult.Stop? =
         (guard.currentState as? GuardState.Tripped)?.let { StepResult.Stop(RunStatus.HANDED_OFF, it.trip.handOffMessage) }
 
@@ -381,7 +395,10 @@ class ReplayEngine(
         slots["address"] = name
         host.remember(key, name)
         events += "delivery address: $name"
-        val o = act(PlannedAction.Click(snap.id, row.index), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+        val now = host.current() ?: snap
+        val freshRow = addressOptions(now)[name] ?: row.takeIf { now.id == snap.id }
+            ?: return StepResult.Stop(RunStatus.HALTED, "The address list closed before I could pick $name.")
+        val o = act(PlannedAction.Click(now.id, freshRow.index), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
         return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't select the address $name.")
     }
 
@@ -406,7 +423,9 @@ class ReplayEngine(
             return StepResult.Stop(if (answer == null) RunStatus.NO_ANSWER else RunStatus.HALTED, "Okay, I left the options open for you to choose.")
         }
         events += "added $item with default options"
-        val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+        val now = host.current() ?: snap
+        val fresh = customisationSheet(now) ?: return StepResult.Stop(RunStatus.HALTED, "The options sheet closed before I could add $item.")
+        val o = act(PlannedAction.Click(now.id, Descriptors.clickableFor(now, fresh.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
         return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add $item.")
     }
 
@@ -452,17 +471,22 @@ class ReplayEngine(
         val joined = labels.joinToString(" ").let(TextNormalizer::normalize)
         val hit = listOf("replace cart", "items already in cart", "start afresh", "clear cart", "discard", "replace item",
             "your cart contains", "items from another", "different restaurant").firstOrNull { joined.contains(it) }
-        return hit?.let { Dialog("replace-cart", labels.take(3).joinToString(" — ")) }
+        return hit?.let { Dialog("replace-cart", labels.filter { it.length > 15 }.maxByOrNull { it.length } ?: labels.first()) }
     }
 
-    private suspend fun handleDecisionDialog(snap: ScreenSnapshot, d: Dialog): StepResult? {
-        val answer = host.ask("Your cart already has items from somewhere else. The app says: \"${d.text}\". Should I replace them?", listOf("yes", "no"))
+    private suspend fun handleDecisionDialog(before: ScreenSnapshot, d: Dialog): StepResult? {
+        val answer = host.ask("Your cart already has other items. The app says: ${d.text.trim()} Should I replace them?", listOf("yes", "no"))
         val yes = answer != null && isYes(answer)
         events += "asked about existing cart: ${if (yes) "replace" else "keep"}"
         val words = if (yes) listOf("replace", "yes", "start afresh", "clear", "ok") else listOf("no", "cancel", "keep")
-        val button = snap.appElements().firstOrNull { e ->
-            e.visible && e.label != null && words.any { w -> TextNormalizer.tokens(e.label).joinToString(" ").let { it == w || it.startsWith("$w ") } }
-        }
+        // Asking took seconds; act on the screen as it is now.
+        val snap = host.current() ?: before
+        if (decisionDialog(snap) == null) return StepResult.Stop(RunStatus.HALTED, "The cart dialog closed before I could answer it.")
+        // Buttons only (the dialog title "Replace cart item?" also starts with "replace").
+        val buttons = snap.appElements().filter { it.visible && it.label != null && (it.clickable || it.className.contains("Button")) }
+        fun norm(e: UiElement) = TextNormalizer.tokens(e.label).joinToString(" ")
+        val button = buttons.firstOrNull { e -> words.any { norm(e) == it } }
+            ?: buttons.firstOrNull { e -> words.any { w -> norm(e).startsWith("$w ") } }
         if (!yes) {
             button?.let { act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, it.index)), GateContext(isRecovery = true), snap) }
             return StepResult.Stop(if (answer == null) RunStatus.NO_ANSWER else RunStatus.HALTED, "I kept your existing cart and stopped, as you asked.")
@@ -470,7 +494,7 @@ class ReplayEngine(
         if (button == null) return StepResult.Stop(RunStatus.HALTED, "I couldn't find the replace button on the cart dialog.")
         // The user explicitly agreed, so this counts as a taught, fully confident step.
         val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
-        return if (o is ActionOutcome.Performed) null else StepResult.Stop(RunStatus.HALTED, "I couldn't replace the cart items.")
+        return if (o is ActionOutcome.Performed) null else StepResult.Stop(RunStatus.HALTED, "I couldn't replace the cart items (${describe(o)}).")
     }
 
     /** Labels inside a popup: a smaller application window on top, or a dialog/bottom-sheet node. */

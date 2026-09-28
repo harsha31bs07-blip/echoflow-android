@@ -72,6 +72,14 @@ class IntentMatcherTest {
         assertEquals("zomato", c.candidate.flow.id)
     }
 
+    @Test fun `a named app picks that app's flow even when another template fits (T13)`() {
+        val swiggyItem = food.copy(template = "order {item}", slots = listOf(SlotDef("item", SlotType.TEXT, "garlic bread")), examples = listOf("order garlic bread"))
+        val zomatoItem = swiggyItem.copy(id = "z", appPackage = "com.application.zomato", appLabel = "Zomato", template = "order {item} on zomato", examples = listOf("order garlic bread on zomato"))
+        val d = assertIs<Decision.Proceed>(DecisionLayer.decide("x", m.match("order paneer tikka on zomato", listOf(swiggyItem, zomatoItem))))
+        assertEquals("z", d.candidate.flow.id)
+        assertEquals("paneer tikka", d.candidate.slots["item"])
+    }
+
     @Test fun `absurd quantity is confirmed`() {
         assertIs<Decision.Confirm>(decide("order 50 garlic bread"))
     }

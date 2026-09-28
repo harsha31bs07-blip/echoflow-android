@@ -141,6 +141,11 @@ class ReplayEngine(
             if (flow.endedAt == "CHECKOUT") {
                 openCart(final)?.let { opened ->
                     var cart = readable(opened) ?: opened
+                    // The cart draws its pay button last; give it a moment.
+                    val waitStart = host.nowMs()
+                    while (!guard.classify(cart).isCheckout && guard.classify(cart).kinds.isEmpty() && host.nowMs() - waitStart < 5_000) {
+                        cart = host.awaitSettled(cart.id, 1_000) ?: host.current() ?: cart
+                    }
                     if (guard.classify(cart).isCheckout) {
                         adjustQuantity(cart, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
                         cart = readable(host.current()) ?: cart
@@ -181,7 +186,8 @@ class ReplayEngine(
             events += "asked for $slotName: ${slots[slotName]}"
         }
 
-        val started = host.nowMs()
+        // Reset after dialogs and questions: time spent waiting for the user doesn't count.
+        var started = host.nowMs()
         var scrolls = 0
         var triedIme = false
         var triedDismiss = 0
@@ -218,16 +224,23 @@ class ReplayEngine(
             }
 
             // Dialogs that need the user's decision (T7): never auto-confirmed.
-            decisionDialog(snap)?.let { return handleDecisionDialog(snap, it) ?: return@let }
+            val dialog = decisionDialog(snap)
+            if (dialog != null) {
+                handleDecisionDialog(snap, dialog)?.let { return it }
+                started = host.nowMs()
+                continue
+            }
             // An options sheet this item has but the taught one didn't (L3): ask, then continue.
             if (customisationSheet(snap) != null) {
                 handleCustomisation(snap, slots)?.let { return it }
+                started = host.nowMs()
                 continue
             }
             // "Select delivery address" sheet: pick the {address} slot, or last time's, or ask (T6).
             if (addressOptions(snap).isNotEmpty() && !addressHandled) {
                 addressHandled = true
                 handleAddressSheet(snap, flow, slots)?.let { return it }
+                started = host.nowMs()
                 continue
             }
 
@@ -267,9 +280,9 @@ class ReplayEngine(
             // Typing step, but the field is hidden behind a "Search" button (its tap wasn't reported
             // while teaching): open search first.
             if (step is Step.TypeText && !triedOpenSearch) {
-                triedOpenSearch = true
                 val opener = searchOpener(snap)
                 if (opener != null) {
+                    triedOpenSearch = true
                     events += "opened search via \"${opener.label ?: opener.viewId}\""
                     act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, opener.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
                     continue
@@ -279,9 +292,9 @@ class ReplayEngine(
             // result that matches {item} (a result tap that wasn't reported while teaching).
             val item = slots["item"]
             if (!triedOpenResult && item != null && step is Step.Tap && step.slot == null && steps.take(i).any { it is Step.TypeText }) {
-                triedOpenResult = true
                 val result = firstResult(snap, item)
                 if (result != null) {
+                    triedOpenResult = true
                     events += "opened the first result matching \"$item\""
                     act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, result.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
                     continue
@@ -423,7 +436,8 @@ class ReplayEngine(
         for (row in all.filter { it.clickable && it.bounds.top < recentTop }) {
             val labels = snap.descendants(row.index, maxDepth = 3).filter { it.visible }.sortedBy { it.index }
                 .mapNotNull { it.label }
-                .filter { l -> !l.contains("icon", ignoreCase = true) && TextNormalizer.normalize(l) !in setOf("selected", "default") }
+                // Skip icon descriptions and icon-font glyphs (no letters after normalising).
+                .filter { l -> !l.contains("icon", ignoreCase = true) && TextNormalizer.tokens(l).isNotEmpty() && TextNormalizer.normalize(l) !in setOf("selected", "default") }
                 .toList()
             if (labels.size < 2) continue // a name plus the full address line
             val name = labels.first().trim()
@@ -478,6 +492,7 @@ class ReplayEngine(
         var chosen = find(slots["address"])
         if (chosen == null && slots["address"] == null) {
             chosen = find(host.recall(key))?.also { events += "used last time's address \"${it.key}\"" }
+                ?: options.entries.singleOrNull()?.also { events += "used the only saved address \"${it.key}\"" }
         }
         if (chosen == null) {
             val names = options.keys.toList()
@@ -570,8 +585,8 @@ class ReplayEngine(
         .filter { it.visible && !it.editable && it.bounds.top < snap.screenHeight / 2 }
         .filter { e ->
             val l = TextNormalizer.normalize(e.label)
-            l == "search" || l.startsWith("search for") || l.startsWith("search or") ||
-                (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it) })
+            l == "search" || l.startsWith("search for") || l.startsWith("search or") || l.contains("open search") ||
+                (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it || "edit" in it) })
         }
         .minByOrNull { if (it.clickable) 0 else 1 }
 
@@ -740,7 +755,7 @@ class ReplayEngine(
         const val MAX_SCROLLS = 3
         const val OPAQUE_GRACE_MS = 6_000L
         const val LOOKAHEAD_AFTER_MS = 2_500L
-        private val ADDRESS_HEADINGS = listOf("select delivery address", "select a delivery address", "choose a delivery address",
+        private val ADDRESS_HEADINGS = listOf("select a saved address", "select delivery address","select a delivery address", "choose a delivery address",
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
         private val ADDRESS_BARS = listOf("selected address is", "delivering to", "deliver to", "delivery address")
         private val NOT_ADDRESS =listOf("enter location", "add address", "add new", "use current location", "grant", "search")

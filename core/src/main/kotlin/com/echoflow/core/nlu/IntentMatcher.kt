@@ -65,8 +65,10 @@ class IntentMatcher {
         if (flow.examples.any { TextNormalizer.normalize(it) == norm }) {
             return Candidate(flow, 1.0, flow.slots.associate { it.name to it.taughtValue }, "exact")
         }
-        // 2. Template regex: same shape, different values (T4–T6).
-        templateRegex(flow.template)?.let { (regex, names) ->
+        // 2. Template regex: same shape, different values (T4–T6). Not when the command names a
+        // different app ("… on zomato" never matches a Swiggy flow's template).
+        val mentioned = Utterances.parse(norm).appMention?.let { Utterances.appNames[it] }
+        if (mentioned == null || mentioned == flow.appPackage) templateRegex(flow.template)?.let { (regex, names) ->
             regex.matchEntire(norm)?.let { m ->
                 val slots = names.mapIndexed { i, n -> n to normaliseSlot(n, m.groupValues[i + 1]) }.toMap().toMutableMap()
                 // A greedy item slot swallows "to home" / "on swiggy": split those back out.

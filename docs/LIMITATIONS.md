@@ -140,3 +140,29 @@ These are the places where the architecture has **no clean answer yet**, or wher
 **Mitigation.** None yet. This is on purpose: loosening one signal at a time, backed by real dumps, keeps T11 safe.
 
 **Still open.** Once Zomato's real cart has been dumped: if it looks like Swiggy's (a pay button plus a method selector, but no credential fields or method list), extend CHECKOUT to cover a "Pay using" selector too, with a fixture proving it.
+
+## L17. Taps some apps never report (teaching)
+**Observed.** Swiggy's checkout bar, Amazon's search box and Amazon's web search results didn't produce `TYPE_VIEW_CLICKED` events, so those taps weren't recorded.
+
+**Mitigation.** Replay bridges the common gaps generically:
+- a typing step whose field is hidden → tap the screen's "Search" box first;
+- after a search, when the next taught element isn't there → open the first result whose title contains `{item}`;
+- a flow taught to end at checkout → open "View Cart" / "Checkout".
+
+**Still open.** A missing tap that doesn't fit these patterns breaks that flow. The teacher sees the recorded steps in the Flow Inspector and can re-teach.
+
+## L18. Secure or unreadable pickers
+**Observed.** Swiggy's cart-page address picker is a secure window: it shows black in screenshots and exposes only its heading to accessibility.
+
+**Mitigation.** T6 uses the app's home-screen address bar instead, which opens a readable saved-address list.
+
+**Still open.** Apps whose only address picker is secure can't be driven for T6.
+
+## L19. Item-specific option pickers (sizes, customisations)
+**Observed.**
+- Amazon clothing and shoes require choosing a size before Add to Cart.
+- Some Swiggy dishes open a "Choose customization" sheet.
+
+**Mitigation.** Customisation sheets → EchoFlow asks *"add it with the default choices for ₹X?"*.
+
+**Still open.** Size pickers aren't handled. The Amazon flow is taught as *search* (it stops at the results) for that reason.

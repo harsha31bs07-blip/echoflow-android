@@ -74,6 +74,7 @@ class IntentMatcher {
                 val item = slots["item"]
                 if (item != null && p.item != null && item != p.item && item.contains(p.item)) slots["item"] = p.item
                 if (p.address != null && "address" !in names) slots["address"] = p.address
+                if (p.quantity != null && "qty" !in names) slots["qty"] = p.quantity.toString()
                 if (slots.values.none { it.isBlank() }) return Candidate(flow, 0.95, slots, "template")
             }
         }
@@ -94,10 +95,11 @@ class IntentMatcher {
         flow.slots.forEach { s ->
             when (s.name) {
                 "item" -> parsed.item?.let { slots["item"] = it }
-                "qty" -> parsed.quantity?.let { slots["qty"] = it.toString() }
-                "address" -> parsed.address?.let { slots["address"] = it }
             }
         }
+        // Quantity and address apply to any ordering flow (set at the cart / address sheet).
+        parsed.quantity?.let { slots["qty"] = it.toString() }
+        parsed.address?.let { slots["address"] = it }
         if (flow.slots.any { it.name == "item" } && slots["item"] != null) score += 0.2
         // Shared non-slot words with any example (weak evidence).
         val exampleWords = flow.examples.flatMap(TextNormalizer::tokens).filter { it !in Utterances.fillers }.toSet()

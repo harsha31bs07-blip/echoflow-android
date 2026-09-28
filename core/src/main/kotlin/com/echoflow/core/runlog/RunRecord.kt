@@ -42,16 +42,19 @@ data class RunRecord(
 
     /** Spoken answer to "what happened last time?" — templated, never generated. */
     fun spokenSummary(): String {
-        val what = flowName?.let { "\"$it\"" } ?: "\"$utterance\""
-        val slotText = if (slots.isEmpty()) "" else " with " + slots.entries.joinToString(", ") { "${it.key} ${it.value}" }
+        // "order {item}" + {item: garlic bread} -> "order garlic bread"
+        var what = flowName ?: utterance
+        slots.forEach { (k, v) -> what = what.replace("{$k}", v) }
+        what = what.replace(Regex("\\{\\w+\\}"), "").trim()
+        val step = stepDescription?.replace(Regex("\\{(\\w+)\\}")) { m -> slots[m.groupValues[1]] ?: m.value }
         val where = if (totalSteps > 0 && stoppedAtStep > 0) " at step $stoppedAtStep of $totalSteps" +
-            (stepDescription?.let { ", $it" } ?: "") else ""
+            (step?.let { " ($it)" } ?: "") else ""
         return when (status) {
-            RunStatus.HANDED_OFF -> "Last run, $what$slotText, succeeded. It reached the payment step$where and handed over to you. $message"
-            RunStatus.COMPLETED -> "Last run, $what$slotText, completed all $totalSteps steps."
-            RunStatus.HALTED -> "Last run, $what$slotText, failed$where. $message"
-            RunStatus.NO_ANSWER -> "Last run, $what$slotText, stopped$where because I asked a question and got no answer. $message"
-            RunStatus.CANCELLED -> "Last run, $what$slotText, was cancelled$where."
+            RunStatus.HANDED_OFF -> "Your last request, $what, succeeded. I got it ready and handed over to you. $message"
+            RunStatus.COMPLETED -> "Your last request, $what, completed all $totalSteps steps."
+            RunStatus.HALTED -> "Your last request, $what, failed$where. $message"
+            RunStatus.NO_ANSWER -> "Your last request, $what, stopped$where because I asked a question and didn't get an answer. $message"
+            RunStatus.CANCELLED -> "Your last request, $what, was cancelled$where."
         }
     }
 }

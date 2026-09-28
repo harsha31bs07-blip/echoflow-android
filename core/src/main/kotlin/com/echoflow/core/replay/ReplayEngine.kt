@@ -117,12 +117,21 @@ class ReplayEngine(
             return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps)
         }
         if (final != null) {
+            if (guard.classify(final).isCheckout) {
+                adjustQuantity(final, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
+                final = readable(host.current()) ?: final
+            }
             guard.handOffAtCheckout(final)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
             // Taught to end at checkout, but the app's cart button didn't report its tap while
             // teaching (custom views): open the cart ourselves. Navigating toward payment is allowed.
             if (flow.endedAt == "CHECKOUT") {
-                openCart(final)?.let { cart ->
-                    guard.handOffAtCheckout(readable(cart) ?: cart)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
+                openCart(final)?.let { opened ->
+                    var cart = readable(opened) ?: opened
+                    if (guard.classify(cart).isCheckout) {
+                        adjustQuantity(cart, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
+                        cart = readable(host.current()) ?: cart
+                    }
+                    guard.handOffAtCheckout(cart)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
                 }
                 (guard.currentState as? GuardState.Tripped)?.let { return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps) }
             }
@@ -400,6 +409,47 @@ class ReplayEngine(
             ?: return StepResult.Stop(RunStatus.HALTED, "The address list closed before I could pick $name.")
         val o = act(PlannedAction.Click(now.id, freshRow.index), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
         return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't select the address $name.")
+    }
+
+    /**
+     * T5 at the cart: set the item's quantity with its "+"/"−" stepper when the command asked for
+     * one the taught flow didn't set. Reads the displayed count after every tap; never goes
+     * below 1 ("−" at 1 removes the item).
+     */
+    private suspend fun adjustQuantity(start: ScreenSnapshot, flow: Flow, slots: Map<String, String>): StepResult.Stop? {
+        val want = slots["qty"]?.toIntOrNull() ?: return null
+        if (flow.steps.any { it is Step.RepeatTap }) return null // the flow sets quantity itself
+        val item = slots["item"]
+        var snap = start
+        repeat(want + 3) {
+            val row = cartRow(snap, item) ?: return if (want > 1) StepResult.Stop(RunStatus.HALTED, "I added ${item ?: "the item"} but couldn't find its quantity buttons in the cart.") else null
+            val (count, plus, minus) = row
+            if (count == want) {
+                if (want > 1) events += "set quantity to $want"
+                return null
+            }
+            val button = if (count < want) plus else minus.takeIf { count > 1 } ?: return null
+            val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+            if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't change the quantity (${describe(o)}).")
+            snap = host.current() ?: return null
+        }
+        return StepResult.Stop(RunStatus.HALTED, "I couldn't get the quantity to $want.")
+    }
+
+    /** The cart line for [item]: its displayed count and its "+" / "−" buttons (same row on screen). */
+    private fun cartRow(snap: ScreenSnapshot, item: String?): Triple<Int, UiElement, UiElement>? {
+        val els = snap.appElements().filter { it.visible }
+        fun cy(e: UiElement) = (e.bounds.top + e.bounds.bottom) / 2
+        fun isPlus(e: UiElement) = e.label?.trim() == "+" || TextNormalizer.normalize(e.label).let { it.contains("add one more") || it.contains("increase") }
+        fun isMinus(e: UiElement) = e.label?.trim() in setOf("−", "-") || TextNormalizer.normalize(e.label).let { it.contains("remove one") || it.contains("decrease") }
+        val pluses = els.filter(::isPlus)
+        val anchor = item?.let { i -> els.firstOrNull { ElementResolver.valueMatch(i, it.label, emptyList()) >= 0.8 } }
+        val plus = if (anchor != null) pluses.minByOrNull { kotlin.math.abs(cy(it) - cy(anchor)) } else pluses.singleOrNull()
+        plus ?: return null
+        val minus = els.filter(::isMinus).minByOrNull { kotlin.math.abs(cy(it) - cy(plus)) + kotlin.math.abs(it.bounds.left - plus.bounds.left) / 4 } ?: return null
+        val count = els.filter { e -> e.label?.trim()?.all(Char::isDigit) == true && kotlin.math.abs(cy(e) - cy(plus)) < 60 && e.bounds.left in minus.bounds.left..plus.bounds.right }
+            .firstNotNullOfOrNull { it.label?.trim()?.toIntOrNull() } ?: return null
+        return Triple(count, plus, minus)
     }
 
     /** The "add" button of an item-options sheet ("Choose customization for …" + "Add Item | ₹511"). */

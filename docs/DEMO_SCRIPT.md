@@ -1,32 +1,40 @@
-# Demo video script (≤ 5 min)
+# Demo video script (≤ 5 min, one unedited take)
 
-Record the phone screen (the Samsung screen recorder, **with microphone audio**) so the video captures both the spoken commands and EchoFlow's replies. Every phrase below has been run on the Galaxy S24 FE (see [TEST_RUN.md](TEST_RUN.md)).
+The rules ask for one unedited video showing, **in this order**:
+- (a) teaching one flow by voice and taps;
+- (b) replaying it with the exact utterance;
+- (c) replaying with a paraphrase;
+- (d) replaying with a changed value;
+- (e) the assistant asking a question when stuck.
+
+This script does exactly that on Zomato, then adds two short extras if time allows. Every line below has been run on the Galaxy S24 FE (see [TEST_RUN.md](TEST_RUN.md)).
+
+Record the phone screen with the Samsung screen recorder, **with microphone and media sound on**, so both your commands and EchoFlow's spoken replies are in the video.
 
 ## Before recording
-- Swiggy logged in, delivery address **Hostel**, cart empty. (If the cart isn't empty, that's fine: EchoFlow asks before replacing it, which shows off T7.)
-- EchoFlow: the accessibility service is on, and **Learned flows** is empty. Delete old flows in the Flow Inspector; keep the Amazon and Zomato ones only if you're skipping their teach segments.
-- Volume up, Do Not Disturb on, the phone plugged in (the screen stays awake).
-- **Speaking:** tap the **🎤** in the floating bubble, wait for "Listening…", then speak clearly.
+- **Zomato:** logged in, a restaurant that delivers to you and is open (the test used *Brik Oven*; use *Domino's* if it delivers to you), and its cart empty.
+- **EchoFlow:** home screen says *"You're all set"*, and nothing is learned yet. Delete old flows in the Flow Inspector.
+- **Phone:** volume up, Do Not Disturb on, and plugged in.
+- **Speaking:** tap **🎤** on the floating bubble, wait for *"Listening…"*, then speak clearly.
+- **Timing:** each replay takes about 40–50 s, so the whole script fits in about 4½ minutes. Don't pause between parts.
 
 ## Timeline
 
-| Time | Show | Say (tap 🎤 first) | Expected on screen / spoken | Rubric |
-|---|---|---|---|---|
-| 0:00–0:20 | EchoFlow home: "Accessibility service is on" | — | One line of voice-over: "EchoFlow learns a task from one demonstration and replays it by voice. It uses only Android accessibility, and never pays." | Intro |
-| 0:20–1:20 | **Teach** in Swiggy | "teach order garlic bread" → tap the Swiggy search bar → type *garlic bread* → Enter → **Dishes** tab → **ADD** on Garlic Breadsticks → **View Cart** → tap **✓ Done** | Bubble shows **● REC**. On Done: "Saved. I learned … steps for order {item}…" | T1 |
-| 1:20–1:40 | EchoFlow → Learned flows → tap the flow | — | The Flow Inspector: answers-to, `{item}` slot, steps, "Then: hand over to you at checkout. EchoFlow never pays." | T1 (inspectable) |
-| 1:40–2:20 | Empty the cart (− on the item), go to the phone's home screen | "order garlic bread" | Swiggy opens, searches, taps ADD, opens the cart → "Everything is ready at checkout, total ₹…. I won't pay. Please check the order and pay yourself." | T2, T11 |
-| 2:20–2:50 | Home screen | "can you get me some garlic bread" | "Do you want me to order garlic bread on Swiggy?" → say "yes" → replays to checkout | T3 |
-| 2:50–3:30 | Home screen | "order 2 choco lava cake to home" | New item, quantity 2 at the cart, delivery address switched to Home → checkout hand-off. (If a "Replace cart item?" dialog appears, EchoFlow asks; say "yes". Avoid dishes with required options such as paneer tikka: EchoFlow correctly stops and asks you to choose them.) | T4, T5, T6, T7 |
-| 3:30–3:55 | Home screen | "order zzqx unicorn waffles" | "I can't find 'zzqx unicorn waffles'. I can see: …. Which one should I pick?" → stay silent → it stops with a specific reason, having tapped nothing | T10 |
-| 3:55–4:10 | Home screen | "book a cab to the airport" | "I don't know how to … yet. Want to teach me?" | T12 |
-| 4:10–4:30 | Home screen *(needs the Zomato flow taught beforehand)* | "get me garlic bread" | "I know more than one way to do that. first: … Swiggy; second: … zomato. Which one?" | T13 |
-| 4:30–4:45 | Home screen | "what happened last time" | The spoken summary of the last run | T14 |
-| 4:45–5:00 | Swiggy Payment Options screen (open it by hand, don't pay) with the **Safety monitor** switched on in EchoFlow's debug section | — | The overlay turns red: **PAYMENT**. Voice-over: "Payment, OTP, password and login screens always stop EchoFlow." | T11 |
+| Time | Part | Say (tap 🎤 first) / do | What EchoFlow says or does |
+|---|---|---|---|
+| 0:00–0:15 | Intro | Show EchoFlow's home screen | Voice-over: *"EchoFlow learns a task from one demonstration and replays it by voice. It only uses Android accessibility, and it never pays."* |
+| 0:15–1:30 | **(a) Teach** | "Order a Margherita pizza from Brik Oven on Zomato." → *"Want to teach me?"* → say **"yes"**. Then do it by hand: open Zomato → (close the location pop-up if it appears) → search → type **Brik Oven** → open the restaurant → the menu's **Search** → type **margherita** → **ADD** → **Add item** → **Continue** (the cart opens) → tap **✓ Done** on the bubble. **Do not tap Place Order.** | Bubble shows **● Recording**. On Done: *"Learned: order a margherita pizza from brik oven on zomato. I saved 6 steps. You can change the item, restaurant."* |
+| 1:30–1:40 | (show it) | Open EchoFlow → the new card under *What I've learned* | The Flow Inspector: what you can say, what can change, every step, and *"stops and hands over to you before paying"*. Go back to the phone's home screen. |
+| 1:40–2:30 | **(b) Exact replay** | "Order a Margherita pizza from Brik Oven on Zomato." | Opens Zomato, finds the restaurant and the dish, then *"Margherita was already in your cart, so I didn't add another one. Your turn. Everything is ready for payment…"* (the dish from teaching is still in the cart; to show a fresh add instead, tap − on it before this step). |
+| 2:30–3:20 | **(c) Paraphrase** | "I want to order margherita pizza on zomato" | Recognises the same flow. The restaurant wasn't said, so it asks: *"Which restaurant should I order from? Last time it was brik oven."* → say **"Brik Oven"** → continues to the cart and hands over (bonus: a missing value asked mid-flow) |
+| 3:20–4:10 | **(d) Changed value** | "Order a Farmhouse pizza from Brik Oven on Zomato." | Adds **Farmhouse** (not Margherita) → *"Your turn. Everything is ready for payment, total ₹…. I won't pay."* |
+| 4:10–4:40 | **(e) Stuck → asks** | "Order a zzqx unicorn pizza from Brik Oven on Zomato." | *"I searched for "zzqx unicorn" at brik oven but couldn't find it. What should I get instead?"* → say **"nothing"** → *"…so I stopped at step 5 without adding anything."* No wrong taps |
+| 4:40–5:00 | Extras (if time) | "Book a cab to the airport." then "Did the last run succeed?" | *"I don't know how to … yet. Want to teach me?"* (say no) · *"No, the last run didn't succeed … stopped at step 5 …"* |
 
-After recording, **set Swiggy's address back to Hostel** ("order garlic bread to hostel" does it) and empty the cart.
+**After recording:** empty the Zomato cart. Nothing is ever ordered or paid, because EchoFlow stops at the cart every time.
 
 ## If something goes wrong on camera
-- **The bubble says "I didn't catch that":** tap 🎤 again, closer to the mic.
-- **It stops with a reason:** that's a valid outcome (T10). Say "what happened last time" to show the report, then retry.
-- **"You're on a payment screen":** press back to a normal screen first. EchoFlow won't start from a sensitive screen.
+- **The bubble says "I didn't catch that":** tap 🎤 again and speak closer to the mic.
+- **Zomato shows "Something went wrong":** EchoFlow taps *Try again* by itself. Just wait.
+- **It stops with a reason:** that's a valid outcome. Say *"did the last run succeed?"* to show the report, then carry on.
+- **You land on a payment screen:** press Back. EchoFlow never acts on payment screens.

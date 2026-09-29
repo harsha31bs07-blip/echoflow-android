@@ -43,6 +43,13 @@ Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt
 - **Also done:** "Order pizza." asks which flow when two templates fit (T13). "Yes" after "Want to teach me?" starts teaching that command. "no, don't" no longer counts as yes.
 - **Still needs the phone:** P0-3, P0-4 on device, P0-6, and all of P1.
 
+## Status (29 Sept, evening), after the phone run ([TEST_RUN.md](TEST_RUN.md))
+- ✅ **Passed on the phone:** T1, T2, T3 (both phrases), T4, T5, T7 (handled without asking), T8, T9, T11, T12, T13, T14, B3. T10 was run as "stuck" (Zomato ignores a Hindi app language) and asked within 30 s.
+- ⚠️ **T6:** needs a saved **Work** address on the Zomato account.
+- ⚠️ **B1:** staged incoming call not tried yet.
+- ❌ **B2:** Myntra not installed.
+- The demo script follows the required a→e order ([DEMO_SCRIPT.md](DEMO_SCRIPT.md)).
+
 ## P0: must do (tonight / tomorrow morning)
 
 **P0-1 · Multi-slot flows: `{restaurant}` (T1–T6, T13, B3). About 3 h, core + tests**

@@ -349,6 +349,15 @@ class EchoBubble(
         }
     }
 
+    /** Touches pass through the panel (EchoFlow's own gestures must reach the app underneath). */
+    private var passThrough = false
+
+    fun setPassThrough(on: Boolean) {
+        if (passThrough == on) return
+        passThrough = on
+        root?.let { runCatching { wm.updateViewLayout(it, params()) } }
+    }
+
     private fun reducedMotion() =
         android.provider.Settings.Global.getFloat(service.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 
@@ -511,7 +520,8 @@ class EchoBubble(
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            (if (passThrough) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
         PixelFormat.TRANSLUCENT,
     ).apply {
         // Compact panel in a corner, clear of most apps' main buttons; ⇅ flips top/bottom.

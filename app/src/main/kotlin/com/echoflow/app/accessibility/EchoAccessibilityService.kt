@@ -110,6 +110,12 @@ class EchoAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * While EchoFlow performs a gesture (a scroll swipe or a fallback tap), its own floating panel
+     * lets touches through, so the gesture reaches the app underneath, not EchoFlow's buttons.
+     */
+    fun setOverlayPassThrough(on: Boolean) = mainHandler.post { bubble?.setPassThrough(on) }
+
     /** Synchronous capture for the teaching recorder (the screen *before* a tap changes it). */
     fun captureNow(): ScreenSnapshot? = capturer.capture(lastActivity, "teach")?.snapshot
 

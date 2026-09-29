@@ -78,12 +78,7 @@ internal class AndroidActionExecutor(
         val (from, to) = r.top + r.height() * 0.7f to r.top + r.height() * 0.3f
         val path = Path().apply { moveTo(x, if (forward) from else to); lineTo(x, if (forward) to else from) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 350)).build()
-        val done = CompletableDeferred<Boolean>()
-        val sent = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
-            override fun onCompleted(d: GestureDescription?) { done.complete(true) }
-            override fun onCancelled(d: GestureDescription?) { done.complete(false) }
-        }, null)
-        return sent && (withTimeoutOrNull(2_000) { done.await() } ?: false)
+        return dispatch(gesture, 2_000)
     }
 
     private suspend fun tapCentre(node: AccessibilityNodeInfo): Boolean {
@@ -91,12 +86,27 @@ internal class AndroidActionExecutor(
         if (r.isEmpty) return false
         val path = Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()) }
         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 60)).build()
-        val done = CompletableDeferred<Boolean>()
-        val sent = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
-            override fun onCompleted(d: GestureDescription?) { done.complete(true) }
-            override fun onCancelled(d: GestureDescription?) { done.complete(false) }
-        }, null)
-        return sent && (withTimeoutOrNull(1_500) { done.await() } ?: false)
+        return dispatch(gesture, 1_500)
+    }
+
+    /**
+     * Sends a gesture with EchoFlow's floating panel letting touches through for its duration: a
+     * swipe or tap that starts where the panel happens to be must reach the app, not the panel.
+     */
+    private suspend fun dispatch(gesture: GestureDescription, timeoutMs: Long): Boolean {
+        val echo = service as? EchoAccessibilityService
+        echo?.setOverlayPassThrough(true)
+        kotlinx.coroutines.delay(60) // let the window flag apply before the touch starts
+        try {
+            val done = CompletableDeferred<Boolean>()
+            val sent = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(d: GestureDescription?) { done.complete(true) }
+                override fun onCancelled(d: GestureDescription?) { done.complete(false) }
+            }, null)
+            return sent && (withTimeoutOrNull(timeoutMs) { done.await() } ?: false)
+        } finally {
+            echo?.setOverlayPassThrough(false)
+        }
     }
 
     private companion object {

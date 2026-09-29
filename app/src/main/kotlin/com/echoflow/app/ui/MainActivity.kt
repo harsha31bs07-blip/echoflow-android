@@ -140,23 +140,33 @@ class MainActivity : Activity() {
 
     private fun buildSetup(column: LinearLayout) {
         setupCard = kit.card {
-            addView(kit.text("Two quick steps", 20f, bold = true))
+            addView(kit.text("Two quick steps", 20f, bold = true).apply { isAccessibilityHeading = true })
             addView(kit.caption("EchoFlow needs these once before it can help.").apply { setPadding(0, kit.dp(2), 0, kit.dp(4)) })
         }
         accessStep = checkStep(1, "Turn on EchoFlow in Accessibility", "Lets EchoFlow see the screen and tap for you.")
         accessStep.actions.apply {
             addView(kit.primaryButton("Open Accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
-            addView(kit.caption("Greyed out? On Android 13 and newer, open App info → ⋮ → \"Allow restricted settings\", then turn EchoFlow on again.").apply {
-                setPadding(0, kit.dp(10), 0, 0)
-            })
-            addView(kit.secondaryButton("Open App info") {
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-            })
+            // Android 13+ greys out the toggle for apps installed from a file until this is allowed.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                addView(kit.caption("Greyed out? Open App info → ⋮ (top right) → \"Allow restricted settings\", then turn EchoFlow on again.").apply {
+                    setPadding(0, kit.dp(10), 0, 0)
+                })
+                addView(kit.secondaryButton("Open App info") { openAppInfo() })
+            }
         }
         setupCard.addView(accessStep.row)
         setupCard.addView(kit.divider())
         micStep = checkStep(2, "Allow the microphone", "So you can speak your commands.")
-        micStep.actions.addView(kit.primaryButton("Allow microphone") { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) })
+        micStep.actions.addView(kit.primaryButton("Allow microphone") {
+            // Denied with "don't ask again": Android won't show the prompt, so open the settings page.
+            if (EchoRuntime.prefs.micAsked && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+                openAppInfo()
+            } else {
+                EchoRuntime.prefs.micAsked = true
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+            }
+        })
+        micStep.actions.addView(kit.caption("You can also type every command and answer instead.").apply { setPadding(0, kit.dp(8), 0, 0) })
         setupCard.addView(micStep.row)
         column.addView(setupCard)
 
@@ -169,6 +179,10 @@ class MainActivity : Activity() {
             ))
         }
         column.addView(readyCard)
+    }
+
+    private fun openAppInfo() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
     }
 
     private fun checkStep(number: Int, title: String, note: String): CheckStep {

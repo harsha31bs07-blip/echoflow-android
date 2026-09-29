@@ -70,6 +70,16 @@ These are the Theme 3 teams with public repos, compared on what their READMEs cl
 4. **The architecture doc is out of date.** `docs/ARCHITECTURE.md` still says *"Status: design document. No implementation code exists yet."* It also describes Room storage and a cloud LLM as the main path, and lists Swiggy and Flipkart as targets.
 5. **No real-voice test.** Every device test used the debug command broadcast, not the microphone.
 
+## Progress (29 Sept, night: work that doesn't need the phone)
+- ✅ **P0-1:** `ARCHITECTURE.md` rewritten from the code, with a Mermaid diagram for each required part.
+- ✅ **P0-2:** target apps (Zomato, Amazon, Myntra; Swiggy earlier) and `LIMITATIONS.md` brought up to date.
+- ✅ **P2-1:** a Gemini key can be pasted in the app (Advanced → Smarter matching). It builds and passes all tests; **it still has to be checked on the phone**.
+- ✅ **P2-2:** judges' quick start and the scorecard added to the README.
+- ✅ **P2-3:** `TEST_MATRIX.md` maps the official wording to classes, unit tests and phone results.
+- ⏳ **P0-3:** merge, tag and release. Waiting for Harsha's go-ahead.
+- ⏳ **P0-4:** team task (rules, deadline time, AI-usage disclosure).
+- ⏳ **P1-1 to P1-5, P2-4:** need the phone. The release APK will be rebuilt after the phone checks, so it includes the key field.
+
 ## 3. The plan, in priority order
 
 Owners: **C** = Claude (code and docs), **H** = Harsha (phone and decisions), **T** = the rest of the team.

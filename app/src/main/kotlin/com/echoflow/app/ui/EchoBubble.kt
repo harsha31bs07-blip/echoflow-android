@@ -88,7 +88,7 @@ class EchoBubble(
     private var lastQuestion: String? = null
     private val endListening = Runnable {
         listeningUi = false
-        root?.visibility = if (shownOnThisScreen) View.VISIBLE else View.GONE
+        applyVisibility()
         updateGlow()
         if (foldAfterListening) {
             foldAfterListening = false
@@ -242,7 +242,24 @@ class EchoBubble(
 
     fun setVisible(visible: Boolean) {
         shownOnThisScreen = visible
-        root?.visibility = if (!visible) View.GONE else if (listeningUi) View.INVISIBLE else View.VISIBLE
+        applyVisibility()
+    }
+
+    /** The notification shade or lock screen covers the screen. */
+    private var shadeOpen = false
+
+    fun setShadeOpen(open: Boolean) {
+        if (shadeOpen == open) return
+        shadeOpen = open
+        applyVisibility()
+    }
+
+    private fun applyVisibility() {
+        root?.visibility = when {
+            !shownOnThisScreen || shadeOpen -> View.GONE
+            listeningUi -> View.INVISIBLE
+            else -> View.VISIBLE
+        }
         updateGlow()
     }
 
@@ -263,7 +280,7 @@ class EchoBubble(
         // Safety net: never stay hidden for a listening panel that isn't actually on screen.
         if (listeningUi && !listening.showing) {
             listeningUi = false
-            root?.visibility = if (shownOnThisScreen) View.VISIBLE else View.GONE
+            applyVisibility()
         }
         // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
         main.removeCallbacks(collapse)
@@ -368,7 +385,7 @@ class EchoBubble(
 
     private fun updateGlow() {
         val color = when {
-            !minimal() || !shownOnThisScreen || listeningUi || justClosed() -> null
+            !minimal() || !shownOnThisScreen || shadeOpen || listeningUi || justClosed() -> null
             lastMode == Mode.TEACHING || lastMode == Mode.LISTENING -> Palette.CORAL
             lastMode == Mode.RUNNING -> Palette.MINT
             lastMode == Mode.ASKING -> Palette.GOLD

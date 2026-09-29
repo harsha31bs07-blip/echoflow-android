@@ -116,11 +116,26 @@ class EchoAccessibilityService : AccessibilityService() {
      */
     fun setOverlayPassThrough(on: Boolean) = mainHandler.post { bubble?.setPassThrough(on) }
 
+    /** A system window (notification shade, lock screen) covering most of the screen. */
+    private fun systemCoversScreen(): Boolean = runCatching {
+        val screenH = resources.displayMetrics.heightPixels
+        windows.any { w ->
+            val r = android.graphics.Rect().also(w::getBoundsInScreen)
+            w.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM && r.height() > screenH / 2
+        }
+    }.getOrDefault(false)
+
     /** Synchronous capture for the teaching recorder (the screen *before* a tap changes it). */
     fun captureNow(): ScreenSnapshot? = capturer.capture(lastActivity, "teach")?.snapshot
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
+        // The notification shade or lock screen is up: step aside (the bubble would cover them).
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+            (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg?.startsWith("com.android.systemui") == true)
+        ) {
+            bubble?.setShadeOpen(systemCoversScreen())
+        }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && !pkg.startsWith("com.android.systemui")) {
             // The bubble is for other apps; EchoFlow's own screens have their own controls. (Events
             // from the bubble's own overlay window also carry our package: only our activities hide it.)

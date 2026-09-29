@@ -13,6 +13,7 @@ Severity: **High** can fail a judge's test or leave the UI stuck · **Medium** m
 | M2 | Medium | Flow Inspector shows internal field names: *Type item into "rs search"* (Amazon's view id). It should say *the search box*. | ✅ Fixed |
 | M3 | Medium | Flow Inspector footer: *"Recorded 1 actions, kept 4 steps"*, a grammar slip that also seems to contradict itself. The extra steps came from the spoken command, because Amazon doesn't report those taps. | ✅ Fixed |
 | M4 | Medium | Flow cards read *"Order an **item** pizza from **restaurant** on Zomato"*: accurate, but form-like. The taught values (still highlighted as changeable) read far better. | ✅ Fixed |
+| L5 | Low | The floating panel draws over the notification shade and Quick Settings (seen in Samsung's tile editor). | ✅ Fixed: the bubble steps aside while a system window covers the screen (shade, lock screen), and comes back when it closes |
 | L1 | Low | A long flow's steps are a flat list. A June 2026 study found that people read demonstrations better grouped into named phases. Group them: *Open the app → Find the restaurant → Pick the dish → Checkout*. | ✅ Done |
 | L2 | Low | The bubble folds and unfolds, and the glow switches on and off, without any transition. Add short fades (respecting "Remove animations"). | ✅ Done |
 | L3 | Low | No haptic feedback on the main buttons. Add a light tick on speak, ✕ and Done. | ✅ Done |

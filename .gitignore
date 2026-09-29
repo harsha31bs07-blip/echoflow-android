@@ -6,3 +6,6 @@ local.properties
 .DS_Store
 captures/
 .kotlin/
+
+# Temporary worktrees used by Claude Code agents
+.claude/worktrees/

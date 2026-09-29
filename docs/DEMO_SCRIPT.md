@@ -15,12 +15,12 @@ Record the phone screen with the Samsung screen recorder, **with microphone and 
 - **Zomato:** logged in, a restaurant that delivers to you and is open (the test used *Brik Oven*; use *Domino's* if it delivers to you), and its cart empty.
 - **EchoFlow:** home screen says *"You're all set"*, and nothing is learned yet. Delete old flows in the Flow Inspector.
 - **Phone:** volume up, Do Not Disturb on, and plugged in.
-- **Speaking:** tap **🎤** on the floating bubble, wait for *"Listening…"*, then speak clearly.
+- **Speaking:** tap the slim **handle on the right edge** (or the coral sound-wave button), wait for the listening panel's *"Listening…"*, then speak clearly. Your words appear on the panel as you speak.
 - **Timing:** each replay takes about 40–50 s, so the whole script fits in about 4½ minutes. Don't pause between parts.
 
 ## Timeline
 
-| Time | Part | Say (tap 🎤 first) / do | What EchoFlow says or does |
+| Time | Part | Say (tap the handle first) / do | What EchoFlow says or does |
 |---|---|---|---|
 | 0:00–0:15 | Intro | Show EchoFlow's home screen | Voice-over: *"EchoFlow learns a task from one demonstration and replays it by voice. It only uses Android accessibility, and it never pays."* |
 | 0:15–1:30 | **(a) Teach** | "Order a Margherita pizza from Brik Oven on Zomato." → *"Want to teach me?"* → say **"yes"**. Then do it by hand: open Zomato → (close the location pop-up if it appears) → search → type **Brik Oven** → open the restaurant → the menu's **Search** → type **margherita** → **ADD** → **Add item** → **Continue** (the cart opens) → tap **✓ Done** on the bubble. **Do not tap Place Order.** | Bubble shows **● Recording**. On Done: *"Learned: order a margherita pizza from brik oven on zomato. I saved 6 steps. You can change the item, restaurant."* |
@@ -36,7 +36,7 @@ Record the phone screen with the Samsung screen recorder, **with microphone and 
 **After recording:** empty the Zomato cart. Nothing is ever ordered or paid, because EchoFlow stops at the cart every time.
 
 ## If something goes wrong on camera
-- **The bubble says "I didn't catch that":** tap 🎤 again and speak closer to the mic.
+- **The bubble says "I didn't catch that":** tap the handle again and speak closer to the phone.
 - **Zomato shows "Something went wrong":** EchoFlow taps *Try again* by itself. Just wait.
 - **It stops with a reason:** that's a valid outcome. Say *"did the last run succeed?"* to show the report, then carry on.
 - **You land on a payment screen:** press Back. EchoFlow never acts on payment screens.

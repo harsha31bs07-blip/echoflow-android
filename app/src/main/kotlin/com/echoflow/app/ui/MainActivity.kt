@@ -241,7 +241,7 @@ class MainActivity : Activity() {
 
         // Command box + Send
         input = EditText(this).apply {
-            hint = "Type a command"
+            hint = "Or type it"
             setHintTextColor(Palette.MUTED)
             setTextColor(Palette.TEXT)
             textSize = 15f
@@ -261,7 +261,26 @@ class MainActivity : Activity() {
             contentDescription = "Send command"
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = kit.dp(8) }
         }
-        card.addView(kit.row(input, send).apply { setPadding(0, kit.dp(14), 0, 0) })
+        // Speak from inside the app too (the floating bubble steps aside on EchoFlow's own screens).
+        val speak = android.widget.ImageButton(this).apply {
+            setImageDrawable(Glyph(Glyph.Kind.WAVES, Color.WHITE, kit.dp(24)))
+            scaleType = android.widget.ImageView.ScaleType.CENTER
+            background = RippleDrawable(
+                ColorStateList.valueOf(0x40FFFFFF),
+                android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFFF7A52.toInt(), Palette.CORAL)).apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                },
+                null,
+            )
+            contentDescription = "Speak a command"
+            layoutParams = LinearLayout.LayoutParams(kit.dp(52), kit.dp(52)).apply { marginEnd = kit.dp(8) }
+            setOnClickListener {
+                it.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                hideKeyboard()
+                EchoRuntime.orchestrator.onSpeakPressed()
+            }
+        }
+        card.addView(kit.row(speak, input, send).apply { setPadding(0, kit.dp(14), 0, 0) })
 
         // Try saying
         examplesTitle = kit.text("Try saying", 13f, Palette.MUTED, bold = true).apply { setPadding(0, kit.dp(16), 0, 0) }

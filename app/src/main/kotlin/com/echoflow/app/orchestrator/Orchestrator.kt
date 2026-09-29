@@ -106,7 +106,7 @@ class Orchestrator(context: Context) {
                 status(when {
                     voice?.recognitionAvailable == false -> "Speech recognition isn't available on this phone"
                     voice?.lastCancelled == true -> "Okay, I stopped listening."
-                    else -> "I didn't catch that. Tap 🎤 and try again."
+                    else -> "I didn't catch that. Tap the sound-wave button to try again."
                 })
                 return@launch
             }

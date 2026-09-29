@@ -15,7 +15,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 
 ## Judges' quick start (3 minutes)
 1. Install [`release/EchoFlow.apk`](release/EchoFlow.apk) (Android 11+). Open **EchoFlow → Open Accessibility settings** and turn on **EchoFlow automation**. On Android 13+, if the toggle is greyed out, see [the steps below](#enable-the-accessibility-service-judges-read-this).
-2. Tap the floating **🎤** and say a task it doesn't know, e.g. *"Order a Margherita pizza from Domino's on Zomato."* It answers *"I don't know how to … yet. Want to teach me?"* → say **yes** → do it yourself in Zomato → tap **✓ Done** on the cart (never tap Pay). It says *"Learned: …"*.
+2. Tap the slim **handle on the right edge** of the screen and say a task it doesn't know, e.g. *"Order a Margherita pizza from Domino's on Zomato."* It answers *"I don't know how to … yet. Want to teach me?"* → say **yes** → do it yourself in Zomato → tap **✓ Done** on the cart (never tap Pay). It says *"Learned: …"*.
 3. Say the same sentence, a paraphrase, or change the dish, the quantity ("two") or the address ("deliver to work"). It runs to the cart and says *"Your turn…"*.
 
 No account, server or API key is needed; everything runs on the phone.
@@ -68,10 +68,11 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
    - **✕** on the bubble or the listening panel stops whatever is going on (a task, a question, a lesson being taught) and folds EchoFlow back into the handle, any time;
    - **long-press it** to open the controls;
    - while EchoFlow is listening, teaching, working or asking, **the screen's edges glow** (coral: listening or recording; mint: working; gold: asking you) and the controls stay open;
-   - the controls are **🎤** speak, **✓ Done** finish teaching, **■** stop, **⌂** open EchoFlow and **⇅** move to the other corner;
+   - the controls are the coral **sound-wave** button (speak), **✓ Done** (finish teaching), **■** (stop), **⌂** (open EchoFlow), **⇅** (move to the other corner) and **✕** (stop and hide);
+   - EchoFlow's own home screen has the same sound-wave button next to the text box;
    - prefer the controls always on screen? Turn it off in **EchoFlow → Advanced → Bubble**.
-3. **Teach:** tap 🎤 and say *"teach order garlic bread"*. Do the task yourself in the app, and **stop before paying**. Then tap **✓ Done**.
-4. **Replay:** tap 🎤 and say the command, a paraphrase, or a different item, quantity or address.
+3. **Teach:** tap the handle and say *"teach order garlic bread"*. Do the task yourself in the app, and **stop before paying**. Then tap **✓ Done**.
+4. **Replay:** tap the handle and say the command, a paraphrase, or a different item, quantity or address.
 5. **Inspect:** EchoFlow → *Learned flows* → tap a flow to see its steps and changeable values.
 
 Optional **AI help**: open **EchoFlow → Advanced → AI help** and paste a free Gemini API key (from aistudio.google.com). Two things change:

@@ -7,6 +7,7 @@ import com.echoflow.core.safety.SignalStrength.MEDIUM
 import com.echoflow.core.safety.SignalStrength.STRONG
 import com.echoflow.core.text.Phrase
 import com.echoflow.core.text.TextNormalizer
+import com.echoflow.core.text.phrases
 
 /**
  * Local, deterministic classifier: is this screen one where automation must stop and hand
@@ -26,11 +27,42 @@ class ScreenSafetyClassifier(
         textSignals(ctx, signals)
         opaqueSignals(ctx, signals)
 
+        val checkout = checkoutSignal(ctx)
+        // A cart's one-line "PAY USING Google Pay UPI" summary beside its Place Order button is
+        // checkout, not a payment screen (Zomato). Only the phrases inside that small block are
+        // set aside; payment lists, card/UPI fields and payment apps still trip PAYMENT.
+        val summary = if (checkout != null) paymentSummaryBlock(ctx) else emptySet()
         val distinct = signals.distinctBy { Triple(it.kind, it.rule, it.evidence) }
+            .filterNot { it.kind == SensitiveKind.PAYMENT && it.rule in SUMMARY_RULES && it.elementIndex in summary }
         val kinds = distinct.groupBy { it.kind }
             .filterValues { list -> list.sumOf { it.strength.weight } >= ScreenVerdict.TRIP_THRESHOLD }
             .keys
-        return ScreenVerdict(snapshot.id, snapshot.packageName, kinds, distinct, checkoutSignal(ctx))
+        return ScreenVerdict(snapshot.id, snapshot.packageName, kinds, distinct, checkout)
+    }
+
+    /** Zomato's "₹285.44 TOTAL | Place Order": the amount sits in the button's own container. */
+    private fun amountBeside(ctx: Ctx, e: UiElement): String? {
+        var p = e.parent
+        repeat(2) {
+            val parent = ctx.snapshot.elements.getOrNull(p) ?: return null
+            ctx.snapshot.descendants(parent.index, maxDepth = 3).mapNotNull { it.label }
+                .firstNotNullOfOrNull { lex.amountOf(TextNormalizer.tokens(it)) }?.let { return it }
+            p = parent.parent
+        }
+        return null
+    }
+
+    /** Elements of a small "Pay using <method>" block (its label's parent and that parent's subtree). */
+    private fun paymentSummaryBlock(ctx: Ctx): Set<Int> {
+        val out = mutableSetOf<Int>()
+        for ((e, tokens) in ctx.visibleLabeled) {
+            if (tokens.size > 3 || SUMMARY_HEADINGS.none { it.startsOf(tokens) }) continue
+            val parent = e.parent.takeIf { it >= 0 } ?: continue
+            val block = listOf(parent) + ctx.snapshot.descendants(parent).map { it.index }.toList()
+            if (block.count { i -> ctx.snapshot.elements.getOrNull(i)?.label != null } > MAX_SUMMARY_LABELS) continue
+            out += block
+        }
+        return out
     }
 
     /**
@@ -50,7 +82,7 @@ class ScreenSafetyClassifier(
                 return CheckoutSignal(if (amount != null) "pay ₹" else "pay", amount, e.index)
             }
             lex.checkoutButtonStart.firstOrNull { it.startsOf(tokens) }?.let {
-                return CheckoutSignal(it.source, lex.amountOf(tokens), e.index)
+                return CheckoutSignal(it.source, lex.amountOf(tokens) ?: amountBeside(ctx, e), e.index)
             }
         }
         return null
@@ -179,6 +211,9 @@ class ScreenSafetyClassifier(
 
     private companion object {
         val NAV_ID_TOKENS = setOf("nav", "tab", "tabs", "navigation", "menu", "tiles")
+        val SUMMARY_HEADINGS = phrases("pay using", "paying using", "pay with", "paying with", "pay via")
+        val SUMMARY_RULES = setOf("payment-phrase", "payment-option")
+        const val MAX_SUMMARY_LABELS = 4
     }
 
     private fun matchesPackage(pkg: String, list: List<String>): Boolean =

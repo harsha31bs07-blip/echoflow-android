@@ -27,7 +27,8 @@ data class ElementDescriptor(
         get() = text?.takeIf { it.isNotBlank() }
             ?: contentDescription?.takeIf { it.isNotBlank() }
             ?: readableId()
-            ?: context.firstOrNull { it.isNotBlank() }?.let { "the button near \"$it\"" }
+            // Icon-font glyphs (private-use characters) aren't readable: skip them.
+            ?: context.firstOrNull { c -> c.any { it.isLetterOrDigit() } }?.let { "the button near \"$it\"" }
             ?: className.substringAfterLast('.')
 
     /** "in.swiggy.android:id/search_bar" -> "search bar"; null for generic ids ("container"). */

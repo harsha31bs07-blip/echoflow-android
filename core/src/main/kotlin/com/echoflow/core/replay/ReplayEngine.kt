@@ -74,6 +74,12 @@ class ReplayEngine(
     /** Field typed into most recently, for "press enter" when results don't appear. */
     private var lastTyped: ElementDescriptor? = null
 
+    /** The value typed most recently ("brik oven"), for opening the matching result. */
+    private var lastTypedValue: String? = null
+
+    /** Things the user should hear at the end ("I kept the size that was already selected."). */
+    private val notes = mutableListOf<String>()
+
     /** The address sheet is answered at most once per run. */
     private var addressHandled = false
 
@@ -82,7 +88,9 @@ class ReplayEngine(
 
     suspend fun run(flow: Flow, slotValues: Map<String, String>): ReplayResult {
         events.clear()
+        notes.clear()
         lastTyped = null
+        lastTypedValue = null
         addressHandled = false
         customisationHandled = false
         val slots = slotValues.toMutableMap()
@@ -198,7 +206,8 @@ class ReplayEngine(
         var staleRetries = 0
         var blankSince: Long? = null
         var triedOpenSearch = false
-        var triedOpenResult = false
+        var openedResults = 0
+        var triedRetry = false
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
@@ -268,6 +277,19 @@ class ReplayEngine(
             }
 
 
+            // The app's own error page ("Something went wrong. Try again"): retry once.
+            if (!triedRetry) {
+                val retry = retryButton(snap)
+                if (retry != null) {
+                    triedRetry = true
+                    events += "the app showed an error; tapped \"${snap.elements[retry].label}\""
+                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, retry)), GateContext(isRecovery = true), snap)
+                    host.awaitSettled(snap.id, 3_000)
+                    started = host.nowMs()
+                    continue
+                }
+            }
+
             // A popup covering the screen (promo, rating, location): dismiss via whitelist.
             if (triedDismiss < 2) {
                 val dismiss = dismissButton(snap)
@@ -293,23 +315,29 @@ class ReplayEngine(
             }
 
             // Typing step, but the field is hidden behind a "Search" button (its tap wasn't reported
-            // while teaching): open search first.
-            if (step is Step.TypeText && !triedOpenSearch) {
+            // while teaching): open search first. A taught tap on a search button that looks
+            // different now (Zomato swaps it for a search bar once the menu scrolls) is the same.
+            // (Only once no result for the text just typed is left to open: that comes first.)
+            val searchTap = isSearchTap(step) &&
+                (openedResults >= MAX_RESULT_OPENS || lastTypedValue?.let { firstResult(snap, it) } == null)
+            if ((step is Step.TypeText || searchTap) && !triedOpenSearch) {
                 val opener = searchOpener(snap)
                 if (opener != null) {
                     triedOpenSearch = true
                     events += "opened search via \"${opener.label ?: opener.viewId}\""
-                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, opener.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, opener.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    if (searchTap && o is ActionOutcome.Performed) return tripped() ?: StepResult.Done
                     continue
                 }
             }
             // After a search, the taught next element isn't on the results list: open the first
-            // result that matches {item} (a result tap that wasn't reported while teaching).
-            val item = slots["item"]
-            if (!triedOpenResult && item != null && step is Step.Tap && step.slot == null && steps.take(i).any { it is Step.TypeText }) {
+            // result that matches what was just typed ({restaurant} or {item}): result taps that
+            // weren't reported while teaching. Twice at most (Zomato: suggestion, then the card).
+            val item = lastTypedValue ?: slots["item"]
+            if (openedResults < MAX_RESULT_OPENS && item != null && step is Step.Tap && step.slot == null && steps.take(i).any { it is Step.TypeText }) {
                 val result = firstResult(snap, item)
                 if (result != null) {
-                    triedOpenResult = true
+                    openedResults++
                     events += "opened the first result matching \"$item\""
                     act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, result.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
                     continue
@@ -324,7 +352,8 @@ class ReplayEngine(
             }
 
             // A slot value that isn't on screen: scroll a bit, then ask with what we see.
-            if (scrolls < MAX_SCROLLS) {
+            // (Not for a search button: scrolling hides it in some apps.)
+            if (scrolls < MAX_SCROLLS && !isSearchTap(step)) {
                 val list = scrollableList(snap)
                 if (list != null) {
                     scrolls++
@@ -391,7 +420,10 @@ class ReplayEngine(
             is Step.TypeText -> {
                 val text = step.slot?.let { slots[it] } ?: step.literal.orEmpty()
                 act(PlannedAction.SetText(snap.id, r.index, text), ctx, snap).also {
-                    if (it is ActionOutcome.Performed) lastTyped = step.target
+                    if (it is ActionOutcome.Performed) {
+                        lastTyped = step.target
+                        lastTypedValue = text
+                    }
                 }
             }
             is Step.RepeatTap -> {
@@ -595,15 +627,11 @@ class ReplayEngine(
             return StepResult.Stop(RunStatus.HALTED, "$item needs you to pick some options, like size or type. I've left them open for you to choose.")
         }
         customisationHandled = true
+        // The teacher got past this sheet (its taps aren't always reported): keep the choices
+        // that are already selected, like the size, and say so at the end. A required choice with
+        // nothing selected keeps the sheet open and stops the run below.
         val price = SafetyLexicon.amountOf(TextNormalizer.tokens(button.label))
-        val answer = host.ask(
-            "$item has extra options. Should I add it with the default choices" + (price?.let { " for $it" } ?: "") + "?",
-            listOf("yes", "no"),
-        )
-        if (answer == null || !isYes(answer)) {
-            return StepResult.Stop(if (answer == null) RunStatus.NO_ANSWER else RunStatus.HALTED, "Okay, I left the options open for you to choose.")
-        }
-        events += "added $item with default options"
+        events += "added $item with the preselected options"
         val now = host.current() ?: snap
         val fresh = customisationSheet(now) ?: return StepResult.Stop(RunStatus.HALTED, "The options sheet closed before I could add $item.")
         val o = act(PlannedAction.Click(now.id, Descriptors.clickableFor(now, fresh.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
@@ -617,8 +645,18 @@ class ReplayEngine(
         return if (customisationSheet(after) != null) {
             StepResult.Stop(RunStatus.HALTED, "$item needs you to pick some options, like size or type. I've left them open for you to choose.")
         } else {
+            notes += "I added $item with the options that were already selected" + (price?.let { ", $it" } ?: "") + "."
             null
         }
+    }
+
+    /** A taught tap whose target is a search button or box (by its label, row text or view id). */
+    private fun isSearchTap(step: Step): Boolean {
+        if (step !is Step.Tap || step.slot != null || step.pick != null) return false
+        val t = step.target
+        val words = (listOfNotNull(t.text, t.contentDescription) + t.context).flatMap(TextNormalizer::tokens) +
+            TextNormalizer.viewIdTokens(t.viewId)
+        return "search" in words
     }
 
     /** A non-editable "Search" box/button (upper part of the screen) that opens the search field. */
@@ -649,7 +687,7 @@ class ReplayEngine(
     }
 
     private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
-        .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) > item.length }
+        .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) >= item.length }
         .filter { ElementResolver.valueMatch(item, it.label, emptyList()) >= 0.8 }
         .filter { Descriptors.clickableFor(snap, it.index).let { c -> snap.elements[c].clickable } }
         .minByOrNull { it.bounds.top * 10 + it.bounds.left }
@@ -737,6 +775,16 @@ class ReplayEngine(
         return snap.elements.filter { it.visible && inPopup(it) }.mapNotNull { it.label }
     }
 
+    /** "Try again" / "Retry" (exact labels only, never "Retry payment") on an error page. */
+    private fun retryButton(snap: ScreenSnapshot): Int? {
+        val labels = snap.appElements().filter { it.visible }.mapNotNull { it.label?.let(TextNormalizer::normalize) }
+        if (labels.none { l -> ERROR_TEXTS.any { l.contains(it) } }) return null
+        return snap.appElements().firstOrNull { e ->
+            e.visible && e.label != null && (e.clickable || e.className.contains("Button")) &&
+                TextNormalizer.normalize(e.label) in RETRY_LABELS
+        }?.index
+    }
+
     private fun dismissButton(snap: ScreenSnapshot): Int? {
         val labels = popupLabels(snap)
         if (labels.isEmpty()) return null
@@ -797,7 +845,7 @@ class ReplayEngine(
 
     private fun result(status: RunStatus, message: String, i: Int, steps: List<Step>) = ReplayResult(
         status = status,
-        message = message,
+        message = (notes + message).joinToString(" "),
         stoppedAtStep = i + 1,
         totalSteps = steps.size,
         stepDescription = steps.getOrNull(i)?.description,
@@ -806,6 +854,12 @@ class ReplayEngine(
 
     companion object {
         const val STEP_BUDGET_MS = 12_000L
+        const val MAX_RESULT_OPENS = 2
+        private val ERROR_TEXTS = listOf(
+            "something went wrong", "went wrong", "couldn t load", "couldnt load", "could not load", "unable to load",
+            "no internet", "not connected", "oops", "failed to load", "please try again",
+        )
+        private val RETRY_LABELS = setOf("try again", "retry", "reload", "refresh", "tap to retry")
         const val SLOT_TAP_SCORE = 0.5
         const val FIELD_SCORE = 0.45
         const val LOOKAHEAD_SCORE = 0.85

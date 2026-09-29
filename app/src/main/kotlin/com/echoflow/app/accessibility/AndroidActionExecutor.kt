@@ -12,6 +12,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.echoflow.core.gateway.ActionExecutor
 import com.echoflow.core.gateway.PlannedAction
 import com.echoflow.core.model.ScreenSnapshot
+import com.echoflow.core.safety.GestureSafety
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -32,8 +33,10 @@ internal class AndroidActionExecutor(
                 val node = resolveNode(action) ?: return@withContext false
                 when (action) {
                     // Views that handle touches themselves (Lynx/Compose/custom) refuse ACTION_CLICK;
-                    // then tap the centre of the same, gate-approved element with a gesture.
-                    is PlannedAction.Click -> node.performAction(AccessibilityNodeInfo.ACTION_CLICK) || tapCentre(node)
+                    // then tap the centre of the same, gate-approved element with a gesture, unless
+                    // something that could pay, order or delete also sits under that point.
+                    is PlannedAction.Click -> node.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
+                        (GestureSafety.safeToTap(snapshot, action.elementIndex) && tapCentre(node))
                     is PlannedAction.SetText -> node.performAction(
                         AccessibilityNodeInfo.ACTION_SET_TEXT,
                         Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, action.text) },

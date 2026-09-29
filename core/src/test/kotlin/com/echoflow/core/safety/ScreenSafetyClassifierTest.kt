@@ -123,6 +123,16 @@ class ScreenSafetyClassifierTest {
         text("BAG"); text("ADDRESS"); text("PAYMENT"); text("Men Running Shoes"); button("PLACE ORDER")
     })
 
+    @Test fun `zomato cart with a pay-using summary and place order is checkout`() = assertCheckout(screen(pkg = "com.application.zomato") {
+        text("Brik Oven"); text("Margherita Pizza"); text("Mini – 6 inches"); text("1"); button("Edit")
+        text("Add more items"); text("Zomato Money Balance: ₹0 •"); button("Add Money")
+        val pay = container(clickable = true); text("PAY USING", pay); text("Google Pay UPI", pay)
+        val checkout = container(clickable = true); text("₹285.44", checkout); text("TOTAL", checkout); text("Place Order", checkout)
+    }, amount = "₹285")
+
+    @Test fun `a pay-using summary without a checkout button still trips`() =
+        assertKind(PAYMENT, screen { val pay = container(clickable = true); text("PAY USING", pay); text("Google Pay UPI", pay) })
+
     @Test fun `payment options page with a pay button is still PAYMENT`() {
         val s = screen { text("Payment Options"); text("Preferred Payment"); icon("Saved card"); text("Pay₹632"); text("Google Pay") }
         assertKind(PAYMENT, s)

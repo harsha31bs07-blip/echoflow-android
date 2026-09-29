@@ -44,9 +44,15 @@ class TalkTileService : TileService() {
         if (Build.VERSION.SDK_INT >= 34) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
         } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(intent)
+            startActivityAndCollapseLegacy(intent)
         }
+    }
+
+    /** Android 13 and older only (the PendingIntent form above is used from Android 14). */
+    @android.annotation.SuppressLint("StartActivityAndCollapseDeprecated")
+    @Suppress("DEPRECATION")
+    private fun startActivityAndCollapseLegacy(intent: Intent) {
+        startActivityAndCollapse(intent)
     }
 
     private companion object {

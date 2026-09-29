@@ -105,4 +105,14 @@ class IntentMatcherTest {
         assertEquals("belgian waffle co", Utterances.parse("order waffles from the belgian waffle co").source)
         assertEquals("dominos", Utterances.parse("get me a margherita from dominos").source)
     }
+
+    @Test fun `look up is a search verb, not part of the value`() {
+        val yt = "com.google.android.youtube"
+        val flow = Flow("yt", "search for {item} on youtube", yt, "YouTube", "search for {item} on youtube",
+            listOf("search for lofi music on youtube"), listOf(SlotDef("item", SlotType.TEXT, "lofi music")), emptyList())
+        for (said in listOf("can you look up coldplay on youtube", "look for coldplay on youtube")) {
+            val top = IntentMatcher().match(said, listOf(flow)).first()
+            assertEquals("coldplay", top.slots["item"], said)
+        }
+    }
 }

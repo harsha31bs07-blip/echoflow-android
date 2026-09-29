@@ -233,6 +233,8 @@ class IntentMatcher {
                 t.startsWith("{") -> t
                 t in RELAX_DROP -> null
                 t == "to" && next != null && verbGroup(next) != null -> null
+                // "look up coldplay", "look for shoes", "check out …": the particle belongs to the verb.
+                t in VERB_PARTICLES && out.lastOrNull()?.let { it in verbGroups.keys } == true -> null
                 t in setOf("deliver", "delivered", "delivery") && out.isNotEmpty() -> null
                 else -> verbGroup(t) ?: t
             }
@@ -278,6 +280,7 @@ class IntentMatcher {
         private val REPORT = listOf("what happened", "last run", "last time", "did it work", "how did it go", "status report", "previous run", "succeed", "successful", "did it go through", "did it fail")
         private val LIST = listOf("what can you do", "what have you learned", "list flows", "what do you know", "show flows")
 
+        private val VERB_PARTICLES = setOf("up", "for", "out")
         private val verbGroups = mapOf(
             "order" to setOf("order", "get", "buy", "want", "need", "bring", "deliver", "send", "purchase", "grab", "khana", "mangao", "mangwa"),
             "search" to setOf("search", "find", "look", "show", "browse", "check"),

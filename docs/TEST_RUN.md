@@ -38,6 +38,18 @@
 | **B2** | "Search for sunglasses on Myntra and add the first result to cart." (Myntra was never taught; the Amazon flow was) | Matched the Amazon flow as a cross-app candidate (0.78) and asked *"I learned this on Amazon. Do you want me to try the same steps on Myntra: …? Say yes or no."* → yes → opened Myntra's search bar, typed, pressed Enter, opened the first product (**Carlton London Women Oversized Sunglasses**), tapped the page's **Add to Bag**. Myntra's bag then held that exact product. The Amazon flow (T9) and the Zomato flow (T4) were re-run afterwards and still pass | ✅ |
 | **B3** | "I want to order margherita pizza on zomato" | Asked which restaurant mid-run, then continued | ✅ |
 
+## A flow in an app EchoFlow had never seen (29 Sept, night)
+
+Judges will teach new flows live, so we taught one the same way in an app EchoFlow had never been used on, with no code changes for it:
+
+| Step | What happened |
+|---|---|
+| Teach | "teach search for lofi music on youtube" → opened YouTube, tapped Search, typed, pressed Enter, tapped ✓ Done → *"Learned: search for lofi music on youtube. I saved 3 steps. You can change the item."* |
+| New value | "search for arijit singh songs on youtube" → template match (0.95) → YouTube searched **arijit singh songs** |
+| Paraphrase | "can you look up coldplay on youtube" → relaxed match (0.88) → searched **coldplay** (the first try searched "up coldplay"; "look up" / "look for" / "check out" are now treated as the verb) |
+
+(Spotify was tried first, but its own search showed "Something went wrong" for every query, so it wasn't a fair test.)
+
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.

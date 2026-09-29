@@ -1,6 +1,8 @@
 package com.echoflow.core.nlu
 
 import com.echoflow.core.flow.Flow
+import com.echoflow.core.flow.SlotType
+import com.echoflow.core.flow.SourceSlots
 import com.echoflow.core.text.TextNormalizer
 
 sealed interface MetaIntent {
@@ -37,7 +39,7 @@ class IntentMatcher {
         return when {
             tokens.firstOrNull() in setOf("teach", "learn") || t.startsWith("remember how") || t.startsWith("new flow") ->
                 MetaIntent.Teach(utterance)
-            t in setOf("done", "finish", "finished", "save", "save it", "that s it", "thats it", "that is it", "stop teaching", "i am done", "i m done") ->
+            t in setOf("done", "finish", "finished", "save", "save it", "thats it", "that is it", "stop teaching", "i am done", "im done") ->
                 MetaIntent.Done
             t in setOf("stop", "cancel", "abort", "halt", "stop it", "stop now", "wait stop") -> MetaIntent.Stop
             t in setOf("continue", "resume", "go on", "carry on", "keep going") -> MetaIntent.Continue
@@ -52,7 +54,7 @@ class IntentMatcher {
         val local = flows.map { f -> localScore(norm, f) }
         val merged = if (llm == null) local else local.map { c ->
             if (llm.flowId == c.flow.id) {
-                c.copy(score = maxOf(c.score, llm.confidence), slots = c.slots + llm.slots.filterValues { it.isNotBlank() }, source = if (llm.confidence > c.score) "llm" else c.source)
+                c.copy(score = maxOf(c.score, llm.confidence), slots = cleanSlots(c.flow, c.slots + llm.slots.filterValues { it.isNotBlank() }), source = if (llm.confidence > c.score) "llm" else c.source)
             } else if (llm.flowId == null && llm.confidence >= 0.7 && c.source == "similar") {
                 c.copy(score = minOf(c.score, 1 - llm.confidence))
             } else c
@@ -60,19 +62,25 @@ class IntentMatcher {
         return merged.sortedByDescending { it.score }
     }
 
-    private fun localScore(norm: String, flow: Flow): Candidate {
+    private fun localScore(norm: String, flow: Flow): Candidate =
+        rawScore(norm, flow).let { c -> c.copy(slots = cleanSlots(flow, c.slots)) }
+
+    private fun rawScore(norm: String, flow: Flow): Candidate {
         // 1. Exact example (T2): the taught slot values apply.
         if (flow.examples.any { TextNormalizer.normalize(it) == norm }) {
             return Candidate(flow, 1.0, flow.slots.associate { it.name to it.taughtValue }, "exact")
         }
-        // 2. Template regex: same shape, different values (T4–T6). Not when the command names a
-        // different app ("… on zomato" never matches a Swiggy flow's template).
-        val mentioned = Utterances.parse(norm).appMention?.let { Utterances.appNames[it] }
-        if (mentioned == null || mentioned == flow.appPackage) templateRegex(flow.template)?.let { (regex, names) ->
+        val p = Utterances.parse(norm)
+        // A command naming a different app never uses this flow's template ("… on zomato" vs a
+        // Swiggy flow), nor does one naming a restaurant when the flow has no place for it.
+        val mentioned = p.appMention?.let { Utterances.appNames[it] }
+        val flowSource = flow.slots.firstOrNull { it.name in SourceSlots.names }?.name
+        val shapeOk = (mentioned == null || mentioned == flow.appPackage) && (p.source == null || flowSource != null)
+        // 2. Template regex: same shape, different values (T4–T6).
+        if (shapeOk) templateRegex(flow.template)?.let { (regex, names) ->
             regex.matchEntire(norm)?.let { m ->
                 val slots = names.mapIndexed { i, n -> n to normaliseSlot(n, m.groupValues[i + 1]) }.toMap().toMutableMap()
                 // A greedy item slot swallows "to home" / "on swiggy": split those back out.
-                val p = Utterances.parse(norm)
                 val item = slots["item"]
                 if (item != null && p.item != null && item != p.item && item.contains(p.item)) slots["item"] = p.item
                 if (p.address != null && "address" !in names) slots["address"] = p.address
@@ -80,8 +88,19 @@ class IntentMatcher {
                 if (slots.values.none { it.isBlank() }) return Candidate(flow, 0.95, slots, "template")
             }
         }
+        // 2b. Relaxed template: the same command in looser words ("get me a margherita from
+        // dominos" for "order a {item} pizza from {restaurant} on zomato"). Articles and politeness
+        // dropped, verbs mapped to their group, plurals and qualifiers optional, and a "from X"
+        // part may be left out (it's asked for mid-flow, bonus B3).
+        if (shapeOk) relaxedMatch(p, flow)?.let { slots ->
+            val itemMissing = flow.slots.any { it.name == "item" } && cleanSlots(flow, slots)["item"].isNullOrBlank()
+            p.address?.let { slots["address"] = it }
+            p.quantity?.let { slots["qty"] = it.toString() }
+            // Without the main value ("order pizza") it's only a guess: confirm (T13).
+            return Candidate(flow, if (itemMissing) 0.7 else RELAXED_SCORE, slots, "template")
+        }
         // 3. Similarity: intent verbs, app mention, and whether the slots are there. Capped at 0.75.
-        val parsed = Utterances.parse(norm)
+        val parsed = p
         val templateTokens = TextNormalizer.tokens(flow.template.replace(Regex("\\{\\w+\\}"), " "))
         val flowVerbs = templateTokens.mapNotNull(::verbGroup).toSet()
         val saidVerbs = parsed.tokens.mapNotNull(::verbGroup).toSet()
@@ -99,6 +118,11 @@ class IntentMatcher {
                 "item" -> parsed.item?.let { slots["item"] = it }
             }
         }
+        when {
+            parsed.source == null -> Unit
+            flowSource != null -> { slots[flowSource] = parsed.source; score += 0.1 }
+            else -> score -= 0.2 // "from Domino's" but this flow has no restaurant
+        }
         // Quantity and address apply to any ordering flow (set at the cart / address sheet).
         parsed.quantity?.let { slots["qty"] = it.toString() }
         parsed.address?.let { slots["address"] = it }
@@ -110,9 +134,122 @@ class IntentMatcher {
         return Candidate(flow, score.coerceIn(0.0, SIMILAR_CAP), slots, "similar")
     }
 
+    /** Relaxed template match on [Utterances.Parsed.core]; null if the shapes differ. */
+    private fun relaxedMatch(p: Utterances.Parsed, flow: Flow): MutableMap<String, String>? {
+        if (!flow.template.contains('{')) return null
+        val qualifiers = flow.slots.flatMap { it.qualifiers }.toSet()
+        val tpl = relaxTemplate(flow)
+        if (tpl.none { it.slot == "item" } && flow.slots.any { it.name == "item" }) return null
+        val names = mutableListOf<String>()
+        val pattern = StringBuilder("^")
+        var i = 0
+        while (i < tpl.size) {
+            val t = tpl[i]
+            val next = tpl.getOrNull(i + 1)
+            val nextSlot = next?.slot
+            when {
+                // "from {restaurant}": optional as a pair.
+                t.slot == null && t.word in OPTIONAL_PREPS && nextSlot != null && nextSlot != "item" -> {
+                    names += nextSlot
+                    pattern.append("(?: ${Regex.escape(t.word)} (.+?))?")
+                    i += 2
+                    continue
+                }
+                t.slot != null -> {
+                    names += t.slot
+                    pattern.append(" (.+?)")
+                }
+                t.word in qualifiers -> pattern.append("(?: ${plural(t.word)})?")
+                else -> pattern.append(" ${plural(t.word)}")
+            }
+            i++
+        }
+        pattern.append("$")
+        val said = " " + relax(p.core).joinToString(" ")
+        val m = runCatching { Regex(pattern.toString()) }.getOrNull()?.matchEntire(said) ?: return null
+        val slots = mutableMapOf<String, String>()
+        names.forEachIndexed { k, n ->
+            val v = m.groupValues[k + 1].trim()
+            // A value can't span a structural word ("margherita from dominos" isn't an item).
+            if (v.split(' ').any { it in STRUCTURAL }) return null
+            if (v.isNotBlank()) slots[n] = v
+        }
+        return slots
+    }
+
+    private data class Tok(val word: String, val slot: String? = null)
+
+    /** The template without the app mention, quantity and address, in relaxed words. */
+    private fun relaxTemplate(flow: Flow): List<Tok> {
+        val raw = flow.template.trim().split(Regex("\\s+"))
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < raw.size) {
+            val w = raw[i]
+            val next = raw.getOrNull(i + 1)
+            when {
+                w in APP_PREPS && next != null && Utterances.appNames.containsKey(next) -> i++
+                Utterances.appNames.containsKey(w) -> Unit
+                w in setOf("to", "at") && next == "{address}" -> i++
+                w == "{address}" || w == "{qty}" -> Unit
+                else -> out += w
+            }
+            i++
+        }
+        return relax(out).map { w -> Regex("^\\{(\\w+)\\}$").matchEntire(w)?.let { Tok(w, it.groupValues[1]) } ?: Tok(w) }
+    }
+
+    /** Drop articles and politeness, map verbs to their group, collapse repeats ("want to order"). */
+    private fun relax(tokens: List<String>): List<String> {
+        val out = mutableListOf<String>()
+        tokens.forEachIndexed { i, t ->
+            val next = tokens.getOrNull(i + 1)
+            val w = when {
+                t.startsWith("{") -> t
+                t in RELAX_DROP -> null
+                t == "to" && next != null && verbGroup(next) != null -> null
+                t in setOf("deliver", "delivered", "delivery") && out.isNotEmpty() -> null
+                else -> verbGroup(t) ?: t
+            }
+            if (w != null && w != out.lastOrNull()) out += w
+        }
+        return out
+    }
+
+    /**
+     * Tidy slot values: "a phone case" -> "phone case"; qualifiers the flow learned are removed
+     * ("farmhouse pizzas" -> "farmhouse"). A value that becomes empty is left out (asked mid-flow).
+     */
+    fun cleanSlots(flow: Flow, slots: Map<String, String>): Map<String, String> = slots.mapNotNull { (k, v) ->
+        val def = flow.slots.firstOrNull { it.name == k }
+        if (def?.type == SlotType.NUMBER || k == "qty") return@mapNotNull k to v
+        var words = TextNormalizer.tokens(v)
+        while (words.size > 1 && words.first() in ARTICLES) words = words.drop(1)
+        val q = def?.qualifiers.orEmpty().map(::singular).toSet()
+        if (q.isNotEmpty()) words = words.filter { singular(it) !in q }
+        if (words.isEmpty() || words.all { it in ARTICLES }) null else k to words.joinToString(" ")
+    }.toMap()
+
     companion object {
         const val SIMILAR_CAP = 0.75
-        private val REPORT = listOf("what happened", "last run", "last time", "did it work", "how did it go", "status report", "previous run")
+        const val RELAXED_SCORE = 0.88
+        private val ARTICLES = setOf("a", "an", "the", "some", "any")
+        private val RELAX_DROP = setOf(
+            "a", "an", "the", "some", "me", "please", "can", "could", "would", "will", "you", "i", "im", "like",
+            "just", "now", "kindly", "hey", "for", "us", "lets", "quickly",
+        )
+        private val OPTIONAL_PREPS = setOf("from", "at", "in", "to")
+        private val APP_PREPS = setOf("on", "from", "in", "using", "via")
+        private val STRUCTURAL = setOf("from", "on")
+
+        private fun plural(word: String) = Regex.escape(word) + "(?:s|es)?"
+        fun singular(w: String) = when {
+            w.length > 4 && w.endsWith("es") && !w.endsWith("ses") -> w.dropLast(2)
+            w.length > 3 && w.endsWith("s") && !w.endsWith("ss") -> w.dropLast(1)
+            else -> w
+        }
+
+        private val REPORT = listOf("what happened", "last run", "last time", "did it work", "how did it go", "status report", "previous run", "succeed", "successful", "did it go through", "did it fail")
         private val LIST = listOf("what can you do", "what have you learned", "list flows", "what do you know", "show flows")
 
         private val verbGroups = mapOf(

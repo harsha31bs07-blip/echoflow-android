@@ -144,7 +144,7 @@ class Orchestrator(context: Context) {
     private suspend fun command(text: String) {
         val all = flows.all()
         if (all.isEmpty()) {
-            say("I don't know any flows yet. Say teach, then the command, and show me.")
+            offerTeach(text, "I don't know how to \"$text\" yet. Want to teach me? Say yes, then show me.")
             return
         }
         status("Matching “$text”…")
@@ -164,8 +164,14 @@ class Orchestrator(context: Context) {
                 val chosen = a?.let { pick(it, d.options) }
                 if (chosen != null) runFlow(chosen, text) else say("Okay, I'll leave it.")
             }
-            is Decision.OfferTeach -> say(d.message)
+            is Decision.OfferTeach -> offerTeach(text, d.message)
         }
+    }
+
+    /** T12: never run anything; on "yes", start learning this very command. */
+    private suspend fun offerTeach(text: String, question: String) {
+        val a = askUser(question, listOf("yes", "no"))
+        if (a != null && ReplayEngine.isYes(a)) startTeaching(text) else say("Okay. Say teach and the command whenever you want to show me.")
     }
 
     private fun pick(answer: String, options: List<Candidate>): Candidate? {
@@ -219,10 +225,11 @@ class Orchestrator(context: Context) {
         Log.i(TAG, "compiled ${actions.size} actions -> ${result.flow.steps.size} steps; dropped=${result.dropped}")
         flows.save(result.flow)
         val f = result.flow
-        val slotText = if (f.slots.isEmpty()) "no changeable values" else f.slots.joinToString(", ") { "${it.name} ${it.taughtValue}" }
+        val slotText = if (f.slots.isEmpty()) "Nothing in it can be changed." else "You can change the " + f.slots.joinToString(", ") { if (it.name == "qty") "quantity" else it.name } + "."
         val noise = if (result.dropped.isEmpty()) "" else " I ignored ${result.dropped.size} accidental or unneeded taps."
-        status("Saved “${f.template}” (${f.steps.size} steps)")
-        say((note?.let { "$it " } ?: "") + "Saved. I learned ${f.steps.size} steps for ${f.template}, with $slotText.$noise You can see it in the EchoFlow app.")
+        status("Learned: “${f.examples.firstOrNull() ?: f.template}” (${f.steps.size} steps)")
+        val learned = f.examples.firstOrNull() ?: f.template
+        say((note?.let { "$it " } ?: "") + "Learned: $learned. I saved ${f.steps.size} steps. $slotText$noise You can see it in the EchoFlow app.")
     }
 
     private suspend fun cancelTeaching() {

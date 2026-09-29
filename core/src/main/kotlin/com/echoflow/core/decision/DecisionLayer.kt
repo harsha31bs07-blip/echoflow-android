@@ -1,5 +1,6 @@
 package com.echoflow.core.decision
 
+import com.echoflow.core.flow.SourceSlots
 import com.echoflow.core.nlu.Candidate
 
 sealed interface Decision {
@@ -29,9 +30,13 @@ object DecisionLayer {
     fun decide(utterance: String, candidates: List<Candidate>): Decision {
         val top = candidates.firstOrNull()
         if (top == null || top.score < UNKNOWN_BELOW) {
-            return Decision.OfferTeach("I don't know how to \"$utterance\" yet. Want to teach me? Say \"teach\" and then show me.")
+            return Decision.OfferTeach("I don't know how to \"$utterance\" yet. Want to teach me? Say yes, then show me.")
         }
-        val close = candidates.drop(1).filter { it.score >= UNKNOWN_BELOW && top.score - it.score < AMBIGUOUS_MARGIN }
+        // Close scores, or two flows whose templates both fit ("order pizza" fits a Swiggy
+        // "order {item}" and a Zomato "order a {item} pizza from {restaurant}"): ask (T13).
+        val close = candidates.drop(1).filter {
+            it.score >= UNKNOWN_BELOW && (top.score - it.score < AMBIGUOUS_MARGIN || (top.source == "template" && it.source == "template"))
+        }
         if (close.isNotEmpty()) {
             val options = (listOf(top) + close).take(3)
             val names = options.mapIndexed { i, c -> "${ordinal(i)}: ${describe(c)}" }
@@ -40,7 +45,10 @@ object DecisionLayer {
         val qty = top.slots["qty"]?.toIntOrNull()
         return when {
             qty != null && qty > MAX_QTY -> Decision.Confirm(top, "That's $qty items. Are you sure? Say yes to continue.")
-            top.score < CONFIRM_BELOW || top.source == "similar" -> Decision.Confirm(top, "Do you want me to ${describe(top)}? Say yes or no.")
+            top.score < CONFIRM_BELOW || top.source == "similar" -> Decision.Confirm(
+                top,
+                "Do you want me to ${describe(top)}?" + (if (top.missing.any { it == "item" || it in SourceSlots.names }) " I'll ask you which one." else "") + " Say yes or no.",
+            )
             else -> Decision.Proceed(top)
         }
     }
@@ -48,7 +56,15 @@ object DecisionLayer {
     fun describe(c: Candidate): String {
         var s = c.flow.template
         c.slots.forEach { (k, v) -> s = s.replace("{$k}", v) }
-        s = s.replace(Regex("\\{\\w+\\}"), "…")
+        // Values still to be asked for: "order a pizza from a restaurant on zomato".
+        s = s.replace(Regex("\\{(\\w+)\\}")) { m ->
+            when (val n = m.groupValues[1]) {
+                "item", "qty" -> ""
+                "address" -> "an address"
+                else -> "a $n"
+            }
+        }
+        s = s.replace(Regex("\\b(a|an) (a|an)\\b"), "$2").replace(Regex("\\s+"), " ").trim()
         // Values the template has no place for (set at the cart / address list).
         if ("{qty}" !in c.flow.template) c.slots["qty"]?.takeIf { it != "1" }?.let { q -> s = s.replaceFirst(" ", " $q ") }
         if ("{address}" !in c.flow.template) c.slots["address"]?.let { s += " to $it" }

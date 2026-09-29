@@ -5,12 +5,14 @@ import com.echoflow.core.flow.ElementDescriptor
 import com.echoflow.core.flow.ElementResolver
 import com.echoflow.core.flow.Flow
 import com.echoflow.core.flow.Resolution
+import com.echoflow.core.flow.SlotDef
 import com.echoflow.core.flow.Step
 import com.echoflow.core.flow.fill
 import com.echoflow.core.gateway.ActionOutcome
 import com.echoflow.core.gateway.GateContext
 import com.echoflow.core.gateway.PlannedAction
 import com.echoflow.core.model.ScreenSnapshot
+import com.echoflow.core.nlu.IntentMatcher
 import com.echoflow.core.model.UiElement
 import com.echoflow.core.model.WindowType
 import com.echoflow.core.runlog.RunStatus
@@ -179,10 +181,11 @@ class ReplayEngine(
         if (slotName != null && slots[slotName].isNullOrBlank()) {
             val snap = host.current()
             val choices = if (step is Step.Tap && snap != null) optionsLike(snap, step.target) else emptyList()
-            val q = "Which $slotName should I use?" + if (choices.isNotEmpty()) " I can see: ${choices.joinToString(", ")}." else ""
+            val def = flow.slots.firstOrNull { it.name == slotName }
+            val q = slotQuestion(slotName, def) + if (choices.isNotEmpty()) " I can see: ${choices.joinToString(", ")}." else ""
             val answer = host.ask(q, choices)?.trim()
-            if (answer.isNullOrBlank()) return StepResult.Stop(RunStatus.NO_ANSWER, "I needed the $slotName and didn't get an answer.")
-            slots[slotName] = if (slotName == "qty") (answer.toIntOrNull() ?: wordNumber(answer) ?: 1).toString() else answer
+            if (answer.isNullOrBlank()) return StepResult.Stop(RunStatus.NO_ANSWER, "I needed the ${slotWord(slotName, def)} and didn't get an answer.")
+            slots[slotName] = if (slotName == "qty") (answer.toIntOrNull() ?: wordNumber(answer) ?: 1).toString() else slotAnswer(answer, def)
             events += "asked for $slotName: ${slots[slotName]}"
         }
 
@@ -242,6 +245,16 @@ class ReplayEngine(
                 handleAddressSheet(snap, flow, slots)?.let { return it }
                 started = host.nowMs()
                 continue
+            }
+
+            if (step is Step.Tap && step.pick == "first") {
+                val first = topResult(snap, slots["item"])
+                if (first != null) {
+                    events += "opened the first result: \"${first.label}\""
+                    val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
+                    if (r is StepResult.Retry && staleRetries++ < 3) continue
+                    return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
+                }
             }
 
             val resolution = resolve(step, snap, slots)
@@ -617,6 +630,22 @@ class ReplayEngine(
         .minByOrNull { if (it.clickable) 0 else 1 }
 
     /** The first (top-most) result whose own label contains [item], below the search field. */
+    /**
+     * The first search result, by position: a clickable row with a product-like title (3+ words)
+     * below the search bar. If one of the top three names the item, that one ("Sponsored" rows
+     * for something else come first on some apps).
+     */
+    private fun topResult(snap: ScreenSnapshot, item: String?): UiElement? {
+        val rows = snap.appElements()
+            .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 }
+            .filter { e -> (e.label?.trim()?.split(Regex("\\s+"))?.size ?: 0) >= 3 && (e.label?.length ?: 0) >= 15 }
+            .filter { Descriptors.clickableFor(snap, it.index).let { c -> snap.elements[c].clickable } }
+            .filter { e -> TextNormalizer.normalize(e.label).let { l -> !l.startsWith("sponsored") && !l.startsWith("results for") && !l.startsWith("showing results") } }
+            .sortedBy { it.bounds.top * 10 + it.bounds.left }
+        if (item != null) rows.take(3).firstOrNull { ElementResolver.valueMatch(item, it.label, emptyList()) > 0 }?.let { return it }
+        return rows.firstOrNull()
+    }
+
     private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
         .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) > item.length }
         .filter { ElementResolver.valueMatch(item, it.label, emptyList()) >= 0.8 }
@@ -794,11 +823,46 @@ class ReplayEngine(
 
         fun isYes(answer: String): Boolean {
             val t = TextNormalizer.tokens(answer)
+            if (t.any { it in setOf("no", "not", "dont", "nope", "nahi", "cancel", "stop") }) return false
             return t.any { it in setOf("yes", "yeah", "yep", "sure", "ok", "okay", "replace", "haan", "ha", "correct", "right", "go", "confirm", "do") }
         }
 
         fun wordNumber(answer: String): Int? = TextNormalizer.tokens(answer).firstNotNullOfOrNull {
             it.toIntOrNull() ?: com.echoflow.core.nlu.Utterances.numberWords[it]
         }
+
+        /** "pizza" for an item taught as "margherita pizza", "restaurant", "quantity"… */
+        fun slotWord(name: String, def: SlotDef?): String = when (name) {
+            "item" -> def?.qualifiers?.lastOrNull() ?: "item"
+            "qty" -> "quantity"
+            else -> name
+        }
+
+        /** B3: "Which restaurant should I order from? Last time it was dominos." */
+        fun slotQuestion(name: String, def: SlotDef?): String {
+            val last = def?.taughtValue?.takeIf { it.isNotBlank() && name != "qty" }?.let { " Last time it was $it." } ?: ""
+            return when (name) {
+                "restaurant" -> "Which restaurant should I order from?$last"
+                "store" -> "Which store or seller should I use?$last"
+                "address" -> "Which address should I deliver to?$last"
+                "qty" -> "How many should I order?"
+                else -> "Which ${slotWord(name, def)} do you want?$last"
+            }
+        }
+
+        /** "from Domino's" -> "dominos"; "same as last time" -> the taught value. */
+        fun slotAnswer(answer: String, def: SlotDef?): String {
+            var words = TextNormalizer.tokens(answer)
+            if (def != null && (words.isEmpty() || words.joinToString(" ") in SAME_ANSWERS)) return def.taughtValue
+            while (words.size > 1 && words.first() in setOf("from", "the", "a", "an", "at", "to", "order", "get", "some", "i", "want")) words = words.drop(1)
+            val q = def?.qualifiers.orEmpty().map(IntentMatcher::singular).toSet()
+            val kept = words.filter { IntentMatcher.singular(it) !in q }
+            return (kept.ifEmpty { words }).joinToString(" ")
+        }
+
+        private val SAME_ANSWERS = setOf(
+            "same", "same one", "the same", "same as last time", "same as before", "last one", "the last one",
+            "yes", "yeah", "usual", "the usual", "same place", "same restaurant", "yes same",
+        )
     }
 }

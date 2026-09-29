@@ -26,7 +26,7 @@ object Utterances {
         "i", "want", "need", "would", "like", "to", "some", "the", "a", "an", "of", "on", "from", "in",
         "and", "deliver", "delivered", "delivery", "send", "bring", "place", "my", "it", "up", "show", "open",
         "at", "with", "using", "via", "quantity", "qty", "pieces", "piece", "plates", "plate", "items", "item",
-        "x", "just", "now", "quickly", "again", "same", "one", "ones", "go", "do", "that", "this", "let", "us", "let's",
+        "x", "just", "now", "quickly", "again", "same", "one", "ones", "go", "do", "that", "this", "let", "us", "lets",
     )
 
     val appNames = mapOf(
@@ -45,8 +45,12 @@ object Utterances {
         val quantityToken: String? = null,
         val address: String? = null,
         val appMention: String? = null,
-        /** Content words left after removing fillers, numbers, address and app ("garlic bread"). */
+        /** Content words left after removing fillers, numbers, address, app and source ("garlic bread"). */
         val item: String? = null,
+        /** Where from: "from Domino's" -> "dominos" (a restaurant or store; not the app). */
+        val source: String? = null,
+        /** Tokens without the app mention, the address phrase and the quantity (used for relaxed matching). */
+        val core: List<String> = tokens,
     )
 
     fun stripTeachPrefix(utterance: String): String {
@@ -55,19 +59,28 @@ object Utterances {
         return (if (p != null) tokens.drop(p.size) else tokens).joinToString(" ")
     }
 
+    /** Words that end a "from <source>" phrase. */
+    private val sourceStops = setOf(
+        "on", "in", "to", "at", "and", "please", "deliver", "delivered", "delivery", "for", "with", "using", "via", "now",
+    )
+
     fun parse(utterance: String): Parsed {
         val tokens = TextNormalizer.tokens(utterance)
         var qty: Int? = null
         var qtyToken: String? = null
         var address: String? = null
         var app: String? = null
+        var source: String? = null
+        // Tokens taken by the app mention, the address or the quantity; then the source as well.
+        val skip = BooleanArray(tokens.size)
         val used = BooleanArray(tokens.size)
+        fun take(i: Int) { skip[i] = true; used[i] = true }
 
         tokens.forEachIndexed { i, t ->
             if (appNames.containsKey(t)) {
                 app = t
-                used[i] = true
-                if (i > 0 && tokens[i - 1] in setOf("on", "from", "in", "using", "via")) used[i - 1] = true
+                take(i)
+                if (i > 0 && tokens[i - 1] in setOf("on", "from", "in", "using", "via")) take(i - 1)
             }
         }
         // "to home", "deliver to work", "at office" at the end (1–2 words).
@@ -85,7 +98,22 @@ object Utterances {
             }
             if (words.isNotEmpty() && words.none { it.all(Char::isDigit) } && words.first() !in setOf("cart", "bag")) {
                 address = words.joinToString(" ")
-                for (j in addrIdx until k) used[j] = true
+                for (j in addrIdx until k) take(j)
+            }
+        }
+        // "from Domino's" (not "from Swiggy": app mentions are already taken).
+        val fromIdx = tokens.indices.firstOrNull { i -> tokens[i] == "from" && !used[i] && i + 1 < tokens.size && !used[i + 1] }
+        if (fromIdx != null) {
+            var k = fromIdx + 1
+            if (k < tokens.size && tokens[k] == "the") k++
+            val words = mutableListOf<String>()
+            while (k < tokens.size && words.size < 3 && !used[k] && tokens[k] !in sourceStops) {
+                words += tokens[k]
+                k++
+            }
+            if (words.isNotEmpty() && words.none { it.all(Char::isDigit) }) {
+                source = words.joinToString(" ")
+                for (j in fromIdx until k) used[j] = true
             }
         }
         tokens.forEachIndexed { i, t ->
@@ -94,10 +122,11 @@ object Utterances {
             if (n != null) {
                 qty = n
                 qtyToken = t
-                used[i] = true
+                take(i)
             }
         }
         val item = tokens.filterIndexed { i, t -> !used[i] && t !in fillers }.joinToString(" ").ifBlank { null }
-        return Parsed(tokens, qty, qtyToken, address, app, item)
+        val core = tokens.filterIndexed { i, _ -> !skip[i] }
+        return Parsed(tokens, qty, qtyToken, address, app, item, source, core)
     }
 }

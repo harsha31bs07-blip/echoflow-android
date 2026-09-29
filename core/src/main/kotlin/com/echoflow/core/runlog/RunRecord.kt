@@ -49,12 +49,13 @@ data class RunRecord(
         val step = stepDescription?.replace(Regex("\\{(\\w+)\\}")) { m -> slots[m.groupValues[1]] ?: m.value }
         val where = if (totalSteps > 0 && stoppedAtStep > 0) " at step $stoppedAtStep of $totalSteps" +
             (step?.let { " ($it)" } ?: "") else ""
+        val cap = what.replaceFirstChar { it.uppercase() }
         return when (status) {
-            RunStatus.HANDED_OFF -> "Your last request, $what, succeeded. I got it ready and handed over to you. $message"
-            RunStatus.COMPLETED -> "Your last request, $what, completed all $totalSteps steps."
-            RunStatus.HALTED -> "Your last request, $what, failed$where. $message"
-            RunStatus.NO_ANSWER -> "Your last request, $what, stopped$where because I asked a question and didn't get an answer. $message"
-            RunStatus.CANCELLED -> "Your last request, $what, was cancelled$where."
+            RunStatus.HANDED_OFF -> "Yes, the last run succeeded. For $what, I did all the steps and handed over to you. $message"
+            RunStatus.COMPLETED -> "Yes, the last run succeeded. $cap completed all $totalSteps steps."
+            RunStatus.HALTED -> "No, the last run didn't succeed. $cap stopped$where. $message"
+            RunStatus.NO_ANSWER -> "No, the last run didn't finish. $cap stopped$where because I asked a question and didn't get an answer. $message"
+            RunStatus.CANCELLED -> "No, the last run was cancelled. $cap stopped$where."
         }
     }
 }

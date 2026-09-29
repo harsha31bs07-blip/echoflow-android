@@ -43,7 +43,10 @@ class FlowInspectorActivity : Activity() {
 
         t("Changeable values (slots)", 17f, bold = true)
         if (flow.slots.isEmpty()) t("None — this flow always does the same thing.")
-        flow.slots.forEach { t("• {${it.name}} — ${it.type.name.lowercase()}, taught as “${it.taughtValue}”") }
+        flow.slots.forEach { s ->
+            val extra = if (s.qualifiers.isEmpty()) "" else " (said as “${s.taughtValue} ${s.qualifiers.joinToString(" ")}”)"
+            t("• {${s.name}} — ${s.type.name.lowercase()}, taught as “${s.taughtValue}”$extra")
+        }
 
         t("Steps", 17f, bold = true)
         flow.steps.forEachIndexed { i, s ->

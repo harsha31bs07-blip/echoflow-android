@@ -11,12 +11,15 @@ import java.util.Locale
 object TextNormalizer {
     private val separators = Regex("[^\\p{L}\\p{M}\\p{N}₹@]+")
     private val camelBoundary = Regex("(?<=[a-z])(?=[A-Z])")
+    /** "Domino's" -> "dominos", so it matches what a speech recogniser writes. */
+    private val innerApostrophe = Regex("(?<=\\p{L})['’`](?=\\p{L})")
 
     fun normalize(raw: String?): String {
         if (raw.isNullOrBlank()) return ""
         return Normalizer.normalize(raw, Normalizer.Form.NFKC)
             .replace("&", " and ")
             .replace("₹", " ₹ ")
+            .replace(innerApostrophe, "")
             .lowercase(Locale.ROOT)
             .replace(separators, " ")
             .trim()

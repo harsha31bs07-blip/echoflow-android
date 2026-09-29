@@ -5,6 +5,7 @@ import com.echoflow.core.flow.ElementResolver
 import com.echoflow.core.flow.Flow
 import com.echoflow.core.flow.SlotDef
 import com.echoflow.core.flow.SlotType
+import com.echoflow.core.flow.SourceSlots
 import com.echoflow.core.flow.Step
 import com.echoflow.core.nlu.Utterances
 import com.echoflow.core.text.TextNormalizer
@@ -51,7 +52,7 @@ class FlowCompiler {
             !dup
         }
 
-        val slots = extractSlots(teachingUtterance, kept, llmSlots)
+        val slots = extractSlots(teachingUtterance, kept, llmSlots, appPackage)
         val slotValues = slots.associate { it.name to it.taughtValue }
 
         // 1d. Detours: the teacher went somewhere and came back to the same screen.
@@ -59,7 +60,7 @@ class FlowCompiler {
         // (No "changed nothing" filter: the coarse fingerprint can't see tab switches or list
         // updates, and on device it dropped a needed "Dishes" tab tap. Extra steps are cheaper.)
 
-        val steps = buildSteps(appPackage, appLabel, kept, slotValues)
+        val steps = markFirstResult(teachingUtterance, buildSteps(appPackage, appLabel, kept, slotValues))
         val template = template(teachingUtterance, slots)
         val flow = Flow(
             id = id,
@@ -75,6 +76,17 @@ class FlowCompiler {
             createdAtMs = nowMs,
         )
         return CompileResult(flow, dropped)
+    }
+
+    /** "…and add the first result to cart": the tap right after the search is positional. */
+    private fun markFirstResult(utterance: String, steps: List<Step>): List<Step> {
+        val t = TextNormalizer.tokens(utterance)
+        val first = FIRST_PHRASES.any { TextNormalizer.containsPhrase(t, TextNormalizer.tokens(it)) }
+        if (!first) return steps
+        val typed = steps.indexOfLast { it is Step.TypeText }
+        val k = (typed + 1 until steps.size).firstOrNull { steps[it] is Step.Tap } ?: return steps
+        if (typed < 0) return steps
+        return steps.toMutableList().also { it[k] = (steps[k] as Step.Tap).copy(pick = "first") }
     }
 
     private fun mergeTyping(actions: List<RawAction>): List<RawAction> {
@@ -159,24 +171,67 @@ class FlowCompiler {
         return d.copy(text = t(d.text), contentDescription = t(d.contentDescription), context = d.context.map { t(it)!! })
     }
 
-    private fun extractSlots(utterance: String, actions: List<RawAction>, llm: Map<String, String>): List<SlotDef> {
+    private fun extractSlots(utterance: String, actions: List<RawAction>, llm: Map<String, String>, appPackage: String): List<SlotDef> {
         val parsed = Utterances.parse(Utterances.stripTeachPrefix(utterance))
         val typed = actions.filter { it.kind == RawKind.TYPE }.mapNotNull { it.typed }
         val slots = mutableListOf<SlotDef>()
+        // "from Domino's": its own slot, so the restaurant search isn't mistaken for the item.
+        val sourceName = SourceSlots.nameFor(appPackage)
+        val source = (llm[sourceName] ?: parsed.source)?.let { spoken -> typedPart(spoken, typed) ?: spoken }
         val item = llm["item"]
-            ?: typed.firstOrNull { t -> parsed.item != null && (sameValue(t, parsed.item) || contains(parsed.item, t) || contains(t, parsed.item)) }
+            ?: typed.filter { t -> source == null || !sameValue(t, source) }
+                .firstOrNull { t -> parsed.item != null && (sameValue(t, parsed.item) || contains(parsed.item, t) || contains(t, parsed.item)) }
                 ?.let { t -> if (contains(parsed.item!!, t)) t else parsed.item }
             ?: parsed.item
-        item?.let { slots += SlotDef("item", SlotType.TEXT, TextNormalizer.normalize(it)) }
+        item?.let { v ->
+            val (value, qualifiers) = refineItem(TextNormalizer.normalize(v), actions, source)
+            slots += SlotDef("item", SlotType.TEXT, value, qualifiers)
+        }
+        source?.let { slots += SlotDef(sourceName, SlotType.TEXT, TextNormalizer.normalize(it)) }
         (llm["qty"]?.toIntOrNull() ?: parsed.quantity)?.let { slots += SlotDef("qty", SlotType.NUMBER, it.toString()) }
         (llm["address"] ?: parsed.address)?.let { slots += SlotDef("address", SlotType.TEXT, it) }
         return slots
+    }
+
+    /** What was typed for a spoken value, when it's the same words or some of them ("domino" for "dominos pizza"). */
+    private fun typedPart(spoken: String, typed: List<String>): String? {
+        val words = TextNormalizer.tokens(spoken)
+        return typed.firstOrNull { t -> sameValue(t, spoken) || TextNormalizer.tokens(t).let { tw -> tw.isNotEmpty() && words.containsAll(tw) } }
+    }
+
+    /**
+     * "margherita pizza" when the menu only says "Margherita": keep the words the screen showed
+     * (they must include the first, most specific word) and remember the rest as qualifiers.
+     */
+    private fun refineItem(value: String, actions: List<RawAction>, source: String?): Pair<String, List<String>> {
+        val words = TextNormalizer.tokens(value)
+        if (words.size < 2) return value to emptyList()
+        fun covered(a: RawAction): List<String> = words.filter { w ->
+            when (a.kind) {
+                RawKind.TYPE -> ElementResolver.valueMatch(w, a.typed, emptyList()) > 0
+                else -> ElementResolver.valueMatch(w, a.label ?: a.target.contentDescription, a.target.context) > 0
+            }
+        }
+        val relevant = actions.filter { a ->
+            source == null || when (a.kind) {
+                RawKind.TYPE -> !sameValue(a.typed.orEmpty(), source)
+                else -> ElementResolver.valueMatch(source, a.label ?: a.target.contentDescription, a.target.context) == 0.0
+            }
+        }
+        val coverage = relevant.map(::covered)
+        if (coverage.any { it.size == words.size }) return value to emptyList()
+        val best = coverage.filter { words.first() in it }.maxByOrNull { it.size } ?: return value to emptyList()
+        return best.joinToString(" ") to words.filter { it !in best }
     }
 
     private fun template(utterance: String, slots: List<SlotDef>): String {
         val parsed = Utterances.parse(Utterances.stripTeachPrefix(utterance))
         var t = parsed.tokens.joinToString(" ")
         slots.firstOrNull { it.name == "address" }?.let { t = replaceIgnoringCase(t, it.taughtValue, "{address}") }
+        // The whole spoken source phrase, even if only part of it was typed.
+        slots.firstOrNull { it.name in SourceSlots.names }?.let { s ->
+            t = replaceIgnoringCase(t, parsed.source?.takeIf { p -> contains(p, s.taughtValue) } ?: s.taughtValue, "{${s.name}}")
+        }
         slots.firstOrNull { it.name == "item" }?.let { t = replaceIgnoringCase(t, it.taughtValue, "{item}") }
         parsed.quantityToken?.let { q -> t = t.split(' ').joinToString(" ") { if (it == q) "{qty}" else it } }
         return t
@@ -184,6 +239,7 @@ class FlowCompiler {
 
     companion object {
         const val DEBOUNCE_MS = 350L
+        private val FIRST_PHRASES = listOf("first result", "first one", "first item", "first product", "top result", "first option", "first search result")
         private val stepperWords = listOf("add one more", "increase", "increment", "add more", "plus")
 
         fun isStepper(a: RawAction): Boolean {

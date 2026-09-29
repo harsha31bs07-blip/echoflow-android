@@ -36,6 +36,13 @@ We verified T1–T14 on the device ([TEST_RUN.md](TEST_RUN.md)) using **our own 
 
 **Bottom line:** of 60 base points, only about 13 (T11, T12, T13, T14) are safe as-is. Most of the rest depends on one core change (a restaurant slot) plus testing on Zomato and Amazon on the device.
 
+## Progress (29 Sept)
+Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt` runs every official phrase for T1–T6, T8/T9, T12–T14, B1 and B3 against a synthetic Zomato/Domino's demonstration, and there are 115 core tests in total.
+- **Done:** P0-1 (restaurant slot, qualifiers such as "pizza", asking "Which restaurant? Last time it was dominos"), P0-2 (relaxed template matching, plurals, articles, "Domino's" = "dominos"), P0-5 (wording).
+- **Done in core:** P0-4, positional "first result" (`Step.Tap.pick = "first"`). "Add to Cart" is already SAFE; "Buy now" stays COMMIT.
+- **Also done:** "Order pizza." asks which flow when two templates fit (T13). "Yes" after "Want to teach me?" starts teaching that command. "no, don't" no longer counts as yes.
+- **Still needs the phone:** P0-3, P0-4 on device, P0-6, and all of P1.
+
 ## P0: must do (tonight / tomorrow morning)
 
 **P0-1 · Multi-slot flows: `{restaurant}` (T1–T6, T13, B3). About 3 h, core + tests**

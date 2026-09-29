@@ -163,4 +163,42 @@ class ReplayEngineTest {
         assertEquals(RunStatus.HALTED, r.status, r.toString())
         assertTrue(r.message.contains("couldn't find"), r.message)
     }
+
+    @Test fun `first result is picked by position, not by the taught title (T8, T9)`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        fun results(titles: List<String>): (Long) -> ScreenSnapshot = { id ->
+            screen(amz, id) {
+                edit(hint = "Search Amazon.in"); text("Showing results for your search"); text("Prime")
+                titles.forEach { t -> val row = container(clickable = true); text(t, row) }
+            }
+        }
+        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); button("Add to Cart") } }
+        val added: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Added to Cart") } }
+        val flow = Flow(
+            "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("search for wireless earbuds on amazon and add the first result to cart"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")),
+            listOf(
+                Step.LaunchApp(amz, "Amazon"),
+                Step.TypeText(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.EditText"), slot = "item"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.TextView", text = "{item}"), slot = "item", pick = "first"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.Button", text = "Add to Cart")),
+            ),
+        )
+        for ((titles, expected) in listOf(
+            // None names the item: plain position.
+            listOf("Spigen Ultra Hybrid Back Cover for iPhone 15", "Amazon Basics Charging Cable 1m") to "Spigen Ultra Hybrid Back Cover for iPhone 15",
+            // One of the top three names it: that one.
+            listOf("Amazon Basics Charging Cable 1m", "OtterBox Phone Case for Galaxy S24") to "OtterBox Phone Case for Galaxy S24",
+        )) {
+            val p = FakePhone(
+                mapOf("home" to { id -> screen(amz, id) { edit(hint = "Search Amazon.in") } }, "results" to results(titles), "product" to product, "added" to added),
+                mapOf(("results" to expected) to "product", ("product" to "Add to Cart") to "added"),
+                "home",
+            )
+            val r = ReplayEngine(p, p.guard).run(flow, mapOf("item" to "phone case"))
+            assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+            assertEquals(listOf(expected, "Add to Cart"), p.clicked)
+        }
+    }
 }

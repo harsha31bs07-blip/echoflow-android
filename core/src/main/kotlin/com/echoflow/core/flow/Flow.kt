@@ -52,7 +52,21 @@ data class SlotDef(
     val type: SlotType,
     /** The value used while teaching, e.g. "garlic bread". */
     val taughtValue: String,
+    /**
+     * Words said with the value that weren't part of it on screen: "margherita pizza" taught on a
+     * menu that says "Margherita" gives value "margherita" and qualifiers ["pizza"]. Stripped from
+     * new values ("farmhouse pizzas" -> "farmhouse").
+     */
+    val qualifiers: List<String> = emptyList(),
 )
+
+/** Slot names for "from <X>": a restaurant in food apps, a store elsewhere. */
+object SourceSlots {
+    val names = setOf("restaurant", "store")
+    private val foodApps = setOf("in.swiggy.android", "com.application.zomato")
+
+    fun nameFor(appPackage: String) = if (appPackage in foodApps) "restaurant" else "store"
+}
 
 @Serializable
 sealed class Step {
@@ -72,9 +86,12 @@ sealed class Step {
         /** Slot whose value must appear in the target or its row (search result, saved address). */
         val slot: String? = null,
         val activity: String? = null,
+        /** "first": the taught command said "the first result", so position wins over text (T8/T9). */
+        val pick: String? = null,
     ) : Step() {
         override val description get() =
-            "Tap \"${target.display}\"" + (slot?.let { " (the one matching {$it})" } ?: "")
+            if (pick == "first") "Tap the first result" + (slot?.let { " for {$it}" } ?: "")
+            else "Tap \"${target.display}\"" + (slot?.let { " (the one matching {$it})" } ?: "")
     }
 
     @Serializable

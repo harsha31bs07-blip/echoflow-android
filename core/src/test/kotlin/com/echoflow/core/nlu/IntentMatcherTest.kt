@@ -44,10 +44,15 @@ class IntentMatcherTest {
         assertEquals("hostel", d.candidate.slots["address"])
     }
 
-    @Test fun `offline paraphrase is matched but confirmed (T3 without LLM)`() {
-        val d = assertIs<Decision.Confirm>(decide("can you get me garlic bread from swiggy"))
+    @Test fun `offline paraphrase of the same shape runs (T3 without LLM)`() {
+        val d = assertIs<Decision.Proceed>(decide("can you get me garlic bread from swiggy"))
         assertEquals("food", d.candidate.flow.id)
         assertEquals("garlic bread", d.candidate.slots["item"])
+    }
+
+    @Test fun `offline paraphrase of a different shape is confirmed`() {
+        val d = assertIs<Decision.Confirm>(decide("garlic bread is what i would like on swiggy"))
+        assertEquals("food", d.candidate.flow.id)
     }
 
     @Test fun `LLM paraphrase with high confidence proceeds (T3)`() {
@@ -68,7 +73,7 @@ class IntentMatcherTest {
 
     @Test fun `app mention resolves the ambiguity`() {
         val d = decide("get me garlic bread on zomato", listOf(food, zomato))
-        val c = assertIs<Decision.Confirm>(d)
+        val c = assertIs<Decision.Proceed>(d)
         assertEquals("zomato", c.candidate.flow.id)
     }
 

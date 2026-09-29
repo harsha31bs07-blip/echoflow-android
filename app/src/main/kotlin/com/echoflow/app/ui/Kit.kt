@@ -59,10 +59,25 @@ class Kit(val ctx: Context) {
     fun screen(activity: Activity, content: LinearLayout): View {
         activity.window.statusBarColor = Palette.INK
         activity.window.navigationBarColor = Palette.BG
-        return ScrollView(ctx).apply {
+        val scroll = ScrollView(ctx).apply {
             setBackgroundColor(Palette.BG)
             isFillViewport = true
+            clipToPadding = false
             addView(content)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        }
+        // Android 15 draws apps edge to edge: keep the content out from under the status and
+        // navigation bars (an ink strip behind the status bar continues the header).
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Palette.INK)
+            addView(scroll)
+            setOnApplyWindowInsetsListener { v, insets ->
+                val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.ime())
+                v.setPadding(bars.left, bars.top, bars.right, 0)
+                scroll.setPadding(0, 0, 0, bars.bottom)
+                insets
+            }
         }
     }
 
@@ -204,6 +219,10 @@ object Words {
             out.append(if (i == 0) p.replaceFirstChar { it.uppercase() } else p)
             names.getOrNull(i)?.let { name ->
                 val shown = values[name] ?: slotName(name)
+                // "order a {item}" shown as a name reads "an item".
+                if (shown.firstOrNull()?.lowercaseChar() in setOf('a', 'e', 'i', 'o', 'u') && out.endsWith(" a ")) {
+                    out.replace(out.length - 2, out.length - 1, "an")
+                }
                 val start = out.length
                 out.append(" $shown ")
                 out.setSpan(BackgroundColorSpan(Palette.MINT_TINT), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)

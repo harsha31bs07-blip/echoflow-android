@@ -40,7 +40,10 @@ data class ElementDescriptor(
     }
 
     private companion object {
-        val GENERIC_ID_WORDS = setOf("container", "layout", "root", "view", "item", "itemlayout", "wrapper", "holder", "frame", "ll", "rl", "cl", "v2")
+        val GENERIC_ID_WORDS = setOf(
+            "container", "layout", "root", "view", "item", "itemlayout", "wrapper", "holder", "frame", "ll", "rl", "cl", "v2",
+            "edittext", "edit", "text", "et", "input", "field", "src", "tv",
+        )
     }
 }
 
@@ -105,7 +108,9 @@ sealed class Step {
         val slot: String? = null,
         val activity: String? = null,
     ) : Step() {
-        override val description get() = "Type ${slot?.let { "{$it}" } ?: "\"$literal\""} into \"${target.display}\""
+        override val description get() = "Type ${slot?.let { "{$it}" } ?: "\"$literal\""} into " +
+            // A bare class name ("EditText") says nothing: call it what it is.
+            (target.display.takeIf { it != target.className.substringAfterLast('.') }?.let { "\"$it\"" } ?: "the text box")
     }
 
     /** Tap the same element (a "+" stepper) enough times that the quantity equals the slot value. */

@@ -114,8 +114,13 @@ class EchoAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && !pkg.startsWith("com.android.systemui")) {
-            // The bubble is for other apps; EchoFlow's own screens have their own controls.
-            bubble?.setVisible(pkg != packageName)
+            // The bubble is for other apps; EchoFlow's own screens have their own controls. (Events
+            // from the bubble's own overlay window also carry our package: only our activities hide it.)
+            if (pkg != packageName) {
+                bubble?.setVisible(true)
+            } else if (event.className?.toString()?.let { it.startsWith("com.echoflow.app.ui.") && it.endsWith("Activity") } == true) {
+                bubble?.setVisible(false)
+            }
         }
         if (pkg == packageName) return
         EchoRuntime.orchestrator.activeRecorder?.let { rec -> runCatching { rec.onEvent(event) } }

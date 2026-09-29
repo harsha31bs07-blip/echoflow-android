@@ -1,15 +1,25 @@
 package com.echoflow.app.ui
 
 import android.accessibilityservice.AccessibilityService
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.RippleDrawable
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -21,56 +31,109 @@ import com.echoflow.app.orchestrator.UiState
  * Floating control panel (TYPE_ACCESSIBILITY_OVERLAY, so no overlay permission): Speak, Done
  * (while teaching), Stop, choice buttons for questions, and a status line. It works on top of
  * any app, which is where teaching and replay happen.
+ *
+ * Look: a compact dark ink card (at most ~300dp wide) with a coloured mode dot and status on top,
+ * answer chips when EchoFlow asks something, and a row of round controls.
  */
 class EchoBubble(
     private val service: AccessibilityService,
     private val orchestrator: Orchestrator,
 ) {
     private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val dp = service.resources.displayMetrics.density
-    private var root: LinearLayout? = null
+    private val kit = Kit(service)
+    private var root: FrameLayout? = null
+    private lateinit var dot: View
     private lateinit var status: TextView
     private lateinit var speak: Button
     private lateinit var done: Button
     private lateinit var stop: Button
     private lateinit var choices: LinearLayout
+    private lateinit var choiceScroll: HorizontalScrollView
+    private var pulse: ObjectAnimator? = null
     private var atBottom = true
 
     fun show() {
         if (root != null) return
-        val pad = (8 * dp).toInt()
-        status = TextView(service).apply {
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            maxLines = 2
-            maxWidth = (300 * dp).toInt()
+
+        dot = View(service).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Palette.MUTED) }
+            layoutParams = LinearLayout.LayoutParams(kit.dp(10), kit.dp(10)).apply {
+                marginEnd = kit.dp(8)
+                topMargin = kit.dp(5) // centred on the first line of 13sp text
+            }
         }
-        speak = button("🎤", 0xFF1E88E5.toInt()) { orchestrator.onSpeakPressed() }
-        done = button("✓ Done", 0xFF43A047.toInt()) { orchestrator.onDonePressed() }
-        stop = button("■", 0xFFE53935.toInt()) { orchestrator.onStopPressed() }
-        val home = button("E", 0xFF546E7A.toInt()) {
+        status = kit.text("", 13f, Color.WHITE).apply {
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            maxWidth = kit.dp(250)
+        }
+        val statusRow = kit.row(dot, status, gravity = Gravity.TOP)
+
+        choices = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
+        choiceScroll = HorizontalScrollView(service).apply {
+            isHorizontalScrollBarEnabled = false
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(kit.dp(16))
+            addView(choices)
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = kit.dp(10)
+            }
+        }
+
+        speak = roundButton("🎤", Palette.CORAL, Color.WHITE, sizeDp = 48, visualDp = 48, textSp = 20f, label = "Speak") {
+            orchestrator.onSpeakPressed()
+        }
+        done = pillButton("✓ Done", Palette.MINT, Palette.INK) { orchestrator.onDonePressed() }
+        stop = roundButton("■", Palette.RED, Color.WHITE, sizeDp = 44, visualDp = 40, textSp = 15f, label = "Stop") {
+            orchestrator.onStopPressed()
+        }
+        val home = roundButton("⌂", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 44, visualDp = 34, textSp = 16f, label = "Open EchoFlow") {
             service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        val move = button("⇅", 0xFF546E7A.toInt()) {
+        val move = roundButton("⇅", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 44, visualDp = 34, textSp = 16f, label = "Move to the other corner") {
             atBottom = !atBottom
             root?.let { wm.updateViewLayout(it, params()) }
         }
-        choices = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
-        val row = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            listOf(speak, done, stop, home, move).forEach(::addView)
-        }
-        root = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                setColor(Color.argb(230, 33, 33, 33))
-                cornerRadius = 16 * dp
+        // Main actions on the left, the two small helpers pushed to the right edge.
+        val spacer = View(service).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) }
+        val controls = kit.row(speak, done, stop, spacer, home, move).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = kit.dp(10)
             }
-            addView(status)
-            addView(HorizontalScrollView(service).apply { addView(choices) })
-            addView(row)
         }
+
+        val panel = object : LinearLayout(service) {
+            // Never wider than ~300dp, so the panel can't cover the app's own buttons.
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val cap = kit.dp(MAX_WIDTH_DP)
+                val size = MeasureSpec.getSize(widthMeasureSpec)
+                val spec = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED || size > cap) {
+                    MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST)
+                } else widthMeasureSpec
+                super.onMeasure(spec, heightMeasureSpec)
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(kit.dp(14), kit.dp(12), kit.dp(12), kit.dp(12))
+            background = kit.rounded(PANEL_BG, 24f, PANEL_EDGE, 1f)
+            elevation = kit.dp(6).toFloat()
+            addView(statusRow)
+            addView(choiceScroll)
+            addView(controls)
+        }
+
+        // A thin transparent margin gives the panel's shadow room to draw inside the window.
+        root = FrameLayout(service).apply {
+            val m = kit.dp(SHADOW_ROOM_DP)
+            setPadding(m, m, m, m)
+            clipToPadding = false
+            addView(panel)
+        }
+        // Until the first render: just Speak and the helpers.
+        done.visibility = View.GONE
+        stop.visibility = View.GONE
         wm.addView(root, params())
     }
 
@@ -79,41 +142,125 @@ class EchoBubble(
     }
 
     fun hide() {
+        stopPulse()
         root?.let { runCatching { wm.removeViewImmediate(it) } }
         root = null
     }
 
     fun render(s: UiState) {
         if (root == null) return
+        val listening = s.mode == Mode.LISTENING || (s.mode == Mode.TEACHING && s.status.startsWith("Listening"))
+        val dotColor = when (s.mode) {
+            Mode.TEACHING, Mode.LISTENING -> Palette.CORAL
+            Mode.RUNNING -> Palette.MINT
+            Mode.ASKING -> Palette.GOLD
+            Mode.IDLE -> Palette.MUTED
+        }
+        (dot.background as GradientDrawable).setColor(dotColor)
+        if (listening) startPulse() else stopPulse()
+
         status.text = when (s.mode) {
-            Mode.TEACHING -> "● REC  ${s.status}"
+            Mode.TEACHING -> "Recording: ${s.status}"
+            Mode.LISTENING -> s.status.ifBlank { "Listening…" }
+            Mode.ASKING -> s.question?.takeIf { it.isNotBlank() } ?: s.status
             else -> s.status
         }
+
         done.visibility = if (s.mode == Mode.TEACHING) View.VISIBLE else View.GONE
         stop.visibility = if (s.mode == Mode.RUNNING || s.mode == Mode.TEACHING || s.mode == Mode.ASKING) View.VISIBLE else View.GONE
         speak.isEnabled = s.mode == Mode.IDLE || s.mode == Mode.TEACHING
         speak.alpha = if (speak.isEnabled) 1f else 0.4f
+
         choices.removeAllViews()
-        s.choices.take(4).forEach { c -> choices.addView(button(c.take(28), 0xFF6D4C41.toInt()) { orchestrator.onChoice(c) }) }
-        choices.visibility = if (s.choices.isEmpty()) View.GONE else View.VISIBLE
+        s.choices.take(4).forEach { c -> choices.addView(choiceChip(c)) }
+        choiceScroll.visibility = if (s.choices.isEmpty()) View.GONE else View.VISIBLE
+        if (s.choices.isNotEmpty()) choiceScroll.scrollTo(0, 0)
     }
 
-    private fun button(label: String, color: Int, onClick: () -> Unit) = Button(service).apply {
+    // --- pieces -------------------------------------------------------------------------------
+
+    /** Ripple over [shape], white-ish so it shows on the dark panel and on coloured buttons. */
+    private fun pressable(shape: Drawable) = RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), shape, null)
+
+    private fun baseButton(label: String, textColor: Int, textSp: Float, onClick: () -> Unit) = Button(service).apply {
         text = label
-        textSize = 12f
+        textSize = textSp
         isAllCaps = false
-        setTextColor(Color.WHITE)
+        setTextColor(textColor)
+        gravity = Gravity.CENTER
+        includeFontPadding = false
+        stateListAnimator = null
         minHeight = 0
         minimumHeight = 0
         minWidth = 0
         minimumWidth = 0
-        setPadding((10 * dp).toInt(), (6 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
-        background = GradientDrawable().apply { setColor(color); cornerRadius = 12 * dp }
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            marginEnd = (6 * dp).toInt()
-            topMargin = (4 * dp).toInt()
-        }
+        setPadding(0, 0, 0, 0)
         setOnClickListener { onClick() }
+    }
+
+    /**
+     * A round icon button: a [visualDp] circle centred in a [sizeDp] square, so small-looking
+     * buttons still have a full-size touch target.
+     */
+    private fun roundButton(
+        symbol: String,
+        fill: Int,
+        textColor: Int,
+        sizeDp: Int,
+        visualDp: Int,
+        textSp: Float,
+        label: String,
+        onClick: () -> Unit,
+    ) = baseButton(symbol, textColor, textSp, onClick).apply {
+        contentDescription = label
+        val circle = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fill) }
+        val inset = kit.dp((sizeDp - visualDp) / 2f)
+        background = pressable(InsetDrawable(circle, inset))
+        layoutParams = LinearLayout.LayoutParams(kit.dp(sizeDp), kit.dp(sizeDp)).apply { marginEnd = kit.dp(4) }
+    }
+
+    private fun pillButton(label: String, fill: Int, textColor: Int, onClick: () -> Unit) =
+        baseButton(label, textColor, 15f, onClick).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            background = pressable(kit.rounded(fill, 22f))
+            setPadding(kit.dp(14), 0, kit.dp(14), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(44)).apply {
+                marginStart = kit.dp(8)
+                marginEnd = kit.dp(8)
+            }
+        }
+
+    /** A gold answer chip; long answers are shortened on screen but read out in full. */
+    private fun choiceChip(choice: String) = baseButton(
+        if (choice.length > MAX_CHOICE_CHARS) choice.take(MAX_CHOICE_CHARS - 1).trimEnd() + "…" else choice,
+        Palette.INK,
+        14f,
+    ) { orchestrator.onChoice(choice) }.apply {
+        contentDescription = choice
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        maxLines = 1
+        background = pressable(kit.rounded(Palette.GOLD_TINT, 22f, Palette.GOLD, 1.5f))
+        setPadding(kit.dp(14), 0, kit.dp(14), 0)
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(44)).apply {
+            marginEnd = kit.dp(8)
+        }
+    }
+
+    /** A gentle breathing dot while EchoFlow is listening. */
+    private fun startPulse() {
+        if (pulse?.isRunning == true) return
+        pulse = ObjectAnimator.ofFloat(dot, View.ALPHA, 1f, 0.25f).apply {
+            duration = 550
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            start()
+        }
+    }
+
+    private fun stopPulse() {
+        pulse?.cancel()
+        pulse = null
+        if (::dot.isInitialized) dot.alpha = 1f
     }
 
     private fun params() = WindowManager.LayoutParams(
@@ -124,8 +271,21 @@ class EchoBubble(
         PixelFormat.TRANSLUCENT,
     ).apply {
         // Compact panel in a corner, clear of most apps' main buttons; ⇅ flips top/bottom.
+        // Offsets subtract the shadow margin so the visible card sits where it always has.
         gravity = (if (atBottom) Gravity.BOTTOM else Gravity.TOP) or Gravity.END
-        y = ((if (atBottom) 150 else 40) * dp).toInt()
-        x = (4 * dp).toInt()
+        y = kit.dp((if (atBottom) 150 else 40) - SHADOW_ROOM_DP)
+        x = 0
+    }
+
+    private companion object {
+        const val MAX_WIDTH_DP = 300
+        const val MAX_CHOICE_CHARS = 28
+        const val SHADOW_ROOM_DP = 6
+        /** Palette.INK at ~92% opacity. */
+        const val PANEL_BG = (0xEB shl 24) or (Palette.INK and 0x00FFFFFF)
+        /** A faint light edge so the panel reads on dark apps too. */
+        const val PANEL_EDGE = 0x24FFFFFF
+        /** Light text for the small helper buttons (high contrast on INK_SOFT). */
+        const val UTILITY_TEXT = 0xFFD5D8EA.toInt()
     }
 }

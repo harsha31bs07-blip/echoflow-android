@@ -57,5 +57,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- "Talk to EchoFlow" Quick Settings tile: tap to speak from anywhere. -->
+        <service
+            android:name=".tile.TalkTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_waves"
+            android:label="Talk to EchoFlow"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

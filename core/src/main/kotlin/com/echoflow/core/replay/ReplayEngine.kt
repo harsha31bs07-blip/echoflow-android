@@ -234,7 +234,9 @@ class ReplayEngine(
                 continue
             }
             // An options sheet this item has but the taught one didn't (L3): ask, then continue.
-            if (customisationSheet(snap) != null) {
+            // When the taught step is on the sheet itself ("Add item", a size), just do that.
+            val sheet = customisationSheet(snap)
+            if (sheet != null && resolve(step, snap, slots)?.let { r -> snap.elements[r.index].windowId == sheet.windowId } != true) {
                 handleCustomisation(snap, slots)?.let { return it }
                 started = host.nowMs()
                 continue
@@ -814,7 +816,10 @@ class ReplayEngine(
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
         private val ADDRESS_BARS = listOf("selected address is", "delivering to", "deliver to", "delivery address")
         private val NOT_ADDRESS =listOf("enter location", "add address", "add new", "use current location", "grant", "search")
-        private val CUSTOMISE_WORDS =listOf("customization", "customisation", "customize", "customise", "choose your", "add ons", "addons")
+        private val CUSTOMISE_WORDS = listOf(
+            "customization", "customisation", "customize", "customise", "choose your", "add ons", "addons",
+            "choose from variant", "select any", "select up to", "choose any", "required",
+        )
         private val ADD_ITEM_WORDS = listOf("add item", "add to cart", "add to bag")
         private val CART_WORDS =listOf("view cart", "checkout", "go to cart", "view bag", "go to bag", "proceed to cart")
         private val POPUP_CLASSES = listOf("Dialog", "BottomSheet", "PopupWindow")

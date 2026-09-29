@@ -66,6 +66,28 @@ class RubricPhrasesTest {
         assertEquals("item", assertIs<Step.Tap>(flow.steps[4]).slot)
     }
 
+    @Test fun `typing only part of the spoken item makes the rest a qualifier`() {
+        val restMenu = screen(zomato, id = 5) { edit(hint = "Search within menu") }
+        val found = screen(zomato, id = 6) { val r = container(); text("Margherita Pizza", r); text("₹225", r); button("ADD", r) }
+        val actions = listOf(
+            tapText(home, "Search for restaurant, item or more", 1_000),
+            Fingerprints.type(search, 0, "Brik Oven", 2_000),
+            tapText(results, "Domino's Pizza", 3_000),
+            Fingerprints.type(restMenu, 0, "margherita", 4_000),
+            Fingerprints.tap(found, found.elements.first { it.text == "ADD" }.index, 5_000),
+        )
+        val f = FlowCompiler().compile("z3", "Order a Margherita pizza from Brik Oven on Zomato.", actions, "Zomato").flow
+        assertEquals("order a {item} pizza from {restaurant} on zomato", f.template)
+        assertEquals("margherita", f.slot("item")!!.taughtValue)
+        assertEquals(listOf("pizza"), f.slot("item")!!.qualifiers)
+        assertEquals("brik oven", f.slot("restaurant")!!.taughtValue)
+        for (u in listOf("Get me a margherita from brik oven", "Order a Margherita from Brik Oven, deliver to work.")) {
+            val d = assertIs<Decision.Proceed>(decide(u, listOf(f)), u)
+            assertEquals("margherita", d.candidate.slots["item"], u)
+            assertEquals("brik oven", d.candidate.slots["restaurant"], u)
+        }
+    }
+
     @Test fun `T2 exact utterance runs with the taught values`() {
         val d = assertIs<Decision.Proceed>(decide("Order a Margherita pizza from Domino's on Zomato."))
         assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos"), d.candidate.slots)

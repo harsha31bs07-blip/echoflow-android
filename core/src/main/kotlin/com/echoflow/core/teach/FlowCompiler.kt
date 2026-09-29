@@ -184,7 +184,15 @@ class FlowCompiler {
                 ?.let { t -> if (contains(parsed.item!!, t)) t else parsed.item }
             ?: parsed.item
         item?.let { v ->
-            val (value, qualifiers) = refineItem(TextNormalizer.normalize(v), actions, source)
+            val norm = TextNormalizer.normalize(v)
+            val spoken = parsed.item
+            val (value, qualifiers) =
+                if (spoken != null && norm != TextNormalizer.normalize(spoken) && contains(spoken, norm)) {
+                    // Typed "margherita" for spoken "margherita pizza": "pizza" is a qualifier.
+                    norm to adjacentWords(parsed.tokens, TextNormalizer.tokens(norm), TextNormalizer.tokens(spoken))
+                } else {
+                    refineItem(norm, actions, source)
+                }
             slots += SlotDef("item", SlotType.TEXT, value, qualifiers)
         }
         source?.let { slots += SlotDef(sourceName, SlotType.TEXT, TextNormalizer.normalize(it)) }
@@ -197,6 +205,22 @@ class FlowCompiler {
     private fun typedPart(spoken: String, typed: List<String>): String? {
         val words = TextNormalizer.tokens(spoken)
         return typed.firstOrNull { t -> sameValue(t, spoken) || TextNormalizer.tokens(t).let { tw -> tw.isNotEmpty() && words.containsAll(tw) } }
+    }
+
+    /**
+     * Spoken item words right next to the typed ones ("pizza" after "margherita"), at most two.
+     * Words elsewhere in the command ("… on amazon and add the first result") don't count.
+     */
+    private fun adjacentWords(tokens: List<String>, value: List<String>, spokenItem: List<String>): List<String> {
+        if (value.isEmpty()) return emptyList()
+        val start = (0..tokens.size - value.size).firstOrNull { i -> value.indices.all { tokens[i + it] == value[it] } } ?: return emptyList()
+        val end = start + value.size
+        val out = mutableListOf<String>()
+        var k = end
+        while (k < tokens.size && out.size < 2 && tokens[k] in spokenItem && tokens[k] !in Utterances.fillers) out += tokens[k++]
+        k = start - 1
+        while (k >= 0 && out.size < 2 && tokens[k] in spokenItem && tokens[k] !in Utterances.fillers) out.add(0, tokens[k--])
+        return out
     }
 
     /**

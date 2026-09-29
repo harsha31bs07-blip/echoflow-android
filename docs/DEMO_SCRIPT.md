@@ -31,6 +31,8 @@ Record the phone screen with the Samsung screen recorder, **with microphone and 
 | 4:10–4:40 | **(e) Stuck → asks** | "Order a zzqx unicorn pizza from Brik Oven on Zomato." | *"I searched for "zzqx unicorn" at brik oven but couldn't find it. What should I get instead?"* → say **"nothing"** → *"…so I stopped at step 5 without adding anything."* No wrong taps |
 | 4:40–5:00 | Extras (if time) | "Book a cab to the airport." then "Did the last run succeed?" | *"I don't know how to … yet. Want to teach me?"* (say no) · *"No, the last run didn't succeed … stopped at step 5 …"* |
 
+**Optional bonus clip (B2), only if the Amazon flow is taught on the phone:** say "Search for sunglasses on Myntra and add the first result to cart." → *"I learned this on Amazon. Do you want me to try the same steps on Myntra…?"* → **"yes"** → it searches Myntra and puts the first product in the bag. Empty the Myntra bag afterwards.
+
 **After recording:** empty the Zomato cart. Nothing is ever ordered or paid, because EchoFlow stops at the cart every time.
 
 ## If something goes wrong on camera

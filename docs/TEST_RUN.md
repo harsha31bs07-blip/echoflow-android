@@ -35,11 +35,13 @@
 | **T13** | "Order pizza." | Score 0.70 (the item is missing): asked *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | ✅ |
 | **T14** | "Did the last run succeed?" (after a failed run) | *"No, the last run didn't succeed. Order a margherita pizza from brik oven on zomato stopped at step 5 of 6 (Tap "ADD"). …"* After a hand-off it answers *"Yes, the last run succeeded…"* | ✅ |
 | **B1** | incoming call during teaching | Unit-tested (taps in the phone app are dropped); not staged on the phone | ⚠️ |
+| **B2** | "Search for sunglasses on Myntra and add the first result to cart." (Myntra was never taught; the Amazon flow was) | Matched the Amazon flow as a cross-app candidate (0.78) and asked *"I learned this on Amazon. Do you want me to try the same steps on Myntra: …? Say yes or no."* → yes → opened Myntra's search bar, typed, pressed Enter, opened the first product (**Carlton London Women Oversized Sunglasses**), tapped the page's **Add to Bag**. Myntra's bag then held that exact product. The Amazon flow (T9) and the Zomato flow (T4) were re-run afterwards and still pass | ✅ |
 | **B3** | "I want to order margherita pizza on zomato" | Asked which restaurant mid-run, then continued | ✅ |
 
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.
+- Myntra (B2): the home screen's own "Deliver to …" bar was read as an address list, and "Use my current location" as a search result; the search bar has no "Search" label (only rotating hints); trending products show before Enter is pressed; the product page's real Add to Bag is plain text in a tappable bar, while "Similar products" cards each have their own Add to Bag; some items open a size sheet. All handled now, with a unit test that has each of these traps.
 - Unreported taps (Zomato suggestions, Amazon results and Add to Cart), clicks that are accepted but ignored, "Something went wrong / Try again" pages, stepper buttons labelled only with icon glyphs, web pages that ignore scroll commands, and an Amazon offer row mistaken for an address sheet.
 
 ---

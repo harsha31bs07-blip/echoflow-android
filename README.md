@@ -23,6 +23,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 | "Order a Farmhouse pizza…", "Order two Margherita pizzas…", "…deliver to work" | New dish, quantity 2 at the cart, saved address switched | T4, T5, T6 |
 | *(the dish is already in the cart, or a pop-up appears)* | *"Margherita was already in your cart, so I didn't add another one."*; closes pop-ups and "Try again" error pages | T7 |
 | "Search for wireless earbuds on Amazon and add the first result to cart." (taught), then "…a phone case…" | A second flow in a second app; opens the first product under "Results" and adds it to the cart | T8, T9 |
+| "Search for sunglasses on Myntra and add the first result to cart." (only ever taught on Amazon) | *"I learned this on Amazon. Do you want me to try the same steps on Myntra…?"* → yes → searches Myntra, opens the first product, taps Add to Bag (and the size sheet's Done) | B2 |
 | *(the app can't find the dish, or you're logged out)* | *"I searched for "…" but couldn't find it. What should I get instead?"* within 30 s, or stops at a login screen: *"Your turn: please log in"*. Never taps the wrong thing | T10 |
 | "Book a cab to the airport." | *"I don't know how to … yet. Want to teach me?"* | T12 |
 | "Order pizza." | *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | T13 |
@@ -62,7 +63,7 @@ Optional: to match paraphrases without confirming first, put a free Gemini API k
 ## Project layout
 
 ```
-core/     Pure Kotlin/JVM, unit-tested (128 tests incl. real Swiggy screen fixtures and every official test phrase):
+core/     Pure Kotlin/JVM, unit-tested (130 tests incl. real Swiggy screen fixtures and every official test phrase):
           safety (SafetyGuard, CHECKOUT/PAYMENT/OTP/LOGIN detection), gateway (the only way to act),
           teach (FlowCompiler), nlu (IntentMatcher), decision (DecisionLayer), replay (ReplayEngine),
           flow (weighted ElementResolver), runlog.

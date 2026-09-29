@@ -31,7 +31,7 @@ We verified T1–T14 on the device ([TEST_RUN.md](TEST_RUN.md)) using **our own 
 | T13 "Order pizza." | 2 | ✅ Likely | Re-check once the restaurant slot exists. It must confirm or ask, never proceed silently. |
 | T14 Report | 3 | ✅ Done | "last run" is in the report phrases. Make the answer start with "Yes, it succeeded" or "No, it stopped at step N (…)". |
 | B1 Stray taps | +3 | ⚠️ Partial | Show an **incoming call** being discarded during teaching. |
-| B2 Amazon→Myntra | +4 | ❌ Not attempted | — |
+| B2 Amazon→Myntra | +4 | ❌ Not attempted (now ✅, see Status) | — |
 | B3 Mid-flow slot | +3 | ⚠️ Partial | The rubric's own example is the missing **restaurant**, which comes with P0-1. |
 
 **Bottom line:** of 60 base points, only about 13 (T11, T12, T13, T14) are safe as-is. Most of the rest depends on one core change (a restaurant slot) plus testing on Zomato and Amazon on the device.
@@ -47,7 +47,7 @@ Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt
 - ✅ **Passed on the phone:** T1, T2, T3 (both phrases), T4, T5, T7 (handled without asking), T8, T9, T11, T12, T13, T14, B3. T10 was run as "stuck" (Zomato ignores a Hindi app language) and asked within 30 s.
 - ✅ **T6:** verified with the account's Work and Home addresses.
 - ⚠️ **B1:** staged incoming call not tried yet.
-- 🟡 **B2:** implemented (a flow taught on Amazon is offered on Myntra or Flipkart, confirmed first, same steps in the named app) and unit-tested; still to be run on the phone once Myntra or Flipkart is installed.
+- ✅ **B2:** a flow taught on Amazon is offered on Myntra or Flipkart (confirmed first) and run with the same steps there. Verified on the phone with Myntra: the first sunglasses result went into the bag.
 - The demo script follows the required a→e order ([DEMO_SCRIPT.md](DEMO_SCRIPT.md)).
 
 ## P0: must do (tonight / tomorrow morning)

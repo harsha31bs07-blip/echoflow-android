@@ -318,4 +318,82 @@ class ReplayEngineTest {
         assertEquals(listOf("zzqx unicorn waffles", "paneer tikka"), p.typed)
         assertEquals("Paneer Tikka", p.addedRow, r.toString())
     }
+
+    @Test fun `an Amazon flow on Myntra searches via the hint-only bar and leaves the delivery bar alone (B2)`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        val myn = "com.myntra.android"
+        val home: (Long) -> ScreenSnapshot = { id ->
+            screen(myn, id) {
+                // The home screen's own delivery bar: a "Deliver to" heading and an address line.
+                val bar = container(clickable = true); text("Deliver to", bar); text("12 - Sample Street, Sample Layout, Bengaluru, Karnataka 560001", bar)
+                // "HPSearchBar" isn't tappable itself; its child with the rotating hints is.
+                val search = node("android.view.ViewGroup", label = "HPSearchBar")
+                text("\"Pants\", \"Dresses\", \"Tops\"", search, clickable = true)
+                val feed = container(); text("Hyphen Melanoclear Moisturizer", feed); text("₹474", feed); button("Add To Bag", feed)
+            }
+        }
+        val location: (Long) -> ScreenSnapshot = { id -> screen(myn, id) { edit(hint = "Search for area, street name"); text("Use my current location", clickable = true) } }
+        val search: (Long) -> ScreenSnapshot = { id -> screen(myn, id) { edit(hint = "Search for brands and products") } }
+        val results: (Long) -> ScreenSnapshot = { id ->
+            screen(myn, id) {
+                edit(hint = "Search for brands and products", typed = "sunglasses")
+                text("Sunglasses"); text("1204 items"); text("Sort")
+                // Myntra briefly shows the delivery address above the results.
+                val addr = container(clickable = true); text("12 - Sample Street, Sample Layout, Bengaluru, Karnataka 560001, India", addr); text("₹0", addr)
+                val card = container(clickable = true); text("Fastrack Square Sunglasses for Men", card); text("₹899", card)
+            }
+        }
+        val product: (Long) -> ScreenSnapshot = { id ->
+            screen(myn, id) {
+                text("Fastrack Square Sunglasses for Men")
+                // "Similar products" above the sticky bar: their buttons add other items.
+                val similar = node("android.widget.HorizontalScrollView"); button("Add to Bag", similar)
+                // The page's own button: a text inside a tappable bar.
+                val bar = container(clickable = true); text("ADD TO BAG", bar)
+            }
+        }
+        // "Add to bag" opens a size sheet; one size here, then DONE (described "buy_done_button").
+        fun sizeSheet(sizes: List<String>): (Long) -> ScreenSnapshot = { id ->
+            screen(myn, id) {
+                text("Select Size")
+                sizes.forEach { z ->
+                    val b = add { com.echoflow.core.model.UiElement(it, -1, 1, className = "android.widget.Button", packageName = myn, contentDescription = "size_select-item-$z", clickable = true, bounds = com.echoflow.core.model.Bounds(0, 1700 + it * 10, 200, 1760 + it * 10)) }
+                    text(z, b)
+                }
+                val d = add { com.echoflow.core.model.UiElement(it, -1, 1, className = "android.view.ViewGroup", packageName = myn, contentDescription = "buy_done_button", clickable = true, bounds = com.echoflow.core.model.Bounds(0, 2100, 1080, 2200)) }
+                text("DONE", d)
+            }
+        }
+        val added: (Long) -> ScreenSnapshot = { id -> screen(myn, id) { text("Added to bag") } }
+        val taught = Flow(
+            "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("search for wireless earbuds on amazon and add the first result to cart"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")),
+            listOf(
+                Step.LaunchApp(amz, "Amazon"),
+                Step.TypeText(com.echoflow.core.flow.ElementDescriptor(viewId = "$amz:id/rs_search_src_text", className = "android.widget.EditText"), slot = "item"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "{item}"), slot = "item", pick = "first"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Add to cart", className = "android.widget.Button"), pick = "add_to_cart"),
+            ),
+        )
+        val hints = "\"Pants\", \"Dresses\", \"Tops\""
+        val p = FakePhone(
+            mapOf("home" to home, "location" to location, "search" to search, "results" to results, "product" to product,
+                "sizes" to sizeSheet(listOf("Onesize")), "added" to added),
+            mapOf(
+                ("home" to hints) to "search", ("home" to "Deliver to") to "location",
+                ("home" to "12 - Sample Street, Sample Layout, Bengaluru, Karnataka 560001") to "location",
+                ("results" to "₹899") to "product", ("results" to "Fastrack Square Sunglasses for Men") to "product",
+                ("product" to "ADD TO BAG") to "sizes", ("sizes" to "buy_done_button") to "added",
+            ),
+            "home",
+        )
+        val r = ReplayEngine(p, p.guard).run(taught.retargeted(myn, "Myntra"), mapOf("item" to "sunglasses"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertTrue(r.events.none { it.contains("address") || it.contains("location") }, r.events.toString())
+        assertEquals(listOf("sunglasses"), p.typed)
+        assertEquals(hints, p.clicked.first(), p.clicked.toString())
+        assertEquals(listOf("ADD TO BAG", "size_select-item-Onesize", "buy_done_button"), p.clicked.takeLast(3))
+        assertTrue("Add To Bag" !in p.clicked, p.clicked.toString())
+    }
 }

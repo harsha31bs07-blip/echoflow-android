@@ -285,6 +285,8 @@ class ReplayEngine(
                     events += "tapped \"${add.label ?: "Add to cart"}\" (${add.viewId?.substringAfter(":id/") ?: add.className})"
                     val r = perform(step, snap, Resolution(add.index, Descriptors.clickableFor(snap, add.index), 0.9, 0.0), slots)
                     if (r is StepResult.Retry && staleRetries++ < 3) continue
+                    // Myntra asks for a size before the item goes in the bag.
+                    if (r is StepResult.Done) handleSizeSheet()?.let { return it }
                     return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
                 }
             }
@@ -292,7 +294,11 @@ class ReplayEngine(
             // only once no keyboard is showing (the search was sent).
             if (step is Step.Tap && step.pick == "first") {
                 val keyboardUp = snap.windows.any { it.type == WindowType.INPUT_METHOD && it.bounds.height > 200 }
-                val first = topResult(snap, slots["item"], allowNonProducts = !keyboardUp)
+                // Just typed and the keyboard is still up: the cards showing are trending picks
+                // (Myntra), not results. Press enter first (below).
+                // Product cards load a moment after the list's filter bar: other rows only after a wait.
+                val first = if (keyboardUp && lastTyped != null && !triedIme) null
+                    else topResult(snap, slots["item"], allowNonProducts = !keyboardUp && host.nowMs() - started > NON_PRODUCT_WAIT_MS)
                 if (first != null) {
                     events += "opened the first result: \"${first.label}\""
                     val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
@@ -365,7 +371,11 @@ class ReplayEngine(
             if (!triedIme && typedField != null) {
                 triedIme = true
                 lastTyped = null
+                // The taught field, or (another app, B2) the box that has focus / the only one.
                 val field = resolver.resolve(snap, typedField, slots, editableOnly = true)
+                    ?: snap.appElements().filter { it.visible && it.editable && !it.password && !isLocationBox(it) }
+                        .let { boxes -> boxes.firstOrNull { it.focused } ?: boxes.singleOrNull() }
+                        ?.let { Resolution(it.index, it.index, FIELD_SCORE, 0.0) }
                 if (field != null) {
                     events += "pressed enter on the search field"
                     act(PlannedAction.ImeEnter(snap.id, field.index), GateContext(explicitlyTaught = true, resolverConfidence = field.score), snap)
@@ -455,7 +465,8 @@ class ReplayEngine(
                     continue
                 }
             }
-            if (step is Step.Tap && step.slot != null && !askedAboutValue) {
+            // (Not for "the first result": that's picked by position, so waiting for the list is right.)
+            if (step is Step.Tap && step.slot != null && step.pick == null && !askedAboutValue) {
                 askedAboutValue = true
                 val options = optionsLike(snap, step.target)
                 if (options.isNotEmpty()) {
@@ -505,7 +516,8 @@ class ReplayEngine(
         is Step.TypeText -> ElementResolver(FIELD_SCORE).resolve(snap, step.target, slots, editableOnly = true)
             // The learned field isn't here (another app, B2; or a redesigned screen), but exactly one
             // text box is on screen: that's where the text goes.
-            ?: snap.appElements().filter { it.visible && it.editable && !it.password }.singleOrNull()
+            // (Never a location / pincode box: a delivery-location sheet isn't the search.)
+            ?: snap.appElements().filter { it.visible && it.editable && !it.password && !isLocationBox(it) }.singleOrNull()
                 ?.let { Resolution(it.index, it.index, FIELD_SCORE, 0.0) }
         is Step.RepeatTap -> resolver.resolve(snap, step.target, slots)
         is Step.LaunchApp -> null
@@ -810,14 +822,70 @@ class ReplayEngine(
     }
 
     /** A non-editable "Search" box/button (upper part of the screen) that opens the search field. */
-    private fun searchOpener(snap: ScreenSnapshot): UiElement? = snap.appElements()
-        .filter { it.visible && !it.editable && it.bounds.top < snap.screenHeight / 2 }
-        .filter { e ->
-            val l = TextNormalizer.normalize(e.label)
-            l == "search" || l.startsWith("search for") || l.startsWith("search or") || l.contains("open search") ||
-                (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it || "edit" in it) })
+    private fun searchOpener(snap: ScreenSnapshot): UiElement? {
+        val hit = snap.appElements()
+            .filter { it.visible && !it.editable && it.bounds.top < snap.screenHeight / 2 }
+            .filter { e ->
+                val l = TextNormalizer.normalize(e.label)
+                l == "search" || l.startsWith("search for") || l.startsWith("search or") || l.contains("open search") ||
+                    (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it || "edit" in it) }) ||
+                    // Myntra names the bar itself ("HPSearchBar"); its tappable part is a child
+                    // showing rotating hints ("Pants", "Dresses", …).
+                    l.replace(" ", "").let { it.endsWith("searchbar") || it.endsWith("searchbox") }
+            }
+            .minByOrNull { if (it.clickable) 0 else 1 } ?: return null
+        if (snap.elements[Descriptors.clickableFor(snap, hit.index)].clickable) return hit
+        return snap.descendants(hit.index).filter { it.visible && it.clickable }.maxByOrNull { it.bounds.area } ?: hit
+    }
+
+    /**
+     * A size picker that opens after "Add to bag" (Myntra): with one size, pick it; with several,
+     * ask which. Then tap the sheet's Done / Add to bag. Null when there's no such sheet.
+     */
+    private suspend fun handleSizeSheet(): StepResult.Stop? {
+        val snap = readable(host.current()) ?: return null
+        val els = snap.appElements().filter { it.visible }
+        val heading = els.any { e -> TextNormalizer.normalize(e.label).let { it == "select size" || it.startsWith("size ") || it == "size" } }
+        if (!heading) return null
+        fun name(e: UiElement) = snap.descendants(e.index, maxDepth = 3).firstNotNullOfOrNull { it.label?.takeIf { l -> "size" !in l.lowercase() } } ?: e.label.orEmpty()
+        val sizes = els.filter { e ->
+            e.clickable && (e.viewId.orEmpty() + " " + e.label.orEmpty()).contains("size", ignoreCase = true) &&
+                listOf("chart", "guide").none { (e.label ?: "").contains(it, ignoreCase = true) }
+        }.filter { name(it).isNotBlank() }
+        fun confirm(s: ScreenSnapshot) = s.appElements().filter { it.visible && (it.clickable || it.className.contains("Button")) }.firstOrNull { e ->
+            // (Myntra's is described "buy_done_button" with a "DONE" text inside.)
+            val labels = (listOfNotNull(e.label) + s.descendants(e.index, maxDepth = 2).mapNotNull { it.label }).map(TextNormalizer::normalize)
+            labels.any { it in SIZE_CONFIRM } && risk.assess(s, e).risk == com.echoflow.core.safety.ActionRisk.SAFE
         }
-        .minByOrNull { if (it.clickable) 0 else 1 }
+        val size = when (sizes.size) {
+            0 -> null
+            1 -> sizes.single()
+            else -> {
+                val names = sizes.map(::name).distinct().take(8)
+                val answer = host.ask("Which size should I pick? I can see: ${names.joinToString(", ")}.", names)
+                    ?: return StepResult.Stop(RunStatus.NO_ANSWER, "I needed a size and didn't get one, so nothing was added.")
+                sizes.firstOrNull { TextNormalizer.normalize(name(it)) == TextNormalizer.normalize(answer) }
+                    ?: sizes.firstOrNull { ElementResolver.textMatch(name(it), answer) > 0 }
+                    ?: return StepResult.Stop(RunStatus.HALTED, "\"$answer\" isn't one of the sizes (${names.joinToString(", ")}), so nothing was added.")
+            }
+        }
+        var now = snap
+        if (size != null) {
+            events += "picked size \"${name(size)}\""
+            act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, size.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.9), snap)
+            now = readable(host.current()) ?: snap
+        }
+        val done = confirm(now) ?: return StepResult.Stop(RunStatus.HALTED, "I picked a size but couldn't find the button to add it to the bag.")
+        events += "tapped \"${done.label ?: "Done"}\" on the size sheet"
+        val o = act(PlannedAction.Click(now.id, Descriptors.clickableFor(now, done.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.9), now)
+        return if (o is ActionOutcome.Performed) tripped() else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't add it to the bag (${describe(o)}).")
+    }
+
+    /** A delivery-location box ("Search for area, street name…", pincode), not a product search. */
+    private fun isLocationBox(e: UiElement): Boolean {
+        val words = listOfNotNull(e.label, e.hintText).flatMap(TextNormalizer::tokens) + TextNormalizer.viewIdTokens(e.viewId)
+        return words.any { it in LOCATION_WORDS }
+    }
 
     /** The first (top-most) result whose own label contains [item], below the search field. */
     /**
@@ -825,13 +893,16 @@ class ReplayEngine(
      * "Submit", id add-to-cart-button). Never one whose label or id says buy now / pay / order.
      */
     private fun addToCartButton(snap: ScreenSnapshot): UiElement? = snap.appElements()
-        .filter { it.visible && (it.clickable || it.className.contains("Button")) }
+        // (Myntra's main button is a text inside a tappable bar.)
+        .filter { it.visible && (it.clickable || it.className.contains("Button") || snap.elements[Descriptors.clickableFor(snap, it.index)].clickable) }
         .filter { e ->
             val label = TextNormalizer.normalize(e.label)
             val id = TextNormalizer.viewIdTokens(e.viewId)
             ADD_TO_CART_LABELS.any { label == it || label.startsWith("$it ") } ||
                 ("add" in id && listOf("cart", "bag", "basket").any { it in id })
         }
+        // Not a "Similar products" carousel card's own button: that adds a different item.
+        .filter { e -> generateSequence(snap.elements.getOrNull(e.parent)) { snap.elements.getOrNull(it.parent) }.none { it.className.endsWith("HorizontalScrollView") } }
         .filter { e -> risk.assess(snap, e).risk == com.echoflow.core.safety.ActionRisk.SAFE }
         .minByOrNull { it.bounds.top }
 
@@ -852,7 +923,10 @@ class ReplayEngine(
             .filter { e ->
                 TextNormalizer.normalize(e.label).let { l ->
                     !l.startsWith("view sponsored") && !l.startsWith("sponsored ad from") && !l.startsWith("results for") && !l.startsWith("showing results") &&
-                        !l.startsWith("ref ") && !l.contains("http")
+                        !l.startsWith("ref ") && !l.contains("http") && !l.contains("location") &&
+                        !l.contains("filter") && !l.endsWith(" icon") &&
+                        // A delivery address line ("…, Bengaluru, Karnataka 560054, India") isn't a result.
+                        !PINCODE.containsMatchIn(e.label.orEmpty()) && !l.endsWith(" india")
                 }
             }
             .sortedBy { it.bounds.top * 10 + it.bounds.left }
@@ -1077,7 +1151,14 @@ class ReplayEngine(
         private val NOT_ADDRESS = listOf(
             "enter location", "add address", "add new", "use current location", "grant", "search",
             "buy", "offer", "pay", "save", "bank", "card", "emi", "coupon", "deal",
+            // The home screen's own "Deliver to …" bar and "Use my current location" aren't saved addresses.
+            "deliver", "current location",
         )
+        /** How long a results list gets to show product cards before other rows count as results. */
+        const val NON_PRODUCT_WAIT_MS = 3_000L
+        private val PINCODE = Regex("(?<!\\d)\\d{6}(?!\\d)")
+        private val SIZE_CONFIRM = setOf("done", "add to bag", "add to cart", "confirm", "continue")
+        private val LOCATION_WORDS = setOf("location", "address", "pincode", "pin", "area", "locality", "city")
         private val CUSTOMISE_WORDS = listOf(
             "customization", "customisation", "customize", "customise", "choose your", "add ons", "addons",
             "choose from variant", "select any", "select up to", "choose any", "required",

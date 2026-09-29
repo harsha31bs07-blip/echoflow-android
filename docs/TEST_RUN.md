@@ -65,6 +65,20 @@ With a Gemini key pasted in the app, and EchoFlow's built-in pop-up rules switch
 | "order a farmhouse pizza from brick oven pizzeria on zomato" | Stuck at step 3 on Zomato's "Serving from exceptional distance" sheet. EchoFlow asked Gemini, which answered *dismiss the 'Okay, got it!' popup blocking the screen*. The button passed the safety check and was tapped, and the run carried on: menu search, no Farmhouse there, asked what to get instead, "nothing", stopped with nothing added. Event: `AI helper: closed "Okay, got it!"` |
 | "order a margherita pizza from brik oven on zomato" (rules back on) | Normal run to the cart (hand-off). Zomato's "Step back. Grab a snack." interstitial stayed up more than 5 s, so Gemini was asked once and said *still loading*; EchoFlow waited, then continued. (Since then EchoFlow waits 7 s and skips screens with a loading spinner.) |
 
+## Overnight regression run (30 Sept, 01:00–01:30, branch build)
+
+Re-run after the night's UI changes (listening panel, ✕ close, panel redesign, animations). Brik Oven was closed, so the Zomato tests weren't repeated.
+
+| Test | Result |
+|---|---|
+| T9 (Amazon, phone case, first result) | ❌ at first: the product page never scrolled, because the scroll swipe started on EchoFlow's own taller panel. Fixed (the panel lets EchoFlow's gestures through), then ✅: added to cart. Cart emptied |
+| B2 (Amazon flow on Myntra, sunglasses) | ✅ confirmed first, first product added to the bag. Bag emptied |
+| T1-style teach (YouTube, "cricket highlights") | ✅ *"Learned: … I saved 3 steps. You can change the item."*; test flow deleted afterwards |
+| T12 ("Book a cab to the airport.") | ✅ offers to learn it |
+| T13 ("Order pizza.") | ✅ asks before running |
+| T14 (after a YouTube run) | ✅ *"Yes, the last run succeeded. … completed all 3 steps."* |
+| ✕ mid-run (Zomato, step 2) | ✅ cancelled, nothing added; recorded as "Stopped at step 2, as you asked." |
+
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.

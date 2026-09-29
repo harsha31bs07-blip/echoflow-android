@@ -17,7 +17,7 @@ Severity: **High** can fail a judge's test or leave the UI stuck · **Medium** m
 | L1 | Low | A long flow's steps are a flat list. A June 2026 study found that people read demonstrations better grouped into named phases. Group them: *Open the app → Find the restaurant → Pick the dish → Checkout*. | ✅ Done |
 | L2 | Low | The bubble folds and unfolds, and the glow switches on and off, without any transition. Add short fades (respecting "Remove animations"). | ✅ Done |
 | L3 | Low | No haptic feedback on the main buttons. Add a light tick on speak, ✕ and Done. | ✅ Done |
-| L4 | Low | The only ways to start are the handle and the app. Add a Quick Settings tile, "Talk to EchoFlow", in the notification shade. | See log |
+| L4 | Low | The only ways to start are the handle and the app. Add a Quick Settings tile, "Talk to EchoFlow", in the notification shade. | ✅ Built (tap untested: One UI ignores adb tile commands) |
 
 ## Rubric walk-through (current build)
 - **T1–T14, B1–B3:** all shown on the phone (see [TEST_RUN.md](TEST_RUN.md)). Nothing tonight changes matching, compiling or safety, apart from H2 (listening only) and M1 (AI-helper timing, which only applies with a key).

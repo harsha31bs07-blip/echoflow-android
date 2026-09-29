@@ -35,8 +35,10 @@ import com.echoflow.app.orchestrator.UiState
  * (while teaching), Stop, choice buttons for questions, and a status line. It works on top of
  * any app, which is where teaching and replay happen.
  *
- * Look: a compact dark ink card (at most ~300dp wide) with a coloured mode dot and status on top,
- * answer chips when EchoFlow asks something, and a row of round controls.
+ * Look: a compact deep-ink card (at most ~300dp wide, soft gradient, faint edge) with a mode
+ * label ("Ready", "Recording", "Working", "Question") tinted like the edge glow, the status line,
+ * answer chips when EchoFlow asks something, and a row of round controls with drawn line icons;
+ * the main one, Speak, is a coral gradient disc with a sound-wave icon and a soft ring.
  */
 class EchoBubble(
     private val service: AccessibilityService,
@@ -45,12 +47,12 @@ class EchoBubble(
     private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val kit = Kit(service)
     private var root: FrameLayout? = null
-    private lateinit var dot: View
+    private lateinit var modeLabel: TextView
     private lateinit var status: TextView
-    private lateinit var speak: Button
+    private lateinit var speak: View
     private lateinit var done: Button
-    private lateinit var stop: Button
-    private lateinit var move: Button
+    private lateinit var stop: View
+    private lateinit var move: View
     private lateinit var choices: LinearLayout
     private lateinit var choiceScroll: HorizontalScrollView
     private var pulse: ObjectAnimator? = null
@@ -118,33 +120,32 @@ class EchoBubble(
     fun show() {
         if (root != null) return
 
-        dot = View(service).apply {
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Palette.MUTED) }
-            layoutParams = LinearLayout.LayoutParams(kit.dp(10), kit.dp(10)).apply {
-                marginEnd = kit.dp(8)
-                topMargin = kit.dp(5) // centred on the first line of 13sp text
-            }
-        }
-        status = kit.text("", 13f, Color.WHITE).apply {
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-            maxWidth = kit.dp(200)
-            // TalkBack reads status changes and questions as they appear.
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        // Mode label ("● Working"), tinted like the edge glow for that mode.
+        modeLabel = kit.text("● Ready", 12f, MODE_READY, bold = true).apply {
+            setPadding(kit.dp(10), kit.dp(4), kit.dp(10), kit.dp(4))
+            background = kit.rounded(tint(MODE_READY), 12f)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO // the status line says it
         }
         // ✕: stop whatever is going on and fold back into the edge handle, any time.
-        val close = roundButton("✕", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 30, textSp = 14f, label = "Close: stop and hide EchoFlow") {
+        val close = iconButton(Glyph.Kind.CLOSE, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 30, iconDp = 16, label = "Close: stop and hide EchoFlow") {
             closeAll()
         }.apply {
             (layoutParams as LinearLayout.LayoutParams).apply {
-                marginEnd = -kit.dp(6)
-                topMargin = -kit.dp(10)
+                marginEnd = -kit.dp(8)
+                topMargin = -kit.dp(8)
+                bottomMargin = -kit.dp(8)
             }
         }
-        val statusSpacer = View(service).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) }
-        val statusRow = kit.row(dot, status, statusSpacer, close, gravity = Gravity.TOP).apply {
+        val headSpacer = View(service).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) }
+        val statusRow = kit.row(modeLabel, headSpacer, close).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        status = kit.text("", 14f, Color.WHITE).apply {
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(kit.dp(2), kit.dp(8), 0, 0)
+            // TalkBack reads status changes and questions as they appear.
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
 
         choices = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
@@ -159,17 +160,22 @@ class EchoBubble(
             }
         }
 
-        speak = roundButton("🎤", Palette.CORAL, Color.WHITE, sizeDp = 48, visualDp = 48, textSp = 20f, label = "Speak") {
+        // Speak: the main action. A coral gradient disc with a sound-wave icon and a soft ring.
+        speak = iconButton(Glyph.Kind.WAVES, speakDisc(), Color.WHITE, sizeDp = 56, visualDp = 56, iconDp = 26, label = "Speak") {
             orchestrator.onSpeakPressed()
         }
-        done = pillButton("✓ Done", Palette.MINT, Palette.INK) { orchestrator.onDonePressed() }
-        stop = roundButton("■", Palette.RED, Color.WHITE, sizeDp = 48, visualDp = 40, textSp = 15f, label = "Stop") {
+        done = pillButton("Done", Palette.MINT, Color.WHITE) { orchestrator.onDonePressed() }.apply {
+            val check = Glyph(Glyph.Kind.CHECK, Color.WHITE, kit.dp(18)).apply { setBounds(0, 0, kit.dp(18), kit.dp(18)) }
+            setCompoundDrawablesRelative(check, null, null, null)
+            compoundDrawablePadding = kit.dp(6)
+        }
+        stop = iconButton(Glyph.Kind.STOP, plainDisc(Palette.RED), Color.WHITE, sizeDp = 48, visualDp = 42, iconDp = 22, label = "Stop") {
             orchestrator.onStopPressed()
         }
-        val home = roundButton("⌂", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 34, textSp = 16f, label = "Open EchoFlow") {
+        val home = iconButton(Glyph.Kind.HOME, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 36, iconDp = 20, label = "Open EchoFlow") {
             service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        move = roundButton("⇅", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 34, textSp = 16f, label = "Move to the other corner") {
+        move = iconButton(Glyph.Kind.MOVE, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 36, iconDp = 20, label = "Move to the other corner") {
             atBottom = !atBottom
             root?.let { wm.updateViewLayout(it, params()) }
         }
@@ -193,10 +199,15 @@ class EchoBubble(
             }
         }.apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(kit.dp(14), kit.dp(12), kit.dp(12), kit.dp(12))
-            background = kit.rounded(PANEL_BG, 24f, PANEL_EDGE, 1f)
-            elevation = kit.dp(6).toFloat()
+            setPadding(kit.dp(16), kit.dp(14), kit.dp(14), kit.dp(14))
+            // Deep ink with a gentle top-to-bottom gradient and a faint light edge.
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(PANEL_TOP, PANEL_BOTTOM)).apply {
+                cornerRadius = kit.dp(26).toFloat()
+                setStroke(kit.dp(1), PANEL_EDGE)
+            }
+            elevation = kit.dp(10).toFloat()
             addView(statusRow)
+            addView(status)
             addView(choiceScroll)
             addView(controls)
         }
@@ -250,17 +261,20 @@ class EchoBubble(
         }
         updateGlow()
         val listening = s.mode == Mode.LISTENING || (s.mode == Mode.TEACHING && s.status.startsWith("Listening"))
-        val dotColor = when (s.mode) {
-            Mode.TEACHING, Mode.LISTENING -> Palette.CORAL
-            Mode.RUNNING -> Palette.MINT
-            Mode.ASKING -> Palette.GOLD
-            Mode.IDLE -> Palette.MUTED
+        val (label, color) = when (s.mode) {
+            Mode.TEACHING -> "Recording" to MODE_CORAL
+            Mode.LISTENING -> "Listening" to MODE_CORAL
+            Mode.RUNNING -> "Working" to MODE_MINT
+            Mode.ASKING -> "Question" to MODE_GOLD
+            Mode.IDLE -> "Ready" to MODE_READY
         }
-        (dot.background as GradientDrawable).setColor(dotColor)
-        if (listening) startPulse() else stopPulse()
+        modeLabel.text = "●  $label"
+        modeLabel.setTextColor(color)
+        modeLabel.background = kit.rounded(tint(color), 12f)
+        if (listening || s.mode == Mode.TEACHING) startPulse() else stopPulse()
 
         status.text = when (s.mode) {
-            Mode.TEACHING -> "Recording: ${s.status}"
+            Mode.TEACHING -> s.status // the "Recording" label above says the mode
             Mode.LISTENING -> s.status.ifBlank { "Listening…" }
             Mode.ASKING -> s.question?.takeIf { it.isNotBlank() } ?: s.status
             else -> s.status
@@ -367,25 +381,45 @@ class EchoBubble(
     }
 
     /**
-     * A round icon button: a [visualDp] circle centred in a [sizeDp] square, so small-looking
-     * buttons still have a full-size touch target.
+     * A round icon button: a [visualDp] disc centred in a [sizeDp] square (so small-looking
+     * buttons still have a full-size touch target), with a drawn [Glyph] in the middle.
      */
-    private fun roundButton(
-        symbol: String,
-        fill: Int,
-        textColor: Int,
+    private fun iconButton(
+        kind: Glyph.Kind,
+        disc: Drawable,
+        iconColor: Int,
         sizeDp: Int,
         visualDp: Int,
-        textSp: Float,
+        iconDp: Int,
         label: String,
         onClick: () -> Unit,
-    ) = baseButton(symbol, textColor, textSp, onClick).apply {
+    ) = android.widget.ImageButton(service).apply {
         contentDescription = label
-        val circle = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fill) }
+        setImageDrawable(Glyph(kind, iconColor, kit.dp(iconDp)))
+        scaleType = android.widget.ImageView.ScaleType.CENTER
+        setPadding(0, 0, 0, 0)
         val inset = kit.dp((sizeDp - visualDp) / 2f)
-        background = pressable(InsetDrawable(circle, inset))
+        background = pressable(InsetDrawable(disc, inset))
         layoutParams = LinearLayout.LayoutParams(kit.dp(sizeDp), kit.dp(sizeDp)).apply { marginEnd = kit.dp(4) }
+        setOnClickListener { onClick() }
     }
+
+    private fun plainDisc(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
+
+    /** Speak: a coral disc lit from the top-left, inside a soft coral ring. */
+    private fun speakDisc(): Drawable {
+        val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x33FF6B4A) }
+        val disc = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFFF7A52.toInt(), Palette.CORAL)).apply {
+            shape = GradientDrawable.OVAL
+        }
+        val ringWidth = kit.dp(4)
+        return android.graphics.drawable.LayerDrawable(arrayOf(ring, disc)).apply {
+            setLayerInset(1, ringWidth, ringWidth, ringWidth, ringWidth)
+        }
+    }
+
+    /** A colour at low opacity, for the mode label's background. */
+    private fun tint(color: Int) = (0x2E shl 24) or (color and 0x00FFFFFF)
 
     private fun pillButton(label: String, fill: Int, textColor: Int, onClick: () -> Unit) =
         baseButton(label, textColor, 15f, onClick).apply {
@@ -420,8 +454,8 @@ class EchoBubble(
         // "Remove animations" in the phone's accessibility settings: keep the dot still.
         val scale = android.provider.Settings.Global.getFloat(service.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
         if (scale == 0f) return
-        pulse = ObjectAnimator.ofFloat(dot, View.ALPHA, 1f, 0.25f).apply {
-            duration = 550
+        pulse = ObjectAnimator.ofFloat(modeLabel, View.ALPHA, 1f, 0.55f).apply {
+            duration = 700
             repeatMode = ValueAnimator.REVERSE
             repeatCount = ValueAnimator.INFINITE
             start()
@@ -431,7 +465,7 @@ class EchoBubble(
     private fun stopPulse() {
         pulse?.cancel()
         pulse = null
-        if (::dot.isInitialized) dot.alpha = 1f
+        if (::modeLabel.isInitialized) modeLabel.alpha = 1f
     }
 
     private fun params() = WindowManager.LayoutParams(
@@ -459,13 +493,22 @@ class EchoBubble(
         const val FIRST_COLLAPSE_MS = 8_000L
         /** Ink at ~55% with a light edge: visible on light and dark apps without shouting. */
         const val HANDLE_FILL = (0x8C shl 24) or (Palette.INK and 0x00FFFFFF)
-        const val HANDLE_EDGE = 0x66FFFFFF
+        /** A coral edge: the tucked-away handle still says "EchoFlow". */
+        const val HANDLE_EDGE = 0xCCFF6B4A.toInt()
         const val MAX_CHOICE_CHARS = 28
         const val SHADOW_ROOM_DP = 6
-        /** Palette.INK at ~92% opacity. */
-        const val PANEL_BG = (0xEB shl 24) or (Palette.INK and 0x00FFFFFF)
+        /** Deep ink, a touch lighter at the top (~96% opaque). */
+        const val PANEL_TOP = 0xF5262B4D.toInt()
+        const val PANEL_BOTTOM = 0xF5141830.toInt()
         /** A faint light edge so the panel reads on dark apps too. */
-        const val PANEL_EDGE = 0x24FFFFFF
+        const val PANEL_EDGE = 0x2EFFFFFF
+        /** Small round controls (home, move, close). */
+        const val CONTROL_BG = 0xFF30365C.toInt()
+        /** Mode label colours: bright enough on the dark panel (all ≥ 4.5:1). */
+        const val MODE_READY = 0xFFC9CCE0.toInt()
+        const val MODE_CORAL = 0xFFFF8A6B.toInt()
+        const val MODE_MINT = 0xFF3DD6C4.toInt()
+        const val MODE_GOLD = 0xFFF4B63F.toInt()
         /** Light text for the small helper buttons (high contrast on INK_SOFT). */
         const val UTILITY_TEXT = 0xFFD5D8EA.toInt()
     }

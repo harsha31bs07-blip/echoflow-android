@@ -232,7 +232,7 @@ Replay is deterministic, and every recovery above runs without an LLM. With a Ge
 
 ```mermaid
 flowchart TD
-  S["Step stuck ≥ 5 s,<br/>every built-in recovery tried"] --> K{"Gemini key set?<br/>Screen not payment / OTP /<br/>password / login / cart?"}
+  S["Step stuck ≥ 7 s (no loading spinner),<br/>every built-in recovery tried"] --> K{"Gemini key set?<br/>Screen not payment / OTP /<br/>password / login / cart?"}
   K -->|no| STOP["Specific stuck message (T10)"]
   K -->|yes| REQ["Send: task, stuck step, what was tried,<br/>redacted list of on-screen elements<br/>(typed text dropped, digits and emails masked)"]
   REQ --> ADV["Gemini picks ONE: close pop-up · this is the step's button ·<br/>back · scroll · wait · ask the user · stop"]

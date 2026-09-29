@@ -63,7 +63,7 @@ With a Gemini key pasted in the app, and EchoFlow's built-in pop-up rules switch
 | Command | What happened |
 |---|---|
 | "order a farmhouse pizza from brick oven pizzeria on zomato" | Stuck at step 3 on Zomato's "Serving from exceptional distance" sheet. EchoFlow asked Gemini, which answered *dismiss the 'Okay, got it!' popup blocking the screen*. The button passed the safety check and was tapped, and the run carried on: menu search, no Farmhouse there, asked what to get instead, "nothing", stopped with nothing added. Event: `AI helper: closed "Okay, got it!"` |
-| "order a margherita pizza from brik oven on zomato" (rules back on) | Normal run to the cart (hand-off). Zomato's "Step back. Grab a snack." interstitial stayed up more than 5 s, so Gemini was asked once and said *still loading*; EchoFlow waited, then continued. |
+| "order a margherita pizza from brik oven on zomato" (rules back on) | Normal run to the cart (hand-off). Zomato's "Step back. Grab a snack." interstitial stayed up more than 5 s, so Gemini was asked once and said *still loading*; EchoFlow waited, then continued. (Since then EchoFlow waits 7 s and skips screens with a loading spinner.) |
 
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).

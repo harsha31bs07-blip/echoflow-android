@@ -134,7 +134,7 @@ With a key, it also helps a replay that's stuck on a screen it wasn't taught ([A
 - **What Gemini sees when stuck.** A list of the screen's button and text labels, with typed text dropped and numbers and emails masked. It's never asked about payment, OTP, password, login or cart screens.
 - **Suggestions only.** Its suggestions are checked and gated like any other action, and it never decides safety.
 - **Suggestions can be wrong.** A suggestion is only followed if it's safe to tap, and at most twice per step. A wrong but safe suggestion (closing the wrong pop-up) costs a little time before the specific stuck message.
-- **It may be asked during a slow load.** On a screen that is only loading for more than 5 s, Gemini may be asked anyway. It usually answers "still loading", which costs one call.
+- **Slow loading screens.** Gemini is asked only after a step has been stuck 7 s, and never while a loading spinner is showing. A slow screen without a spinner can still cost one call, which usually answers "still loading".
 
 ### L15. Launching apps
 `LaunchApp` uses the app's launcher intent, the same one the home-screen icon sends. It's not a deep link, and it always starts from the app's home screen.

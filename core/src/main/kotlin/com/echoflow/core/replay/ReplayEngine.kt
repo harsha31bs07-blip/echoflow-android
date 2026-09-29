@@ -488,7 +488,8 @@ class ReplayEngine(
 
             // Last resort, only when every recovery above has run out: an AI model looks at the
             // redacted screen and suggests one thing to try. Checked here, gated as usual.
-            if (advisor != null && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS) {
+            // (Not while a loading spinner is up: that screen is still arriving.)
+            if (advisor != null && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS && !loading(snap)) {
                 advised++
                 when (val o = consultAdvisor(flow, steps, i, snap, slots)) {
                     AdviceOutcome.Acted -> continue
@@ -504,6 +505,9 @@ class ReplayEngine(
         val snap = host.current()
         return StepResult.Stop(RunStatus.HALTED, stuckMessage(step, i, steps.size, snap, slots))
     }
+
+    /** A visible progress spinner or bar: the screen is still loading. */
+    private fun loading(snap: ScreenSnapshot) = snap.appElements().any { it.visible && it.className.endsWith("ProgressBar") }
 
     private sealed interface AdviceOutcome {
         data object Acted : AdviceOutcome
@@ -1252,7 +1256,7 @@ class ReplayEngine(
         const val STEP_BUDGET_MS = 12_000L
         /** AI help: at most this many suggestions per step, only after the step was stuck this long. */
         const val MAX_ADVICE = 2
-        const val ADVISE_AFTER_MS = 5_000L
+        const val ADVISE_AFTER_MS = 7_000L
         const val ADVICE_TARGET_CONFIDENCE = 0.75
         const val MAX_RESULT_OPENS = 3
         private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)

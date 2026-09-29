@@ -69,6 +69,9 @@ class Orchestrator(context: Context) {
     private var recorder: TeachingRecorder? = null
     private var runJob: Job? = null
 
+    /** Counts presses of Speak, so only the newest listening session updates the state. */
+    @Volatile private var listenSession = 0
+
     /** The step the current run is on (number, description), for a cancelled run's record. */
     @Volatile var currentStep: Pair<Int, String>? = null
     @Volatile private var typedAnswer: kotlinx.coroutines.CompletableDeferred<String?>? = null
@@ -91,10 +94,13 @@ class Orchestrator(context: Context) {
     /** Bubble "Speak" button. While a question is open, the answer goes to the question. */
     fun onSpeakPressed() {
         if (_state.value.mode == Mode.ASKING || _state.value.mode == Mode.RUNNING) return
+        // Each press is its own session; an older one that ends later must not reset the state.
+        val session = ++listenSession
         scope.launch {
-            val before = _state.value.mode
+            val before = if (_state.value.mode == Mode.LISTENING) Mode.IDLE else _state.value.mode
             _state.value = _state.value.copy(mode = if (before == Mode.TEACHING) Mode.TEACHING else Mode.LISTENING, status = "Listening…")
             val text = listen()
+            if (session != listenSession) return@launch // a newer press took over
             if (before != Mode.TEACHING) _state.value = _state.value.copy(mode = Mode.IDLE)
             if (text.isNullOrBlank()) {
                 status(when {

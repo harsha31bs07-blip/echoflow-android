@@ -64,7 +64,8 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 ## How to use
 1. Install the APK, open **EchoFlow**, and enable the accessibility service (steps below). Allow the microphone.
 2. EchoFlow stays out of the way, like Siri on an iPhone. When idle it's only a **slim handle on the right edge** of the screen:
-   - **tap the handle** to speak a command;
+   - **tap the handle** to speak a command: a listening panel rises with coral dots that move with your voice, and your words appear as you speak;
+   - **✕** on the bubble or the listening panel stops whatever is going on (a task, a question, a lesson being taught) and folds EchoFlow back into the handle, any time;
    - **long-press it** to open the controls;
    - while EchoFlow is listening, teaching, working or asking, **the screen's edges glow** (coral: listening or recording; mint: working; gold: asking you) and the controls stay open;
    - the controls are **🎤** speak, **✓ Done** finish teaching, **■** stop, **⌂** open EchoFlow and **⇅** move to the other corner;

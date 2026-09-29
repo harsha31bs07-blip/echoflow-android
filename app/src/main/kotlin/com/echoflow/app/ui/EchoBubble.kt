@@ -66,15 +66,40 @@ class EchoBubble(
     private var lastMode = Mode.IDLE
     private val collapse = Runnable { if (lastMode == Mode.IDLE && minimal()) setCollapsed(true) }
 
-    // Google Assistant-style listening panel while the microphone is open.
-    private val listening = ListeningPanel(service) { EchoRuntime.service?.voice?.cancelListening() }
+    // Google Assistant-style listening panel while the microphone is open. Its ✕ stops
+    // listening and folds EchoFlow back into the handle (while teaching, it only stops listening:
+    // the lesson needs ✓ Done).
+    private val listening = ListeningPanel(service) {
+        foldAfterListening = lastMode != Mode.TEACHING
+        EchoRuntime.service?.voice?.cancelListening()
+    }
     private var listeningUi = false
+    private var foldAfterListening = false
     private var lastQuestion: String? = null
     private val endListening = Runnable {
         listeningUi = false
         root?.visibility = if (shownOnThisScreen) View.VISIBLE else View.GONE
         updateGlow()
+        if (foldAfterListening) {
+            foldAfterListening = false
+            main.removeCallbacks(collapse)
+            if (minimal()) setCollapsed(true)
+        }
     }
+
+    /** The bubble's ✕: stop any task, question or lesson, then fold into the edge handle. */
+    private fun closeAll() {
+        // The stopping task may report "running" once more on its way out: stay folded meanwhile.
+        closedAt = android.os.SystemClock.uptimeMillis()
+        if (lastMode != Mode.IDLE) orchestrator.onStopPressed()
+        main.removeCallbacks(collapse)
+        if (minimal()) setCollapsed(true)
+        updateGlow()
+        // Once the quiet period is over, show the glow again if something is still going on.
+        main.postDelayed({ updateGlow() }, CLOSE_QUIET_MS + 100)
+    }
+    private var closedAt = 0L
+    private fun justClosed() = android.os.SystemClock.uptimeMillis() - closedAt < CLOSE_QUIET_MS
 
     /** Speech events from [com.echoflow.app.voice.VoiceIO]: open, update and close the listening panel. */
     fun onSpeech(e: com.echoflow.app.voice.SpeechUi) {
@@ -104,11 +129,23 @@ class EchoBubble(
         status = kit.text("", 13f, Color.WHITE).apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            maxWidth = kit.dp(250)
+            maxWidth = kit.dp(200)
             // TalkBack reads status changes and questions as they appear.
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
-        val statusRow = kit.row(dot, status, gravity = Gravity.TOP)
+        // ✕: stop whatever is going on and fold back into the edge handle, any time.
+        val close = roundButton("✕", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 30, textSp = 14f, label = "Close: stop and hide EchoFlow") {
+            closeAll()
+        }.apply {
+            (layoutParams as LinearLayout.LayoutParams).apply {
+                marginEnd = -kit.dp(6)
+                topMargin = -kit.dp(10)
+            }
+        }
+        val statusSpacer = View(service).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) }
+        val statusRow = kit.row(dot, status, statusSpacer, close, gravity = Gravity.TOP).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
 
         choices = LinearLayout(service).apply { orientation = LinearLayout.HORIZONTAL }
         choiceScroll = HorizontalScrollView(service).apply {
@@ -205,7 +242,12 @@ class EchoBubble(
         // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
         main.removeCallbacks(collapse)
         // (Longer messages stay up longer, so "Your turn. Everything is ready…" can be read.)
-        if (!minimal() || s.mode != Mode.IDLE) setCollapsed(false) else if (!collapsed) main.postDelayed(collapse, readingTime(s.status))
+        when {
+            !minimal() -> setCollapsed(false)
+            justClosed() -> Unit // ✕ was just tapped: stay folded while the task winds down
+            s.mode != Mode.IDLE -> setCollapsed(false)
+            !collapsed -> main.postDelayed(collapse, readingTime(s.status))
+        }
         updateGlow()
         val listening = s.mode == Mode.LISTENING || (s.mode == Mode.TEACHING && s.status.startsWith("Listening"))
         val dotColor = when (s.mode) {
@@ -265,7 +307,7 @@ class EchoBubble(
 
     private fun updateGlow() {
         val color = when {
-            !minimal() || !shownOnThisScreen || listeningUi -> null
+            !minimal() || !shownOnThisScreen || listeningUi || justClosed() -> null
             lastMode == Mode.TEACHING || lastMode == Mode.LISTENING -> Palette.CORAL
             lastMode == Mode.RUNNING -> Palette.MINT
             lastMode == Mode.ASKING -> Palette.GOLD
@@ -410,6 +452,8 @@ class EchoBubble(
         const val MAX_WIDTH_DP = 300
         /** Idle this long after a run or an answer: tuck into the edge handle. */
         const val IDLE_COLLAPSE_MS = 6_000L
+        /** After ✕, ignore "still busy" states from the stopping task for this long. */
+        const val CLOSE_QUIET_MS = 2_500L
         const val MAX_READ_MS = 15_000L
         /** After the service starts, show the full panel briefly so people see where it is. */
         const val FIRST_COLLAPSE_MS = 8_000L

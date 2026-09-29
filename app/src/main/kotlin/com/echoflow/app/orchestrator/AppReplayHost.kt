@@ -32,8 +32,10 @@ class AppReplayHost(
 
     override fun say(text: String) = orchestrator.sayAsync(text)
 
-    override fun progress(step: Int, total: Int, description: String) =
+    override fun progress(step: Int, total: Int, description: String) {
+        orchestrator.currentStep = step to description
         orchestrator.status("Step $step/$total: $description")
+    }
 
     override fun recall(key: String): String? = orchestrator.memory.getString(key, null)
 

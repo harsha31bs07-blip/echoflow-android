@@ -68,6 +68,9 @@ class Orchestrator(context: Context) {
 
     private var recorder: TeachingRecorder? = null
     private var runJob: Job? = null
+
+    /** The step the current run is on (number, description), for a cancelled run's record. */
+    @Volatile var currentStep: Pair<Int, String>? = null
     @Volatile private var typedAnswer: kotlinx.coroutines.CompletableDeferred<String?>? = null
 
     val activeRecorder: TeachingRecorder? get() = recorder
@@ -261,6 +264,7 @@ class Orchestrator(context: Context) {
         _state.value = UiState(Mode.RUNNING, "Running “${DecisionLayer.describe(c)}”")
         say("Okay, ${DecisionLayer.describe(c)}.")
         val started = System.currentTimeMillis()
+        currentStep = null
         runJob = scope.launch(Dispatchers.Default) {
             val result = try {
                 // With a Gemini key, a step stuck on an unfamiliar screen gets AI help (checked and gated).
@@ -268,7 +272,9 @@ class Orchestrator(context: Context) {
                 val popupRules = !(com.echoflow.app.BuildConfig.DEBUG && EchoRuntime.debugPopupRulesOff)
                 ReplayEngine(AppReplayHost(this@Orchestrator), EchoRuntime.guard, advisor = advisor, popupRules = popupRules).run(flow, slots)
             } catch (e: CancellationException) {
-                ReplayResult(RunStatus.CANCELLED, "Stopped.", 0, flow.steps.size, null, emptyList())
+                // Record where it was stopped, for "Did the last run succeed?" (T14).
+                val (at, what) = currentStep ?: (0 to null)
+                ReplayResult(RunStatus.CANCELLED, "Stopped at step $at, as you asked.", at, flow.steps.size, what, emptyList())
             } catch (e: Exception) {
                 Log.e(TAG, "replay crashed", e)
                 ReplayResult(RunStatus.HALTED, "Something went wrong: ${e.message}", 0, flow.steps.size, null, emptyList())

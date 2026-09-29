@@ -112,7 +112,8 @@ class ReplayEngine(
         try {
             while (i < steps.size) {
                 val step = steps[i]
-                host.progress(i + 1, steps.size, step.description)
+                // With the values filled in: "Type brik oven into the text box", not "{restaurant}".
+                host.progress(i + 1, steps.size, slots.entries.fold(step.description) { d, (k, v) -> d.replace("{$k}", v) })
                 when (val r = runStep(flow, steps, i, slots)) {
                     is StepResult.Done -> {
                         if (step is Step.LaunchApp) ensureAddress(flow, slots)?.let { return result(it.status, it.message, i, steps) }

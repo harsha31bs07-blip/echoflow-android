@@ -207,6 +207,7 @@ class ReplayEngine(
         var blankSince: Long? = null
         var triedOpenSearch = false
         var openedResults = 0
+        var lastOpen: String? = null
         var triedRetry = false
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
@@ -338,8 +339,16 @@ class ReplayEngine(
                 val result = firstResult(snap, item)
                 if (result != null) {
                     openedResults++
-                    events += "opened the first result matching \"$item\""
-                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, result.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    // Same screen, same result as the last open: the click was accepted and ignored
+                    // (Zomato's result cards), so tap it for real this time.
+                    val key = "${snap.activityName}|${result.label}|${result.bounds}"
+                    val gesture = key == lastOpen
+                    lastOpen = key
+                    events += "opened the first result matching \"$item\"" + if (gesture) " (tapped)" else ""
+                    act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, result.index), gesture = gesture), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
+                    // Let the next screen arrive before looking again (a second tap on the same
+                    // row while it loads opens nothing new).
+                    host.awaitSettled(snap.id, 3_000)
                     continue
                 }
             }
@@ -598,8 +607,14 @@ class ReplayEngine(
     private fun cartRow(snap: ScreenSnapshot, item: String?): Triple<Int, UiElement, UiElement>? {
         val els = snap.appElements().filter { it.visible }
         fun cy(e: UiElement) = (e.bounds.top + e.bounds.bottom) / 2
-        fun isPlus(e: UiElement) = e.label?.trim() == "+" || TextNormalizer.normalize(e.label).let { it.contains("add one more") || it.contains("increase") }
-        fun isMinus(e: UiElement) = e.label?.trim() in setOf("−", "-") || TextNormalizer.normalize(e.label).let { it.contains("remove one") || it.contains("decrease") }
+        // Unlabelled icon buttons (Zomato's cart stepper) are recognised by their view ids.
+        // (Their "text" is an icon-font glyph: no letters or digits.)
+        fun idSays(e: UiElement, words: Set<String>) = e.label.orEmpty().none { it.isLetterOrDigit() } && e.clickable &&
+            TextNormalizer.viewIdTokens(e.viewId).any { it in words }
+        fun isPlus(e: UiElement) = e.label?.trim() == "+" || TextNormalizer.normalize(e.label).let { it.contains("add one more") || it.contains("increase") } ||
+            idSays(e, setOf("add", "plus", "increment", "increase", "inc"))
+        fun isMinus(e: UiElement) = e.label?.trim() in setOf("−", "-") || TextNormalizer.normalize(e.label).let { it.contains("remove one") || it.contains("decrease") } ||
+            idSays(e, setOf("remove", "minus", "decrement", "decrease", "subtract", "dec"))
         val pluses = els.filter(::isPlus)
         val anchor = item?.let { i -> els.firstOrNull { ElementResolver.valueMatch(i, it.label, emptyList()) >= 0.8 } }
         val plus = if (anchor != null) pluses.minByOrNull { kotlin.math.abs(cy(it) - cy(anchor)) } else pluses.singleOrNull()
@@ -854,7 +869,7 @@ class ReplayEngine(
 
     companion object {
         const val STEP_BUDGET_MS = 12_000L
-        const val MAX_RESULT_OPENS = 2
+        const val MAX_RESULT_OPENS = 3
         private val ERROR_TEXTS = listOf(
             "something went wrong", "went wrong", "couldn t load", "couldnt load", "could not load", "unable to load",
             "no internet", "not connected", "oops", "failed to load", "please try again",

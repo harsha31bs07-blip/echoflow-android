@@ -13,7 +13,12 @@ sealed interface PlannedAction {
         fun retarget(snapshotId: Long, elementIndex: Int): Targeted
     }
 
-    data class Click(override val snapshotId: Long, override val elementIndex: Int) : Targeted {
+    data class Click(
+        override val snapshotId: Long,
+        override val elementIndex: Int,
+        /** Tap the element's centre instead of ACTION_CLICK (views that accept the click and ignore it). */
+        val gesture: Boolean = false,
+    ) : Targeted {
         override fun retarget(snapshotId: Long, elementIndex: Int) = copy(snapshotId = snapshotId, elementIndex = elementIndex)
     }
 

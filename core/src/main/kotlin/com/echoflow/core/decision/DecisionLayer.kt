@@ -66,7 +66,8 @@ object DecisionLayer {
         }
         s = s.replace(Regex("\\b(a|an) (a|an)\\b"), "$2").replace(Regex("\\s+"), " ").trim()
         // Values the template has no place for (set at the cart / address list).
-        if ("{qty}" !in c.flow.template) c.slots["qty"]?.takeIf { it != "1" }?.let { q -> s = s.replaceFirst(" ", " $q ") }
+        // "order a margherita pizza" + qty 2 -> "order 2 margherita pizza" (the number replaces "a").
+        if ("{qty}" !in c.flow.template) c.slots["qty"]?.takeIf { it != "1" }?.let { q -> s = s.replaceFirst(Regex("^(\\S+) (?:(?:a|an|one) )?"), "$1 $q ") }
         if ("{address}" !in c.flow.template) c.slots["address"]?.let { s += " to $it" }
         val app = c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
         return if (s.contains(app, ignoreCase = true)) s else "$s on $app"

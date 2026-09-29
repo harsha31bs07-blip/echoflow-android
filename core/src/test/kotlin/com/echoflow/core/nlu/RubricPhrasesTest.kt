@@ -114,6 +114,11 @@ class RubricPhrasesTest {
         assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos", "qty" to "2"), d.candidate.slots)
     }
 
+    @Test fun `T5 confirmation wording puts the number in place of the article`() {
+        val c = m.match("Order two Margherita pizzas from Domino's.", listOf(flow)).first()
+        assertEquals("order 2 margherita pizza from dominos on zomato", DecisionLayer.describe(c))
+    }
+
     @Test fun `T6 deliver to work`() {
         val d = assertIs<Decision.Proceed>(decide("Order a Margherita from Domino's, deliver to work."))
         assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos", "address" to "work"), d.candidate.slots)

@@ -8,6 +8,7 @@ import android.graphics.Rect
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import android.os.Bundle
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.echoflow.core.gateway.ActionExecutor
 import com.echoflow.core.gateway.PlannedAction
@@ -30,13 +31,20 @@ internal class AndroidActionExecutor(
             PlannedAction.Back -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
             is PlannedAction.LaunchApp -> launch(action.packageName)
             is PlannedAction.Targeted -> {
-                val node = resolveNode(action) ?: return@withContext false
+                val node = resolveNode(action) ?: return@withContext false.also {
+                    Log.i(TAG, "no live node for $action (snapshot gone or node refreshed away)")
+                }
                 when (action) {
                     // Views that handle touches themselves (Lynx/Compose/custom) refuse ACTION_CLICK;
                     // then tap the centre of the same, gate-approved element with a gesture, unless
                     // something that could pay, order or delete also sits under that point.
-                    is PlannedAction.Click -> node.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
-                        (GestureSafety.safeToTap(snapshot, action.elementIndex) && tapCentre(node))
+                    is PlannedAction.Click -> (!action.gesture && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) || run {
+                        val blocked = GestureSafety.blocker(snapshot, action.elementIndex)
+                        if (blocked != null) Log.i(TAG, "no gesture for #${action.elementIndex}: $blocked")
+                        (blocked == null && tapCentre(node)).also { ok ->
+                            if (blocked == null) Log.i(TAG, "gesture ${if (ok) "sent" else "failed"} for #${action.elementIndex}")
+                        }
+                    }
                     is PlannedAction.SetText -> node.performAction(
                         AccessibilityNodeInfo.ACTION_SET_TEXT,
                         Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, action.text) },
@@ -68,6 +76,10 @@ internal class AndroidActionExecutor(
             override fun onCancelled(d: GestureDescription?) { done.complete(false) }
         }, null)
         return sent && (withTimeoutOrNull(1_500) { done.await() } ?: false)
+    }
+
+    private companion object {
+        const val TAG = "EchoAct"
     }
 
     private fun launch(packageName: String): Boolean {

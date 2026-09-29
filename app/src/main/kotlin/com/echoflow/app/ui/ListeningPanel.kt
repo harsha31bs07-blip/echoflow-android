@@ -41,11 +41,21 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
     private lateinit var dots: VoiceDots
     private lateinit var card: LinearLayout
     val showing: Boolean get() = root != null
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** Closes the panel a moment after listening ends; cancelled if listening starts again. */
+    private val closeLater = Runnable { hide() }
 
     /** Opens the panel; [question] is shown above the words when EchoFlow asked something. */
     fun show(question: String?) {
+        // A new listening session: the previous one's delayed close must not close this one.
+        main.removeCallbacks(closeLater)
         if (root != null) {
             prompt.text = question ?: "Listening…"
+            words.text = HINT
+            words.setTextColor(HINT_COLOR)
+            dots.level = 0f
+            dots.mode = VoiceDots.Mode.WAITING
             return
         }
         prompt = kit.text(question ?: "Listening…", 14f, PROMPT).apply {
@@ -124,13 +134,15 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
                     words.setTextColor(HINT_COLOR)
                 }
                 dots.mode = VoiceDots.Mode.THINKING
-                // Leave the final words up a moment, then go.
-                root?.postDelayed({ hide() }, if (event.text.isNullOrBlank()) 900 else 600)
+                // Leave the final words up a moment, then go (unless listening starts again).
+                main.removeCallbacks(closeLater)
+                main.postDelayed(closeLater, if (event.text.isNullOrBlank()) 900L else 600L)
             }
         }
     }
 
     fun hide() {
+        main.removeCallbacks(closeLater)
         val r = root ?: return
         root = null
         dots.stop()

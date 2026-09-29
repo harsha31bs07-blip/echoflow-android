@@ -71,9 +71,17 @@ class EchoBubble(
     // Google Assistant-style listening panel while the microphone is open. Its ✕ stops
     // listening and folds EchoFlow back into the handle (while teaching, it only stops listening:
     // the lesson needs ✓ Done).
-    private val listening = ListeningPanel(service) {
+    private val listening = ListeningPanel(service) { cancelFromPanel() }
+
+    /** The listening panel's ✕. */
+    private fun cancelFromPanel() {
         foldAfterListening = lastMode != Mode.TEACHING
         EchoRuntime.service?.voice?.cancelListening()
+        // Respond at once: close the panel and bring the handle back now, not a second later,
+        // so it can be tapped again straight away.
+        listening.hide()
+        main.removeCallbacks(endListening)
+        endListening.run()
     }
     private var listeningUi = false
     private var foldAfterListening = false
@@ -107,6 +115,8 @@ class EchoBubble(
     fun onSpeech(e: com.echoflow.app.voice.SpeechUi) {
         if (e is com.echoflow.app.voice.SpeechUi.Ready) {
             main.removeCallbacks(endListening)
+            // A new session: a ✕ from the previous one doesn't carry over.
+            foldAfterListening = false
             listeningUi = true
             listening.show(lastQuestion.takeIf { lastMode == Mode.ASKING })
             // The panel replaces the bubble and the glow while listening.
@@ -250,6 +260,11 @@ class EchoBubble(
         if (root == null) return
         lastMode = s.mode
         lastQuestion = s.question
+        // Safety net: never stay hidden for a listening panel that isn't actually on screen.
+        if (listeningUi && !listening.showing) {
+            listeningUi = false
+            root?.visibility = if (shownOnThisScreen) View.VISIBLE else View.GONE
+        }
         // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
         main.removeCallbacks(collapse)
         // (Longer messages stay up longer, so "Your turn. Everything is ready…" can be read.)

@@ -124,10 +124,15 @@ class VoiceIO(context: Context) {
         }
         r.startListening(intent)
         val text = withTimeoutOrNull(timeoutMs) { result.await() }
-        if (text == null) r.cancel()
-        waiting = null
-        // Let the final words show for a moment before the panel goes.
-        onSpeechUi(SpeechUi.Ended(text))
+        // A newer listen() may already have started (✕, then a quick tap): then this one's end
+        // must not touch the panel or the recognizer, which now belong to the new session.
+        val current = waiting === result
+        if (current) {
+            if (text == null) r.cancel()
+            waiting = null
+            // Let the final words show for a moment before the panel goes.
+            onSpeechUi(SpeechUi.Ended(text))
+        }
         text
     }
 

@@ -146,6 +146,17 @@ class RubricPhrasesTest {
         assertEquals("phone case", d.candidate.slots["item"])
     }
 
+    @Test fun `T8 when the app reports only the typing, the command supplies first-result and add-to-cart`() {
+        val amazon = "in.amazon.mShop.android.shopping"
+        val home = screen(amazon, id = 31) { edit(hint = "Search Amazon.in") }
+        val f = FlowCompiler().compile(
+            "a2", "Search for wireless earbuds on Amazon and add the first result to cart.",
+            listOf(Fingerprints.type(home, 0, "wireless earbuds", 1_000)), "Amazon",
+        ).flow
+        assertEquals(listOf(null, null, "first", "add_to_cart"), f.steps.map { (it as? Step.Tap)?.pick })
+        assertEquals("item", (f.steps[2] as Step.Tap).slot)
+    }
+
     @Test fun `T12 unknown intent offers to teach`() {
         assertIs<Decision.OfferTeach>(decide("Book a cab to the airport."))
     }

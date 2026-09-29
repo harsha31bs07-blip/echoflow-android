@@ -82,6 +82,8 @@ class ReplayEngine(
     /** Things the user should hear at the end ("I kept the size that was already selected."). */
     private val notes = mutableListOf<String>()
 
+    private val risk = com.echoflow.core.safety.ActionRiskClassifier()
+
     /** "Already in your cart" is decided at most once per run. */
     private var alreadyInCartNoted = false
 
@@ -276,8 +278,20 @@ class ReplayEngine(
                 continue
             }
 
+            if (step is Step.Tap && step.pick == "add_to_cart") {
+                val add = addToCartButton(snap)
+                if (add != null) {
+                    events += "tapped \"${add.label ?: "Add to cart"}\" (${add.viewId?.substringAfter(":id/") ?: add.className})"
+                    val r = perform(step, snap, Resolution(add.index, Descriptors.clickableFor(snap, add.index), 0.9, 0.0), slots)
+                    if (r is StepResult.Retry && staleRetries++ < 3) continue
+                    return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
+                }
+            }
+            // Results, not search suggestions: product cards are taken at once; any other kind of row
+            // only once no keyboard is showing (the search was sent).
             if (step is Step.Tap && step.pick == "first") {
-                val first = topResult(snap, slots["item"])
+                val keyboardUp = snap.windows.any { it.type == WindowType.INPUT_METHOD && it.bounds.height > 200 }
+                val first = topResult(snap, slots["item"], allowNonProducts = !keyboardUp)
                 if (first != null) {
                     events += "opened the first result: \"${first.label}\""
                     val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
@@ -371,7 +385,7 @@ class ReplayEngine(
             // result that matches what was just typed ({restaurant} or {item}): result taps that
             // weren't reported while teaching. Twice at most (Zomato: suggestion, then the card).
             val item = lastTypedValue ?: slots["item"]
-            if (openedResults < MAX_RESULT_OPENS && item != null && step is Step.Tap && step.slot == null && steps.take(i).any { it is Step.TypeText }) {
+            if (openedResults < MAX_RESULT_OPENS && item != null && step is Step.Tap && step.slot == null && step.pick == null && steps.take(i).any { it is Step.TypeText }) {
                 val result = firstResult(snap, item)
                 if (result != null) {
                     openedResults++
@@ -398,11 +412,18 @@ class ReplayEngine(
 
             // A slot value that isn't on screen: scroll a bit, then ask with what we see.
             // (Not for a search button: scrolling hides it in some apps.)
-            if (scrolls < MAX_SCROLLS && !isSearchTap(step)) {
+            // Add to Cart sits a few screens down a product page: allow more scrolling there.
+            val addToCartStep = step is Step.Tap && step.pick == "add_to_cart"
+            if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !isSearchTap(step)) {
                 val list = scrollableList(snap)
                 if (list != null) {
                     scrolls++
-                    act(PlannedAction.Scroll(snap.id, list.index, forward = true), GateContext(isRecovery = true), snap)
+                    val o = act(PlannedAction.Scroll(snap.id, list.index, forward = true), GateContext(isRecovery = true), snap)
+                    events += "scrolled ${list.simpleClassName}" + if (o is ActionOutcome.Performed) "" else " (${describe(o)})"
+                    if (addToCartStep && o is ActionOutcome.Performed) {
+                        host.awaitSettled(snap.id, 1_200)
+                        started = host.nowMs()
+                    }
                     continue
                 }
             }
@@ -452,7 +473,7 @@ class ReplayEngine(
             ElementResolver(SLOT_TAP_SCORE).resolve(snap, step.target, slots, requiredValue = slots[step.slot])
         } else {
             resolver.resolve(snap, step.target, slots)
-        })?.takeIf { r -> !isAddTap(step) || saysAdd(snap, r) }
+        })?.takeIf { r -> step.pick == null && (!isAddTap(step) || saysAdd(snap, r)) } // picks use their own rules
         is Step.TypeText -> ElementResolver(FIELD_SCORE).resolve(snap, step.target, slots, editableOnly = true)
         is Step.RepeatTap -> resolver.resolve(snap, step.target, slots)
         is Step.LaunchApp -> null
@@ -530,7 +551,12 @@ class ReplayEngine(
      */
     private fun addressOptions(snap: ScreenSnapshot): Map<String, UiElement> {
         val all = snap.appElements().filter { it.visible }
-        val heading = all.any { e -> e.label?.let { TextNormalizer.normalize(it) }?.let { l -> ADDRESS_HEADINGS.any { l.contains(it) } } == true }
+        // A real sheet heading: short, no digits ("Deliver to 560054" on every Amazon page isn't one).
+        val heading = all.any { e ->
+            e.label?.let { TextNormalizer.normalize(it) }?.let { l ->
+                ADDRESS_HEADINGS.any { l.contains(it) } && l.split(' ').size <= 6 && l.none(Char::isDigit)
+            } == true
+        }
         if (!heading) return emptyMap()
         // Rows below a "recently searched" heading are past searches, not saved addresses.
         val recentTop = all.filter { TextNormalizer.normalize(it.label).startsWith("recent") }.minOfOrNull { it.bounds.top } ?: Int.MAX_VALUE
@@ -545,6 +571,8 @@ class ReplayEngine(
             val name = labels.first().trim()
             val n = TextNormalizer.tokens(name)
             if (n.isEmpty() || n.size > 3 || NOT_ADDRESS.any { TextNormalizer.normalize(name).contains(it) }) continue
+            // Offers and prices ("Buy for" / "₹1,734 with Axis Bank Credit Card") aren't addresses.
+            if (labels.take(2).any { SafetyLexicon.amountOf(TextNormalizer.tokens(it)) != null }) continue
             if (labels.drop(1).none { it.length > 20 }) continue // must have a real address line
             out.putIfAbsent(name, row)
         }
@@ -749,19 +777,51 @@ class ReplayEngine(
 
     /** The first (top-most) result whose own label contains [item], below the search field. */
     /**
-     * The first search result, by position: a clickable row with a product-like title (3+ words)
-     * below the search bar. If one of the top three names the item, that one ("Sponsored" rows
-     * for something else come first on some apps).
+     * An "Add to cart / bag / basket" button, by its label or its view id (Amazon's is labelled
+     * "Submit", id add-to-cart-button). Never one whose label or id says buy now / pay / order.
      */
-    private fun topResult(snap: ScreenSnapshot, item: String?): UiElement? {
-        val rows = snap.appElements()
-            .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 }
-            .filter { e -> (e.label?.trim()?.split(Regex("\\s+"))?.size ?: 0) >= 3 && (e.label?.length ?: 0) >= 15 }
+    private fun addToCartButton(snap: ScreenSnapshot): UiElement? = snap.appElements()
+        .filter { it.visible && (it.clickable || it.className.contains("Button")) }
+        .filter { e ->
+            val label = TextNormalizer.normalize(e.label)
+            val id = TextNormalizer.viewIdTokens(e.viewId)
+            ADD_TO_CART_LABELS.any { label == it || label.startsWith("$it ") } ||
+                ("add" in id && listOf("cart", "bag", "basket").any { it in id })
+        }
+        .filter { e -> risk.assess(snap, e).risk == com.echoflow.core.safety.ActionRisk.SAFE }
+        .minByOrNull { it.bounds.top }
+
+    /**
+     * The first search result, by position. Product cards (a title with a price or a star rating
+     * just below it) come first, which skips AI summaries and video ads above the list; among the
+     * first few, one whose title names the item wins. Without product cards: the first clickable
+     * row with a title-like label (3+ words).
+     */
+    private fun topResult(snap: ScreenSnapshot, item: String?, allowNonProducts: Boolean = true): UiElement? {
+        val els = snap.appElements().filter { it.visible }
+        // Amazon heads its list with "Results"; banners and AI summaries sit above it.
+        val listTop = els.firstOrNull { TextNormalizer.normalize(it.label) in RESULTS_HEADINGS }?.bounds?.bottom ?: 0
+        val rows = els
+            .filter { !it.editable && it.bounds.top > snap.screenHeight / 8 && it.bounds.top >= listTop }
+            .filter { e -> (e.label?.trim()?.split(Regex("\\s+"))?.size ?: 0) in 3..40 && (e.label?.length ?: 0) >= 15 }
             .filter { Descriptors.clickableFor(snap, it.index).let { c -> snap.elements[c].clickable } }
-            .filter { e -> TextNormalizer.normalize(e.label).let { l -> !l.startsWith("sponsored") && !l.startsWith("results for") && !l.startsWith("showing results") } }
+            .filter { e ->
+                TextNormalizer.normalize(e.label).let { l ->
+                    !l.startsWith("view sponsored") && !l.startsWith("sponsored ad from") && !l.startsWith("results for") && !l.startsWith("showing results") &&
+                        !l.startsWith("ref ") && !l.contains("http")
+                }
+            }
             .sortedBy { it.bounds.top * 10 + it.bounds.left }
-        if (item != null) rows.take(3).firstOrNull { ElementResolver.valueMatch(item, it.label, emptyList()) > 0 }?.let { return it }
-        return rows.firstOrNull()
+            .distinctBy { Descriptors.clickableFor(snap, it.index) }
+        fun productLike(e: UiElement) = els.any { o ->
+            o.bounds.top >= e.bounds.top && o.bounds.top <= e.bounds.bottom + PRODUCT_DETAIL_SPAN &&
+                o.bounds.left < e.bounds.right && o.bounds.right > e.bounds.left &&
+                TextNormalizer.tokens(o.label).let { t -> t.size in 1..6 && (TextNormalizer.containsPhrase(t, OUT_OF_5) || SafetyLexicon.amountOf(t) != null) }
+        }
+        val products = rows.filter(::productLike)
+        val pool = products.ifEmpty { if (allowNonProducts) rows else emptyList() }
+        if (item != null) pool.take(4).firstOrNull { ElementResolver.valueMatch(item, it.label, emptyList()) > 0 }?.let { return it }
+        return pool.firstOrNull()
     }
 
     private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
@@ -877,6 +937,9 @@ class ReplayEngine(
 
     private fun scrollableList(snap: ScreenSnapshot): UiElement? =
         snap.appElements().filter { it.scrollable && it.visible }.maxByOrNull { it.bounds.area }
+            // Web pages (Amazon's product page) often don't flag themselves scrollable.
+            ?: snap.appElements().filter { e -> e.visible && SCROLL_CLASSES.any { e.className.endsWith(it) } && e.bounds.area * 3 > snap.screenArea }
+                .maxByOrNull { it.bounds.area }
 
     /** Labels of elements that look like the taught target (same class/parent): list options. */
     private fun optionsLike(snap: ScreenSnapshot, target: ElementDescriptor): List<String> {
@@ -933,6 +996,13 @@ class ReplayEngine(
     companion object {
         const val STEP_BUDGET_MS = 12_000L
         const val MAX_RESULT_OPENS = 3
+        const val MAX_PRODUCT_SCROLLS = 8
+        private val ADD_TO_CART_LABELS = listOf("add to cart", "add to bag", "add to basket", "add to trolley")
+        /** How far below a result title its price/rating may sit (px) to count as a product card. */
+        const val PRODUCT_DETAIL_SPAN = 450
+        private val OUT_OF_5 = listOf("out", "of", "5")
+        private val RESULTS_HEADINGS = setOf("results", "search results", "all results")
+        private val SCROLL_CLASSES = listOf("WebView", "RecyclerView", "ScrollView", "ListView")
         private val ERROR_TEXTS = listOf(
             "something went wrong", "went wrong", "couldn t load", "couldnt load", "could not load", "unable to load",
             "no internet", "not connected", "oops", "failed to load", "please try again",
@@ -947,7 +1017,10 @@ class ReplayEngine(
         private val ADDRESS_HEADINGS = listOf("select a saved address", "select delivery address","select a delivery address", "choose a delivery address",
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
         private val ADDRESS_BARS = listOf("selected address is", "delivering to", "deliver to", "delivery address")
-        private val NOT_ADDRESS =listOf("enter location", "add address", "add new", "use current location", "grant", "search")
+        private val NOT_ADDRESS = listOf(
+            "enter location", "add address", "add new", "use current location", "grant", "search",
+            "buy", "offer", "pay", "save", "bank", "card", "emi", "coupon", "deal",
+        )
         private val CUSTOMISE_WORDS = listOf(
             "customization", "customisation", "customize", "customise", "choose your", "add ons", "addons",
             "choose from variant", "select any", "select up to", "choose any", "required",

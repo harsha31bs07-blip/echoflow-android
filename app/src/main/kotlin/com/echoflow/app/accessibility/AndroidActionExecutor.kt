@@ -50,9 +50,14 @@ internal class AndroidActionExecutor(
                         Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, action.text) },
                     )
                     is PlannedAction.ImeEnter -> node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
-                    is PlannedAction.Scroll -> node.performAction(
-                        if (action.forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
-                    )
+                    // Web content (Amazon's product page) accepts ACTION_SCROLL_* and doesn't move: swipe.
+                    is PlannedAction.Scroll -> if (node.className?.toString()?.contains("WebView") == true) {
+                        swipe(node, action.forward)
+                    } else {
+                        node.performAction(
+                            if (action.forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
+                        ) || swipe(node, action.forward)
+                    }
                 }
             }
         }
@@ -63,6 +68,22 @@ internal class AndroidActionExecutor(
         val live = store.liveById(action.snapshotId) ?: return null
         val node = live.nodes.getOrNull(action.elementIndex) ?: return null
         return node.takeIf { it.refresh() }
+    }
+
+    /** A vertical swipe inside the node (70% → 30% of its height): scrolls, never taps. */
+    private suspend fun swipe(node: AccessibilityNodeInfo, forward: Boolean): Boolean {
+        val r = Rect().also(node::getBoundsInScreen)
+        if (r.height() < 200) return false
+        val x = r.exactCenterX()
+        val (from, to) = r.top + r.height() * 0.7f to r.top + r.height() * 0.3f
+        val path = Path().apply { moveTo(x, if (forward) from else to); lineTo(x, if (forward) to else from) }
+        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 350)).build()
+        val done = CompletableDeferred<Boolean>()
+        val sent = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(d: GestureDescription?) { done.complete(true) }
+            override fun onCancelled(d: GestureDescription?) { done.complete(false) }
+        }, null)
+        return sent && (withTimeoutOrNull(2_000) { done.await() } ?: false)
     }
 
     private suspend fun tapCentre(node: AccessibilityNodeInfo): Boolean {

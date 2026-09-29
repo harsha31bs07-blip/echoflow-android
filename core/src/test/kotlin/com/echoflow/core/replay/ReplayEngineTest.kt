@@ -243,4 +243,67 @@ class ReplayEngineTest {
         assertTrue(r.events.any { it.contains("already in the cart") }, "$r / clicked=${p.clicked}")
         assertTrue("+" !in p.clicked && "ADD" !in p.clicked, p.clicked.toString())
     }
+
+    @Test fun `first result skips an AI summary and a video ad and takes the first product card (T9)`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        fun t(label: String, top: Int, parent: Int, clickable: Boolean = false) = { b: com.echoflow.core.testing.ScreenBuilder ->
+            b.add { com.echoflow.core.model.UiElement(it, parent, 1, className = "android.widget.TextView", packageName = amz, text = label,
+                bounds = com.echoflow.core.model.Bounds(300, top, 1000, top + 60), clickable = clickable) }
+        }
+        val results: (Long) -> ScreenSnapshot = { id ->
+            screen(amz, id) {
+                edit(hint = "Search Amazon.in")
+                val ai = add { com.echoflow.core.model.UiElement(it, -1, 1, className = "android.view.View", packageName = amz, bounds = com.echoflow.core.model.Bounds(0, 560, 1080, 1100), clickable = true) }
+                t("Researched by AI", 600, ai)(this); t("Budget earbuds under ₹7,000 now deliver adaptive ANC and long battery life without flagship pricing.", 700, ai)(this)
+                val video = add { com.echoflow.core.model.UiElement(it, -1, 1, className = "android.view.View", packageName = amz, bounds = com.echoflow.core.model.Bounds(0, 1150, 1080, 1500), clickable = true) }
+                t("Noise Alt Clip Wireless Open-Earbuds (2026), Hi-Res Audio", 1200, video)(this); t("4.0", 1280, video)(this)
+                t("Results", 1620, -1)(this)
+                val card = add { com.echoflow.core.model.UiElement(it, -1, 1, className = "android.view.View", packageName = amz, bounds = com.echoflow.core.model.Bounds(0, 1700, 1080, 2300), clickable = true) }
+                t("Sponsored Ad - Spigen Rugged Armor Back Cover Case for Galaxy S24", 1720, card)(this); t("3.8 out of 5 stars", 1800, card)(this); t("₹999", 1900, card)(this)
+            }
+        }
+        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); button("Add to Cart") } }
+        val added: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Added to Cart") } }
+        val flow = Flow(
+            "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("search for wireless earbuds on amazon and add the first result to cart"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")),
+            listOf(
+                Step.LaunchApp(amz, "Amazon"),
+                Step.TypeText(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.EditText"), slot = "item"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.TextView", text = "{item}"), slot = "item", pick = "first"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.Button", text = "Add to Cart")),
+            ),
+        )
+        val title = "Sponsored Ad - Spigen Rugged Armor Back Cover Case for Galaxy S24"
+        val p = FakePhone(
+            mapOf("home" to { id -> screen(amz, id) { edit(hint = "Search Amazon.in") } }, "results" to results, "product" to product, "added" to added),
+            // (The fake names a tapped card by its last child: the price.)
+            mapOf(("results" to "₹999") to "product", ("product" to "Add to Cart") to "added"),
+            "home",
+        )
+        val r = ReplayEngine(p, p.guard).run(flow, mapOf("item" to "phone case"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertTrue(r.events.any { it.contains(title) }, r.events.toString())
+        assertEquals(listOf("₹999", "Add to Cart"), p.clicked)
+    }
+
+    @Test fun `an Amazon product page with an offer row is not an address sheet`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        val page: (Long) -> ScreenSnapshot = { id ->
+            screen(amz, id) {
+                text("Deliver to 560054")
+                val offer = container(clickable = true); text("Buy for", offer); text("₹3,600 with SBI credit card and no cost EMI", offer)
+                button("Add to Cart")
+            }
+        }
+        val added: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Added to Cart") } }
+        val flow = Flow("a", "search for {item} on amazon", amz, "Amazon", "search for {item} on amazon", listOf("x"),
+            listOf(SlotDef("item", SlotType.TEXT, "phone case")),
+            listOf(Step.LaunchApp(amz, "Amazon"), Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Add to cart", className = "android.widget.Button"), pick = "add_to_cart")))
+        val p = FakePhone(mapOf("home" to page, "added" to added), mapOf(("home" to "Add to Cart") to "added"), "added")
+        val r = ReplayEngine(p, p.guard).run(flow, mapOf("item" to "phone case"))
+        assertTrue(r.events.none { it.contains("address") }, r.events.toString())
+        assertEquals(listOf("Add to Cart"), p.clicked)
+    }
 }

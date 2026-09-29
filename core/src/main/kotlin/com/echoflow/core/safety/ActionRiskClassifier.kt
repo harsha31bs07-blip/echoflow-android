@@ -28,6 +28,8 @@ class ActionRiskClassifier(private val lex: SafetyLexicon = SafetyLexicon) {
     fun assess(snapshot: ScreenSnapshot, target: UiElement): ActionAssessment {
         val candidates = buildList {
             target.label?.let(::add)
+            // Amazon labels both "Add to Cart" and "Buy Now" as "Submit"; the view id tells them apart.
+            TextNormalizer.viewIdTokens(target.viewId).takeIf { it.isNotEmpty() }?.let { add(it.joinToString(" ")) }
             if (!target.editable) {
                 snapshot.descendants(target.index, maxDepth = 3)
                     .filter { !it.editable }

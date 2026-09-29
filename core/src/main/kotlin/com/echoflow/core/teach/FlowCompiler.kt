@@ -60,7 +60,7 @@ class FlowCompiler {
         // (No "changed nothing" filter: the coarse fingerprint can't see tab switches or list
         // updates, and on device it dropped a needed "Dishes" tab tap. Extra steps are cheaper.)
 
-        val steps = markFirstResult(teachingUtterance, buildSteps(appPackage, appLabel, kept, slotValues))
+        val steps = addToCartFromCommand(teachingUtterance, markFirstResult(teachingUtterance, buildSteps(appPackage, appLabel, kept, slotValues)))
         val template = template(teachingUtterance, slots)
         val flow = Flow(
             id = id,
@@ -78,14 +78,37 @@ class FlowCompiler {
         return CompileResult(flow, dropped)
     }
 
+    /**
+     * "…and add the first result to cart", but the app never reported the Add to Cart tap (Amazon's
+     * product page): the command says it, so add the step; replay finds the button by meaning.
+     */
+    private fun addToCartFromCommand(utterance: String, steps: List<Step>): List<Step> {
+        val t = TextNormalizer.tokens(utterance)
+        val says = "add" in t && CART_WORDS.any { w -> t.indexOf(w) > t.indexOf("add") }
+        if (!says) return steps
+        val recorded = steps.any { s ->
+            s is Step.Tap && (s.pick == "add_to_cart" ||
+                TextNormalizer.normalize(s.target.text ?: s.target.contentDescription).let { l -> CART_WORDS.any { l == "add to $it" } } ||
+                TextNormalizer.viewIdTokens(s.target.viewId).let { "add" in it && CART_WORDS.any { w -> w in it } })
+        }
+        if (recorded) return steps
+        return steps + Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Add to cart", className = "android.widget.Button"), pick = "add_to_cart")
+    }
+
     /** "…and add the first result to cart": the tap right after the search is positional. */
     private fun markFirstResult(utterance: String, steps: List<Step>): List<Step> {
         val t = TextNormalizer.tokens(utterance)
         val first = FIRST_PHRASES.any { TextNormalizer.containsPhrase(t, TextNormalizer.tokens(it)) }
         if (!first) return steps
         val typed = steps.indexOfLast { it is Step.TypeText }
-        val k = (typed + 1 until steps.size).firstOrNull { steps[it] is Step.Tap } ?: return steps
         if (typed < 0) return steps
+        val k = (typed + 1 until steps.size).firstOrNull { steps[it] is Step.Tap }
+        if (k == null) {
+            // The app never reported the result tap (Amazon): the command says it, so add it.
+            val slot = (steps[typed] as Step.TypeText).slot
+            val tap = Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = slot?.let { "{$it}" }), slot = slot, pick = "first")
+            return steps.toMutableList().also { it.add(typed + 1, tap) }
+        }
         return steps.toMutableList().also { it[k] = (steps[k] as Step.Tap).copy(pick = "first") }
     }
 
@@ -263,6 +286,7 @@ class FlowCompiler {
 
     companion object {
         const val DEBOUNCE_MS = 350L
+        private val CART_WORDS = listOf("cart", "bag", "basket", "trolley")
         private val FIRST_PHRASES = listOf("first result", "first one", "first item", "first product", "top result", "first option", "first search result")
         private val stepperWords = listOf("add one more", "increase", "increment", "add more", "plus")
 

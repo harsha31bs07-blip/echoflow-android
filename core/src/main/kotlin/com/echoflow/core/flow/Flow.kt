@@ -92,6 +92,7 @@ sealed class Step {
     ) : Step() {
         override val description get() =
             if (pick == "first") "Tap the first result" + (slot?.let { " for {$it}" } ?: "")
+            else if (pick == "add_to_cart") "Tap \"Add to cart\""
             else "Tap \"${target.display}\"" + (slot?.let { " (the one matching {$it})" } ?: "")
     }
 

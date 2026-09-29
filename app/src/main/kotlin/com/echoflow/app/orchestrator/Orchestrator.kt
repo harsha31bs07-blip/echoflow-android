@@ -94,7 +94,11 @@ class Orchestrator(context: Context) {
             val text = listen()
             if (before != Mode.TEACHING) _state.value = _state.value.copy(mode = Mode.IDLE)
             if (text.isNullOrBlank()) {
-                status(if (voice?.recognitionAvailable == false) "Speech recognition isn't available on this phone" else "I didn't catch that. Tap 🎤 and try again.")
+                status(when {
+                    voice?.recognitionAvailable == false -> "Speech recognition isn't available on this phone"
+                    voice?.lastCancelled == true -> "Okay, I stopped listening."
+                    else -> "I didn't catch that. Tap 🎤 and try again."
+                })
                 return@launch
             }
             handle(text)

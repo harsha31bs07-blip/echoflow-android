@@ -79,6 +79,7 @@ class EchoAccessibilityService : AccessibilityService() {
         voice = VoiceIO(this)
         voice.onStatus = { s -> EchoRuntime.orchestrator.status(s) }
         bubble = EchoBubble(this, EchoRuntime.orchestrator).also { it.show() }
+        voice.onSpeechUi = { e -> bubble?.onSpeech(e) }
         uiScope.launch { EchoRuntime.orchestrator.state.collect { bubble?.render(it) } }
         if (BuildConfig.DEBUG) {
             // Debug builds only: `adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "..."`

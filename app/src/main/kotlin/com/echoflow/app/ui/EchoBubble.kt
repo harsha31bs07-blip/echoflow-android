@@ -66,6 +66,30 @@ class EchoBubble(
     private var lastMode = Mode.IDLE
     private val collapse = Runnable { if (lastMode == Mode.IDLE && minimal()) setCollapsed(true) }
 
+    // Google Assistant-style listening panel while the microphone is open.
+    private val listening = ListeningPanel(service) { EchoRuntime.service?.voice?.cancelListening() }
+    private var listeningUi = false
+    private var lastQuestion: String? = null
+    private val endListening = Runnable {
+        listeningUi = false
+        root?.visibility = if (shownOnThisScreen) View.VISIBLE else View.GONE
+        updateGlow()
+    }
+
+    /** Speech events from [com.echoflow.app.voice.VoiceIO]: open, update and close the listening panel. */
+    fun onSpeech(e: com.echoflow.app.voice.SpeechUi) {
+        if (e is com.echoflow.app.voice.SpeechUi.Ready) {
+            main.removeCallbacks(endListening)
+            listeningUi = true
+            listening.show(lastQuestion.takeIf { lastMode == Mode.ASKING })
+            // The panel replaces the bubble and the glow while listening.
+            root?.visibility = View.INVISIBLE
+            updateGlow()
+        }
+        listening.on(e)
+        if (e is com.echoflow.app.voice.SpeechUi.Ended) main.postDelayed(endListening, 1_000)
+    }
+
     fun show() {
         if (root != null) return
 
@@ -160,11 +184,13 @@ class EchoBubble(
 
     fun setVisible(visible: Boolean) {
         shownOnThisScreen = visible
-        root?.visibility = if (visible) View.VISIBLE else View.GONE
+        root?.visibility = if (!visible) View.GONE else if (listeningUi) View.INVISIBLE else View.VISIBLE
         updateGlow()
     }
 
     fun hide() {
+        main.removeCallbacks(endListening)
+        listening.hide()
         main.removeCallbacks(collapse)
         glow.hide()
         stopPulse()
@@ -175,6 +201,7 @@ class EchoBubble(
     fun render(s: UiState) {
         if (root == null) return
         lastMode = s.mode
+        lastQuestion = s.question
         // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
         main.removeCallbacks(collapse)
         // (Longer messages stay up longer, so "Your turn. Everything is ready…" can be read.)
@@ -238,7 +265,7 @@ class EchoBubble(
 
     private fun updateGlow() {
         val color = when {
-            !minimal() || !shownOnThisScreen -> null
+            !minimal() || !shownOnThisScreen || listeningUi -> null
             lastMode == Mode.TEACHING || lastMode == Mode.LISTENING -> Palette.CORAL
             lastMode == Mode.RUNNING -> Palette.MINT
             lastMode == Mode.ASKING -> Palette.GOLD

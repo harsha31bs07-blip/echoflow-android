@@ -17,6 +17,20 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
+/** What the listening panel shows while the microphone is open. */
+sealed interface SpeechUi {
+    /** The microphone is open. */
+    data object Ready : SpeechUi
+    /** Voice level, 0 (silence) to 1 (loud). */
+    data class Level(val value: Float) : SpeechUi
+    /** The words heard so far. */
+    data class Partial(val text: String) : SpeechUi
+    /** The speaker stopped; recognising. */
+    data object Thinking : SpeechUi
+    /** Listening is over ([text] null: nothing understood or cancelled). */
+    data class Ended(val text: String?) : SpeechUi
+}
+
 /**
  * Push-to-talk speech recognition plus text-to-speech that can be awaited, so a question is
  * fully spoken before the microphone opens for the answer.
@@ -30,6 +44,12 @@ class VoiceIO(context: Context) {
 
     /** Partial transcript / listening state, for the bubble. */
     @Volatile var onStatus: (String) -> Unit = {}
+
+    /** Live speech events for the listening panel (main thread). */
+    @Volatile var onSpeechUi: (SpeechUi) -> Unit = {}
+
+    /** The listen() waiting for a result, so cancelListening() can end it at once. */
+    @Volatile private var waiting: CompletableDeferred<String?>? = null
 
     private val tts: TextToSpeech = TextToSpeech(app) { status ->
         if (status == TextToSpeech.SUCCESS) {
@@ -66,19 +86,33 @@ class VoiceIO(context: Context) {
     suspend fun listen(timeoutMs: Long = 9_000): String? = withContext(Dispatchers.Main) {
         if (!recognitionAvailable) return@withContext null
         val result = CompletableDeferred<String?>()
+        waiting = result
+        lastCancelled = false
         val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(app).also { recognizer = it }
         r.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = onStatus("Listening…")
+            override fun onReadyForSpeech(params: Bundle?) {
+                onStatus("Listening…")
+                onSpeechUi(SpeechUi.Ready)
+            }
             override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
+            // Roughly -2 dB (silence) to 10 dB (loud speech) -> 0..1.
+            override fun onRmsChanged(rmsdB: Float) = onSpeechUi(SpeechUi.Level(((rmsdB + 2f) / 12f).coerceIn(0f, 1f)))
             override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = onStatus("Thinking…")
+            override fun onEndOfSpeech() {
+                onStatus("Thinking…")
+                onSpeechUi(SpeechUi.Thinking)
+            }
             override fun onError(error: Int) { result.complete(null) }
             override fun onResults(results: Bundle?) {
-                result.complete(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull())
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                text?.let { onSpeechUi(SpeechUi.Partial(it)) }
+                result.complete(text)
             }
             override fun onPartialResults(partial: Bundle?) {
-                partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { onStatus("“$it”") }
+                partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let {
+                    onStatus("“$it”")
+                    onSpeechUi(SpeechUi.Partial(it))
+                }
             }
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
         })
@@ -91,10 +125,22 @@ class VoiceIO(context: Context) {
         r.startListening(intent)
         val text = withTimeoutOrNull(timeoutMs) { result.await() }
         if (text == null) r.cancel()
+        waiting = null
+        // Let the final words show for a moment before the panel goes.
+        onSpeechUi(SpeechUi.Ended(text))
         text
     }
 
-    fun cancelListening() = main.post { recognizer?.cancel() }
+    /** True when the last listen() ended because the user tapped ✕ (not silence). */
+    @Volatile var lastCancelled = false
+        private set
+
+    /** Stops listening now; the waiting listen() returns null straight away. */
+    fun cancelListening() = main.post {
+        if (waiting?.isActive == true) lastCancelled = true
+        recognizer?.cancel()
+        waiting?.complete(null)
+    }
 
     fun shutdown() {
         main.post { recognizer?.destroy(); recognizer = null }

@@ -1,4 +1,51 @@
-# Device test run: rubric T1–T14
+# Device test run: the official Theme 3 test cases
+
+**Device:** Samsung Galaxy S24 FE (SM-S721B), Android 15 / One UI. **Date:** 29 Sept 2026.
+**Build:** debug APK from `claude/elegant-einstein-c96kwl` (same code as the release build, plus the debug command channel).
+**How:** commands and answers went through the debug channel (`scripts/run.ps1`), which uses the same code path as speech. No order was placed and no payment was made in any run.
+
+**Stand-ins (the only differences from the judges' scripts):**
+- **Domino's → Brik Oven.** Domino's shows *"Outside delivery range"* for the test phone's address, so the same flow was taught with Brik Oven (menu items "Margherita Pizza" and "Briks Farmhouse Pizza"). The flow has a `{restaurant}` slot, so nothing is specific to either restaurant.
+- **T6** needs a saved **Work** address; the test account has only "Home" addresses, so T6 was checked in unit tests and on Swiggy (below), not yet on Zomato.
+- **T10 (Hindi):** Zomato ignores Android's per-app language (set to hi-IN, the UI stayed English), so the language change couldn't be reproduced. The equivalent "genuinely stuck" case (a dish the restaurant doesn't have) was run instead; the logged-out case is covered by a unit test (a login screen stops the run, says *"Your turn: please log in"*, and is reported as not succeeded).
+
+## Flows taught (live, by command + taps)
+
+| Test | Taught with | Saved flow |
+|---|---|---|
+| T1 | "Order a Margherita pizza from Brik Oven on Zomato." → *"I don't know how to … Want to teach me?"* → yes → taps: close location sheet, search, type the restaurant, open it, menu search, type "margherita", ADD, Add item (size sheet), Continue | `order a {item} pizza from {restaurant} on zomato`: open Zomato → type `{restaurant}` → menu search → type `{item}` → ADD → Continue. Confirmation: *"Learned: order a margherita pizza from brik oven on zomato. I saved 6 steps. You can change the item, restaurant."* |
+| T8 | "Search for wireless earbuds on Amazon and add the first result to cart." → yes → taps: search, type, first result, Add to Cart, Done | `search for {item} on amazon and add the first result to cart`: open Amazon → type `{item}` → first result → Add to cart. (Amazon doesn't report its result and Add to Cart taps; the command supplies those two steps.) |
+
+## Results
+
+| Test | Command (as the judges say it) | What happened on the phone | Result |
+|---|---|---|---|
+| **T1** | (teaching above) | Saved, confirmed aloud, visible in the Flow Inspector | ✅ |
+| **T2** | "Order a Margherita pizza from Brik Oven on Zomato." | Exact match (1.00), ran unattended: search → restaurant → menu search → ADD → size sheet (kept the preselected size) → cart. *"Your turn. Everything is ready for payment, total ₹285. I won't pay. Please check the order and pay yourself."* Cart: Brik Oven, Margherita Pizza ×1 | ✅ |
+| **T3** | "Get me a margherita from brik oven" | Matched without an LLM, ran directly to the cart (₹285) | ✅ |
+| **T3** | "I want to order margherita pizza on zomato" | Matched; the restaurant wasn't said, so it asked for it mid-run (B3), then continued to the cart (₹285) | ✅ |
+| **T4** | "Order a Farmhouse pizza from Brik Oven on Zomato." | Cart: **Briks Farmhouse Pizza** ×1 (not Margherita), ₹343 | ✅ |
+| **T5** | "Order two Margherita pizzas from Brik Oven." | *"set quantity to 2"* at the cart; cart showed **2**, ₹553 | ✅ |
+| **T6** | "…deliver to work" | Not run on Zomato (no Work address on the account). Parsing and matching are unit-tested; address switching was verified on Swiggy (Home ↔ Hostel) | ⚠️ needs a Work address |
+| **T7** | T2 with a Margherita already in the cart | *"Margherita was already in your cart, so I didn't add another one. Your turn. Everything is ready for payment, total ₹285."* Zomato's location pop-up on every launch and an empty sheet shell were also closed automatically | ✅ (autonomous) |
+| **T8** | (teaching above) | Second flow, second app, distinct from T1 | ✅ |
+| **T9** | "Search for a phone case on Amazon and add the first result to cart." | Searched, opened the **first product under "Results"** (skipping the AI summary and video ad), scrolled the product page, tapped Add to Cart: Amazon showed *"Added to cart"* (a phone case) | ✅ |
+| **T10** | T2 with a dish the restaurant doesn't have ("zzqx unicorn") | Asked *"I searched for "zzqx unicorn" at brik oven but couldn't find it. What should I get instead?"* 27.7 s after the command (the wait before asking has since been cut from 6 s to 4 s); no answer → *"…so I stopped at step 5 without adding anything."* No wrong taps | ✅ (proxy, see above) |
+| **T11** | every Zomato run above | Never tapped Place Order; every hand-off starts *"Your turn."* | ✅ |
+| **T12** | "Book a cab to the airport." | Score 0.30: *"I don't know how to … yet. Want to teach me?"* No flow ran | ✅ |
+| **T13** | "Order pizza." | Score 0.70 (the item is missing): asked *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | ✅ |
+| **T14** | "Did the last run succeed?" (after a failed run) | *"No, the last run didn't succeed. Order a margherita pizza from brik oven on zomato stopped at step 5 of 6 (Tap "ADD"). …"* After a hand-off it answers *"Yes, the last run succeeded…"* | ✅ |
+| **B1** | incoming call during teaching | Unit-tested (taps in the phone app are dropped); not staged on the phone | ⚠️ |
+| **B3** | "I want to order margherita pizza on zomato" | Asked which restaurant mid-run, then continued | ✅ |
+
+## Found and fixed on the phone during this run
+- Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
+- Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.
+- Unreported taps (Zomato suggestions, Amazon results and Add to Cart), clicks that are accepted but ignored, "Something went wrong / Try again" pages, stepper buttons labelled only with icon glyphs, web pages that ignore scroll commands, and an Amazon offer row mistaken for an address sheet.
+
+---
+
+# Earlier run (28–29 Sept): our own versions of T1–T14 on Swiggy
 
 **Device:** Samsung Galaxy S24 FE (SM-S721B), Android 15 / One UI.
 **Apps:** Swiggy, Amazon, Zomato (the versions installed on 28–29 Sept 2026).

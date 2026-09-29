@@ -13,20 +13,20 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 | **Presentation** | *(add link or file here)* |
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
 
-## What it does (all verified on a Galaxy S24 FE: [docs/TEST_RUN.md](docs/TEST_RUN.md))
+## What it does (the official test cases, run on a Galaxy S24 FE: [docs/TEST_RUN.md](docs/TEST_RUN.md))
 
-| You say | EchoFlow does | Rubric |
+| You say | EchoFlow does | Test |
 |---|---|---|
-| "teach order garlic bread", then you tap through Swiggy to the cart, then **Done** | Records the taps, drops accidental ones, turns "garlic bread" into a changeable `{item}`, saves an inspectable flow | T1, B1 |
-| "order garlic bread" | Opens Swiggy, searches, adds the right dish, opens the cart, then: *"Everything is ready at checkout, total ₹153. I won't pay."* | T2, T11 |
-| "can you get me some garlic bread" | Paraphrase → confirms, then replays (direct with a Gemini key) | T3 |
-| "order 2 choco lava cake to home" | New dish, quantity 2 at the cart, delivery address switched to your saved **Home** | T4, T5, T6 |
-| *(the cart already has another restaurant's food)* | *"Your cart already has other items… Should I replace them?"*; closes promo popups by itself | T7 |
-| "search running shoes on amazon", then "search wireless earbuds on amazon" | A second flow in a second app, for any search term | T8, T9 |
-| "order zzqx unicorn waffles" | *"I can't find it. I can see: …. Which one should I pick?"*, and never taps a wrong item | T10, B3 |
-| "book a cab to the airport" | *"I don't know how to do that yet. Want to teach me?"* | T12 |
-| "get me garlic bread" (with Swiggy and Zomato flows) | *"I know more than one way to do that… Which one?"* | T13 |
-| "what happened last time" | A spoken summary of the last run and where it stopped | T14 |
+| "Order a Margherita pizza from Domino's on Zomato.", then yes to *"Want to teach me?"*, then you tap through to payment | Records the taps, drops accidental ones, learns `{item}` and `{restaurant}`, says *"Learned: …"*, saves an inspectable flow | T1, B1 |
+| the same sentence again | Runs unattended to Zomato's cart: *"Your turn. Everything is ready for payment, total ₹…. I won't pay."* | T2, T11 |
+| "Get me a margherita from dominos" / "I want to order margherita pizza on zomato" | Same flow; when the restaurant isn't said, asks for it mid-run | T3, B3 |
+| "Order a Farmhouse pizza…", "Order two Margherita pizzas…", "…deliver to work" | New dish, quantity 2 at the cart, saved address switched | T4, T5, T6 |
+| *(the dish is already in the cart, or a pop-up appears)* | *"Margherita was already in your cart, so I didn't add another one."*; closes pop-ups and "Try again" error pages | T7 |
+| "Search for wireless earbuds on Amazon and add the first result to cart." (taught), then "…a phone case…" | A second flow in a second app; opens the first product under "Results" and adds it to the cart | T8, T9 |
+| *(the app can't find the dish, or you're logged out)* | *"I searched for "…" but couldn't find it. What should I get instead?"* within 30 s, or stops at a login screen: *"Your turn: please log in"*. Never taps the wrong thing | T10 |
+| "Book a cab to the airport." | *"I don't know how to … yet. Want to teach me?"* | T12 |
+| "Order pizza." | *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | T13 |
+| "Did the last run succeed?" | *"Yes, …"* or *"No, … stopped at step 5 of 6 (Tap "ADD") …"* | T14 |
 
 ## How to use
 1. Install the APK, open **EchoFlow**, and enable the accessibility service (steps below). Allow the microphone.
@@ -55,14 +55,14 @@ Optional: to match paraphrases without confirming first, put a free Gemini API k
 
 | Flow | App | Status |
 |---|---|---|
-| Food ordering: item, quantity, saved address | **Swiggy** | Verified end to end |
-| Food search | **Zomato** | Verified (search flow; used for T13) |
-| Shopping search | **Amazon** | Verified (search flow; T8/T9) |
+| Food ordering: item, restaurant, quantity, saved address | **Zomato** | Verified end to end (T1–T5, T7, T10–T14) |
+| Food ordering: item, quantity, saved address | **Swiggy** | Verified end to end (earlier run) |
+| Shopping: search and add the first result to cart | **Amazon** | Verified (T8, T9) |
 
 ## Project layout
 
 ```
-core/     Pure Kotlin/JVM, unit-tested (100 tests incl. real Swiggy screen fixtures):
+core/     Pure Kotlin/JVM, unit-tested (128 tests incl. real Swiggy screen fixtures and every official test phrase):
           safety (SafetyGuard, CHECKOUT/PAYMENT/OTP/LOGIN detection), gateway (the only way to act),
           teach (FlowCompiler), nlu (IntentMatcher), decision (DecisionLayer), replay (ReplayEngine),
           flow (weighted ElementResolver), runlog.

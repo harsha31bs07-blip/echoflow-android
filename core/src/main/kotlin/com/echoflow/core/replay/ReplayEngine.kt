@@ -595,7 +595,7 @@ class ReplayEngine(
      */
     private fun addressOptions(snap: ScreenSnapshot): Map<String, UiElement> {
         val all = snap.appElements().filter { it.visible }
-        // A real sheet heading: short, no digits ("Deliver to 560054" on every Amazon page isn't one).
+        // A real sheet heading: short, no digits ("Deliver to 560001" on every Amazon page isn't one).
         val heading = all.any { e ->
             e.label?.let { TextNormalizer.normalize(it) }?.let { l ->
                 ADDRESS_HEADINGS.any { l.contains(it) } && l.split(' ').size <= 6 && l.none(Char::isDigit)

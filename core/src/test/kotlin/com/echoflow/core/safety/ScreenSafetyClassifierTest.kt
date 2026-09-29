@@ -142,7 +142,7 @@ class ScreenSafetyClassifierTest {
     @Test fun `a navigation tab called Pay is not checkout`() {
         val s = screen(pkg = "in.amazon.mShop.android.shopping") {
             add { com.echoflow.core.model.UiElement(it, className = "android.widget.TextView", text = "Pay", viewId = "in.amazon.mShop.android.shopping:id/tiles_nav_item_text", bounds = com.echoflow.core.model.Bounds(0, 0, 200, 100)) }
-            text("Deliver to 560054")
+            text("Deliver to 560001")
         }
         assertEquals("SAFE", classifier.classify(s).label, classifier.classify(s).summary())
     }

@@ -292,7 +292,7 @@ class ReplayEngineTest {
         val amz = "in.amazon.mShop.android.shopping"
         val page: (Long) -> ScreenSnapshot = { id ->
             screen(amz, id) {
-                text("Deliver to 560054")
+                text("Deliver to 560001")
                 val offer = container(clickable = true); text("Buy for", offer); text("₹3,600 with SBI credit card and no cost EMI", offer)
                 button("Add to Cart")
             }

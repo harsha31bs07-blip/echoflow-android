@@ -227,6 +227,7 @@ class EchoAccessibilityService : AccessibilityService() {
     }
 
     private fun applyPrefs() {
+        bubble?.refreshMode()
         if (EchoRuntime.prefs.monitorEnabled) {
             val o = overlay ?: SafetyMonitorOverlay(this, ::dumpCurrent, ::rearm) { EchoRuntime.prefs.monitorEnabled = false }
                 .also { overlay = it }

@@ -22,6 +22,14 @@ class EchoPrefs(context: Context) {
         get() = sp.getString(KEY_GEMINI, "").orEmpty()
         set(value) = sp.edit().putString(KEY_GEMINI, value.trim()).apply()
 
+    /**
+     * Siri-style bubble: tucked into a small edge handle when idle, a glow around the screen
+     * while busy. Off = the full panel stays on screen.
+     */
+    var minimalBubble: Boolean
+        get() = sp.getBoolean(KEY_MINIMAL, true)
+        set(value) = sp.edit().putBoolean(KEY_MINIMAL, value).apply()
+
     /** The microphone permission was requested at least once (to spot "denied for good"). */
     var micAsked: Boolean
         get() = sp.getBoolean(KEY_MIC_ASKED, false)
@@ -36,5 +44,6 @@ class EchoPrefs(context: Context) {
         const val KEY_SPEAK = "speak"
         const val KEY_GEMINI = "gemini_key"
         const val KEY_MIC_ASKED = "mic_asked"
+        const val KEY_MINIMAL = "minimal_bubble"
     }
 }

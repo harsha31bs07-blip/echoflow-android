@@ -23,6 +23,9 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.os.Handler
+import android.os.Looper
+import com.echoflow.app.EchoRuntime
 import com.echoflow.app.orchestrator.Mode
 import com.echoflow.app.orchestrator.Orchestrator
 import com.echoflow.app.orchestrator.UiState
@@ -52,6 +55,16 @@ class EchoBubble(
     private lateinit var choiceScroll: HorizontalScrollView
     private var pulse: ObjectAnimator? = null
     private var atBottom = true
+
+    // Siri-style minimal mode: a small handle at the edge when idle, a glow while busy.
+    private lateinit var panel: LinearLayout
+    private lateinit var handle: FrameLayout
+    private val glow = EdgeGlow(service)
+    private val main = Handler(Looper.getMainLooper())
+    private var collapsed = false
+    private var shownOnThisScreen = true
+    private var lastMode = Mode.IDLE
+    private val collapse = Runnable { if (lastMode == Mode.IDLE && minimal()) setCollapsed(true) }
 
     fun show() {
         if (root != null) return
@@ -107,7 +120,7 @@ class EchoBubble(
             }
         }
 
-        val panel = object : LinearLayout(service) {
+        panel = object : LinearLayout(service) {
             // Never wider than ~300dp, so the panel can't cover the app's own buttons.
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val cap = kit.dp(MAX_WIDTH_DP)
@@ -127,24 +140,33 @@ class EchoBubble(
             addView(controls)
         }
 
+        handle = buildHandle()
+
         // A thin transparent margin gives the panel's shadow room to draw inside the window.
         root = FrameLayout(service).apply {
             val m = kit.dp(SHADOW_ROOM_DP)
             setPadding(m, m, m, m)
             clipToPadding = false
             addView(panel)
+            addView(handle)
         }
+        handle.visibility = View.GONE
         // Until the first render: just Speak and the helpers.
         done.visibility = View.GONE
         stop.visibility = View.GONE
         wm.addView(root, params())
+        if (minimal()) main.postDelayed(collapse, FIRST_COLLAPSE_MS)
     }
 
     fun setVisible(visible: Boolean) {
+        shownOnThisScreen = visible
         root?.visibility = if (visible) View.VISIBLE else View.GONE
+        updateGlow()
     }
 
     fun hide() {
+        main.removeCallbacks(collapse)
+        glow.hide()
         stopPulse()
         root?.let { runCatching { wm.removeViewImmediate(it) } }
         root = null
@@ -152,6 +174,11 @@ class EchoBubble(
 
     fun render(s: UiState) {
         if (root == null) return
+        lastMode = s.mode
+        // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
+        main.removeCallbacks(collapse)
+        if (!minimal() || s.mode != Mode.IDLE) setCollapsed(false) else if (!collapsed) main.postDelayed(collapse, IDLE_COLLAPSE_MS)
+        updateGlow()
         val listening = s.mode == Mode.LISTENING || (s.mode == Mode.TEACHING && s.status.startsWith("Listening"))
         val dotColor = when (s.mode) {
             Mode.TEACHING, Mode.LISTENING -> Palette.CORAL
@@ -182,6 +209,68 @@ class EchoBubble(
         s.choices.take(4).forEach { c -> choices.addView(choiceChip(c)) }
         choiceScroll.visibility = if (s.choices.isEmpty()) View.GONE else View.VISIBLE
         if (s.choices.isNotEmpty()) choiceScroll.scrollTo(0, 0)
+    }
+
+    // --- minimal mode ---------------------------------------------------------------------------
+
+    private fun minimal() = EchoRuntime.prefs.minimalBubble
+
+    /** Re-reads the minimal-mode setting (it changed in EchoFlow's settings). */
+    fun refreshMode() {
+        main.removeCallbacks(collapse)
+        if (!minimal()) setCollapsed(false) else if (lastMode == Mode.IDLE) main.postDelayed(collapse, IDLE_COLLAPSE_MS)
+        updateGlow()
+    }
+
+    private fun setCollapsed(value: Boolean) {
+        if (collapsed == value || root == null) return
+        collapsed = value
+        panel.visibility = if (value) View.GONE else View.VISIBLE
+        handle.visibility = if (value) View.VISIBLE else View.GONE
+        // The handle sits flush against the edge; the panel keeps room for its shadow.
+        val m = if (value) 0 else kit.dp(SHADOW_ROOM_DP)
+        root?.setPadding(m, m, m, m)
+        root?.let { runCatching { wm.updateViewLayout(it, params()) } }
+    }
+
+    private fun updateGlow() {
+        val color = when {
+            !minimal() || !shownOnThisScreen -> null
+            lastMode == Mode.TEACHING || lastMode == Mode.LISTENING -> Palette.CORAL
+            lastMode == Mode.RUNNING -> Palette.MINT
+            lastMode == Mode.ASKING -> Palette.GOLD
+            else -> null
+        }
+        glow.set(color)
+    }
+
+    /**
+     * The tucked-away bubble: a slim pill at the screen's edge (faint, so it doesn't get in the
+     * way) inside a full 48dp touch target. Tap: open and listen. Long-press: just open.
+     */
+    private fun buildHandle() = FrameLayout(service).apply {
+        val pill = View(service).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            background = kit.rounded(HANDLE_FILL, 4f, HANDLE_EDGE, 1f)
+            layoutParams = FrameLayout.LayoutParams(kit.dp(7), kit.dp(56), Gravity.CENTER_VERTICAL or Gravity.END).apply {
+                marginEnd = kit.dp(3)
+            }
+        }
+        addView(pill)
+        layoutParams = FrameLayout.LayoutParams(kit.dp(48), kit.dp(72))
+        contentDescription = "EchoFlow. Tap to speak, or long-press to open the controls."
+        isClickable = true
+        isLongClickable = true
+        setOnClickListener {
+            setCollapsed(false)
+            orchestrator.onSpeakPressed()
+        }
+        setOnLongClickListener {
+            setCollapsed(false)
+            main.removeCallbacks(collapse)
+            main.postDelayed(collapse, IDLE_COLLAPSE_MS)
+            true
+        }
     }
 
     // --- pieces -------------------------------------------------------------------------------
@@ -289,6 +378,13 @@ class EchoBubble(
 
     private companion object {
         const val MAX_WIDTH_DP = 300
+        /** Idle this long after a run or an answer: tuck into the edge handle. */
+        const val IDLE_COLLAPSE_MS = 6_000L
+        /** After the service starts, show the full panel briefly so people see where it is. */
+        const val FIRST_COLLAPSE_MS = 8_000L
+        /** Ink at ~55% with a light edge: visible on light and dark apps without shouting. */
+        const val HANDLE_FILL = (0x8C shl 24) or (Palette.INK and 0x00FFFFFF)
+        const val HANDLE_EDGE = 0x66FFFFFF
         const val MAX_CHOICE_CHARS = 28
         const val SHADOW_ROOM_DP = 6
         /** Palette.INK at ~92% opacity. */

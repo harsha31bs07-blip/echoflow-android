@@ -173,7 +173,7 @@ class MainActivity : Activity() {
         readyCard = kit.card(Palette.MINT_TINT) {
             addView(kit.row(
                 kit.iconCircle("✓", Palette.MINT, 32).apply { setTextColor(Color.WHITE) },
-                kit.text("You're all set. Tap the 🎤 bubble in any app and speak.", 15f, MINT_DARK, bold = true).apply {
+                kit.text("You're all set. In any app, tap the slim handle on the right edge and speak.", 15f, MINT_DARK, bold = true).apply {
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 },
             ))
@@ -328,6 +328,12 @@ class MainActivity : Activity() {
             ))
             keyStatus = kit.caption("")
             addView(keyStatus)
+            addView(kit.divider())
+            addView(kit.text("Bubble", 15f, Palette.TEXT, bold = true))
+            addView(switchRow("Tuck the bubble into the screen edge when idle, and glow the edges while working", EchoRuntime.prefs.minimalBubble) {
+                EchoRuntime.prefs.minimalBubble = it
+            })
+            addView(kit.caption("Tap the slim handle on the right edge to speak; long-press it to see the controls."))
             addView(kit.divider())
             addView(kit.caption("For demos and debugging."))
             addView(switchRow("Show safety monitor overlay", EchoRuntime.prefs.monitorEnabled) { EchoRuntime.prefs.monitorEnabled = it })

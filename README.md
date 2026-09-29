@@ -62,12 +62,12 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 
 ## How to use
 1. Install the APK, open **EchoFlow**, and enable the accessibility service (steps below). Allow the microphone.
-2. A small floating bubble appears in every app:
-   - **🎤** speak a command;
-   - **✓ Done** finish teaching;
-   - **■** stop;
-   - **E** open EchoFlow;
-   - **⇅** move the bubble.
+2. EchoFlow stays out of the way, like Siri on an iPhone. When idle it's only a **slim handle on the right edge** of the screen:
+   - **tap the handle** to speak a command;
+   - **long-press it** to open the controls;
+   - while EchoFlow is listening, teaching, working or asking, **the screen's edges glow** (coral: listening or recording; mint: working; gold: asking you) and the controls stay open;
+   - the controls are **🎤** speak, **✓ Done** finish teaching, **■** stop, **⌂** open EchoFlow and **⇅** move to the other corner;
+   - prefer the controls always on screen? Turn it off in **EchoFlow → Advanced → Bubble**.
 3. **Teach:** tap 🎤 and say *"teach order garlic bread"*. Do the task yourself in the app, and **stop before paying**. Then tap **✓ Done**.
 4. **Replay:** tap 🎤 and say the command, a paraphrase, or a different item, quantity or address.
 5. **Inspect:** EchoFlow → *Learned flows* → tap a flow to see its steps and changeable values.

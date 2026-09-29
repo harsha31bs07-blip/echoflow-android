@@ -55,7 +55,8 @@ class Orchestrator(context: Context) {
         },
     )
     private val matcher = IntentMatcher()
-    private val gemini = GeminiClient()
+    // A key pasted in the app wins; a build-time key (local.properties) is the fallback.
+    private val gemini = GeminiClient(apiKey = { EchoRuntime.prefs.geminiKey.ifBlank { com.echoflow.app.BuildConfig.GEMINI_API_KEY } })
     val flows = FlowStore(app)
     val runs = RunStore(app)
 
@@ -264,17 +265,17 @@ class Orchestrator(context: Context) {
                 Log.e(TAG, "replay crashed", e)
                 ReplayResult(RunStatus.HALTED, "Something went wrong: ${e.message}", 0, flow.steps.size, null, emptyList())
             }
-            finishRun(flow, utterance, slots, started, result, learnPhrase = c.targetApp == null)
+            finishRun(flow, utterance, slots, started, result, learnPhrase = c.targetApp == null, matchedBy = if (c.source == "llm") "understood with Gemini" else null)
         }
     }
 
-    private suspend fun finishRun(flow: Flow, utterance: String, slots: Map<String, String>, started: Long, r: ReplayResult, learnPhrase: Boolean = true) {
+    private suspend fun finishRun(flow: Flow, utterance: String, slots: Map<String, String>, started: Long, r: ReplayResult, learnPhrase: Boolean = true, matchedBy: String? = null) {
         runs.save(
             RunRecord(
                 id = flow.id, utterance = utterance, flowId = flow.id, flowName = flow.template, slots = slots,
                 startedAtMs = started, endedAtMs = System.currentTimeMillis(), status = r.status,
                 stoppedAtStep = r.stoppedAtStep, totalSteps = r.totalSteps, stepDescription = r.stepDescription,
-                message = r.message, events = r.events,
+                message = r.message, events = listOfNotNull(matchedBy) + r.events,
             ),
         )
         // Learn successful paraphrases so they match exactly next time (T3).

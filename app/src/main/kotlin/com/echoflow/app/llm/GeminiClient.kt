@@ -28,12 +28,13 @@ import java.net.URL
  * or no answer within [TIMEOUT_MS] — the local matcher then works alone.
  */
 class GeminiClient(
-    private val apiKey: String = BuildConfig.GEMINI_API_KEY,
+    /** Read on every call, so a key pasted in the app takes effect at once. */
+    private val apiKey: () -> String = { BuildConfig.GEMINI_API_KEY },
     private val model: String = BuildConfig.GEMINI_MODEL,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    val enabled: Boolean get() = apiKey.isNotBlank()
+    val enabled: Boolean get() = apiKey().isNotBlank()
 
     @Volatile var lastError: String? = null
         private set
@@ -82,7 +83,7 @@ class GeminiClient(
                     readTimeout = TIMEOUT_MS.toInt()
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("x-goog-api-key", apiKey)
+                    setRequestProperty("x-goog-api-key", apiKey())
                 }
                 val body = buildJsonObject {
                     put("contents", buildJsonArray {

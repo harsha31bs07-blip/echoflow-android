@@ -91,6 +91,7 @@ flowchart TD
 | Quantity over 10 | Confirms the number | T5 |
 | Otherwise | Runs. A missing value is asked for when its step is reached | T2–T4, B3 |
 
+- **The optional LLM.** With a Gemini key (pasted in the app under Advanced, or set at build time), commands that the local steps can't place are sent to Gemini with the list of learned flows (their templates, example phrasings and value names). Its pick and values are merged into the candidates and still go through the DecisionLayer. A run it helped with records the event "understood with Gemini".
 - **Learning phrasings.** After a successful run, a new phrasing is saved as an example, so it matches exactly next time.
 
 ---

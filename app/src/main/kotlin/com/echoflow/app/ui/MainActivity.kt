@@ -61,6 +61,8 @@ class MainActivity : Activity() {
     private lateinit var statusDetail: TextView
     private lateinit var statusActions: LinearLayout
     private lateinit var input: EditText
+    private lateinit var keyInput: EditText
+    private lateinit var keyStatus: TextView
     private lateinit var examplesTitle: TextView
     private lateinit var examplesBox: LinearLayout
 
@@ -278,6 +280,40 @@ class MainActivity : Activity() {
         column.addView(advancedToggle)
 
         advancedBox = kit.card {
+            // Optional LLM: the user's own key, so the APK ships without one.
+            addView(kit.text("Smarter matching (optional)", 15f, Palette.TEXT, bold = true))
+            addView(kit.caption("Paste a Gemini API key (free at aistudio.google.com) and EchoFlow understands looser wordings without asking \"Do you want me to…?\" first. " +
+                "Gemini only sees your command and the names of your learned flows, never the screen, and it never taps anything. The key stays on this phone."))
+            keyInput = EditText(this@MainActivity).apply {
+                hint = "Gemini API key"
+                setHintTextColor(Palette.MUTED)
+                setTextColor(Palette.TEXT)
+                textSize = 15f
+                setSingleLine()
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                minHeight = kit.dp(48)
+                setPadding(kit.dp(14), kit.dp(10), kit.dp(14), kit.dp(10))
+                background = kit.rounded(Color.WHITE, 14f, Palette.LINE, 1.5f)
+                setText(EchoRuntime.prefs.geminiKey)
+                contentDescription = "Gemini API key"
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(10) }
+            }
+            addView(keyInput)
+            addView(kit.row(
+                kit.primaryButton("Save key", Palette.MINT) {
+                    EchoRuntime.prefs.geminiKey = keyInput.text.toString()
+                    (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(keyInput.windowToken, 0)
+                    refresh()
+                }.apply { layoutParams = halfWidth(end = 4) },
+                kit.secondaryButton("Remove", Palette.RED) {
+                    EchoRuntime.prefs.geminiKey = ""
+                    keyInput.setText("")
+                    refresh()
+                }.apply { layoutParams = halfWidth(start = 4) },
+            ))
+            keyStatus = kit.caption("")
+            addView(keyStatus)
+            addView(kit.divider())
             addView(kit.caption("For demos and debugging."))
             addView(switchRow("Show safety monitor overlay", EchoRuntime.prefs.monitorEnabled) { EchoRuntime.prefs.monitorEnabled = it })
             addView(switchRow("Speak each screen classification", EchoRuntime.prefs.speakEnabled) { EchoRuntime.prefs.speakEnabled = it })
@@ -409,10 +445,16 @@ class MainActivity : Activity() {
             is GuardState.Tripped -> "handed off (${state.trip.kind})"
         }
         val snapshot = EchoRuntime.snapshots.current()
+        val geminiOn = EchoRuntime.prefs.geminiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
+        keyStatus.text = when {
+            EchoRuntime.prefs.geminiKey.isNotBlank() -> "✓ Gemini is on with your key."
+            geminiOn -> "✓ Gemini is on (key built into this APK)."
+            else -> "Off: EchoFlow matches commands on the phone and confirms looser wordings first."
+        }
         debugInfo.text = "Accessibility service: ${if (connected) "on" else "off"} · Mic: ${if (mic) "allowed" else "not allowed"}\n" +
             "Screen: ${snapshot?.packageName ?: "—"} · ${snapshot?.diagnostics?.summary() ?: "—"}\n" +
             "Verdict: ${EchoRuntime.guard.lastVerdict?.summary() ?: "—"} · Guard: $guard\n" +
-            "Paraphrase AI (Gemini): ${if (BuildConfig.GEMINI_API_KEY.isBlank()) "off — no key, local matching only" else "on (${BuildConfig.GEMINI_MODEL})"}" +
+            "Paraphrase AI (Gemini): ${if (!geminiOn) "off — no key, local matching only" else "on (${BuildConfig.GEMINI_MODEL})"}" +
             "\nRestricted settings hint: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "may apply" else "n/a"}"
         refreshFlowsAndRuns()
     }

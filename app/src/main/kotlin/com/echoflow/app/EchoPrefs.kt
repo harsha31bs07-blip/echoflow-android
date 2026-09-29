@@ -14,6 +14,14 @@ class EchoPrefs(context: Context) {
         get() = sp.getBoolean(KEY_SPEAK, false)
         set(value) = sp.edit().putBoolean(KEY_SPEAK, value).apply()
 
+    /**
+     * The user's own Gemini API key, pasted in the app (never built into the APK). Stored in this
+     * app's private preferences; backups are off (allowBackup="false"), so it stays on the phone.
+     */
+    var geminiKey: String
+        get() = sp.getString(KEY_GEMINI, "").orEmpty()
+        set(value) = sp.edit().putString(KEY_GEMINI, value.trim()).apply()
+
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) = sp.registerOnSharedPreferenceChangeListener(listener)
 
     fun unregister(listener: SharedPreferences.OnSharedPreferenceChangeListener) = sp.unregisterOnSharedPreferenceChangeListener(listener)
@@ -21,5 +29,6 @@ class EchoPrefs(context: Context) {
     private companion object {
         const val KEY_MONITOR = "safety_monitor"
         const val KEY_SPEAK = "speak"
+        const val KEY_GEMINI = "gemini_key"
     }
 }

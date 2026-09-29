@@ -127,7 +127,7 @@ This is an honest list of what EchoFlow can't do yet, or has only partly verifie
 ### L14. The optional LLM
 **What it does.** With a Gemini API key, loosely worded commands can match a flow without a confirmation question. Without a key, those commands still work, but EchoFlow asks "Do you want me to …?" first.
 
-**Limits.** The release APK has no key. The LLM only helps matching: it never sees the screen, never taps, and never affects safety.
+**Limits.** The release APK has no key built in; a key can be pasted in the app (Advanced → Smarter matching) and stays on the phone. The LLM only helps matching: it never sees the screen, never taps, and never affects safety.
 
 ### L15. Launching apps
 `LaunchApp` uses the app's launcher intent, the same one the home-screen icon sends. It's not a deep link, and it always starts from the app's home screen.

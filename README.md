@@ -72,7 +72,7 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 4. **Replay:** tap 🎤 and say the command, a paraphrase, or a different item, quantity or address.
 5. **Inspect:** EchoFlow → *Learned flows* → tap a flow to see its steps and changeable values.
 
-Optional: to match paraphrases without confirming first, put a free Gemini API key in `local.properties` as `GEMINI_API_KEY=…` before building. Without it, matching is fully on-device.
+Optional: to understand looser wordings without confirming first, open **EchoFlow → Advanced → Smarter matching** and paste a free Gemini API key (from aistudio.google.com). Gemini only sees the command and the names of learned flows, never the screen. Without a key, matching is fully on the phone. Developers can instead set `GEMINI_API_KEY=…` in `local.properties` before building.
 
 ## Design and documentation
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): speech-to-intent, UI-tree capture, generalisation, slot extraction, replay and safety, with diagrams

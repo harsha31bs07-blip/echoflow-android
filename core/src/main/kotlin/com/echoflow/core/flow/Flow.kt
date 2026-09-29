@@ -146,4 +146,11 @@ data class Flow(
     val createdAtMs: Long = 0,
 ) {
     fun slot(name: String): SlotDef? = slots.firstOrNull { it.name == name }
+
+    /** The same steps in another app of the same kind (B2): only the app to open changes. */
+    fun retargeted(pkg: String, label: String?): Flow = copy(
+        appPackage = pkg,
+        appLabel = label,
+        steps = steps.map { if (it is Step.LaunchApp) Step.LaunchApp(pkg, label) else it },
+    )
 }

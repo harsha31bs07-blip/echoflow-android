@@ -249,7 +249,8 @@ class Orchestrator(context: Context) {
 
     private suspend fun runFlow(c: Candidate, utterance: String) {
         if (!prepareGuard()) return
-        val flow = c.flow
+        // B2: the same steps in another app of the same kind (never saved over the taught flow).
+        val flow = c.targetApp?.let { c.flow.retargeted(it, DecisionLayer.appLabel(it)) } ?: c.flow
         val slots = c.slots.filterValues { it.isNotBlank() }
         _state.value = UiState(Mode.RUNNING, "Running “${DecisionLayer.describe(c)}”")
         say("Okay, ${DecisionLayer.describe(c)}.")
@@ -263,11 +264,11 @@ class Orchestrator(context: Context) {
                 Log.e(TAG, "replay crashed", e)
                 ReplayResult(RunStatus.HALTED, "Something went wrong: ${e.message}", 0, flow.steps.size, null, emptyList())
             }
-            finishRun(flow, utterance, slots, started, result)
+            finishRun(flow, utterance, slots, started, result, learnPhrase = c.targetApp == null)
         }
     }
 
-    private suspend fun finishRun(flow: Flow, utterance: String, slots: Map<String, String>, started: Long, r: ReplayResult) {
+    private suspend fun finishRun(flow: Flow, utterance: String, slots: Map<String, String>, started: Long, r: ReplayResult, learnPhrase: Boolean = true) {
         runs.save(
             RunRecord(
                 id = flow.id, utterance = utterance, flowId = flow.id, flowName = flow.template, slots = slots,
@@ -278,7 +279,7 @@ class Orchestrator(context: Context) {
         )
         // Learn successful paraphrases so they match exactly next time (T3).
         val norm = TextNormalizer.normalize(utterance)
-        if ((r.status == RunStatus.HANDED_OFF || r.status == RunStatus.COMPLETED) &&
+        if (learnPhrase && (r.status == RunStatus.HANDED_OFF || r.status == RunStatus.COMPLETED) &&
             flow.examples.none { TextNormalizer.normalize(it) == norm } && slots == flow.slots.associate { it.name to it.taughtValue }
         ) {
             flows.save(flow.copy(examples = flow.examples + norm))

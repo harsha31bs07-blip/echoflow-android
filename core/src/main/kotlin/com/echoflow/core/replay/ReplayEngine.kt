@@ -503,6 +503,10 @@ class ReplayEngine(
             resolver.resolve(snap, step.target, slots)
         })?.takeIf { r -> step.pick == null && (!isAddTap(step) || saysAdd(snap, r)) } // picks use their own rules
         is Step.TypeText -> ElementResolver(FIELD_SCORE).resolve(snap, step.target, slots, editableOnly = true)
+            // The learned field isn't here (another app, B2; or a redesigned screen), but exactly one
+            // text box is on screen: that's where the text goes.
+            ?: snap.appElements().filter { it.visible && it.editable && !it.password }.singleOrNull()
+                ?.let { Resolution(it.index, it.index, FIELD_SCORE, 0.0) }
         is Step.RepeatTap -> resolver.resolve(snap, step.target, slots)
         is Step.LaunchApp -> null
     }

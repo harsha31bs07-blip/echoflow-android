@@ -47,7 +47,7 @@ Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt
 - ✅ **Passed on the phone:** T1, T2, T3 (both phrases), T4, T5, T7 (handled without asking), T8, T9, T11, T12, T13, T14, B3. T10 was run as "stuck" (Zomato ignores a Hindi app language) and asked within 30 s.
 - ✅ **T6:** verified with the account's Work and Home addresses.
 - ⚠️ **B1:** staged incoming call not tried yet.
-- ❌ **B2:** Myntra not installed.
+- 🟡 **B2:** implemented (a flow taught on Amazon is offered on Myntra or Flipkart, confirmed first, same steps in the named app) and unit-tested; still to be run on the phone once Myntra or Flipkart is installed.
 - The demo script follows the required a→e order ([DEMO_SCRIPT.md](DEMO_SCRIPT.md)).
 
 ## P0: must do (tonight / tomorrow morning)

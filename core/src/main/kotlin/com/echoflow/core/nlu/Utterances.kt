@@ -39,6 +39,16 @@ object Utterances {
         "zepto" to "com.zeptoconsumerapp",
     )
 
+    /** Apps that do the same kind of job: a flow taught on one may be tried on another (bonus B2). */
+    val appCategory = mapOf(
+        "in.amazon.mShop.android.shopping" to "shopping", "com.flipkart.android" to "shopping", "com.myntra.android" to "shopping",
+        "in.swiggy.android" to "food", "com.application.zomato" to "food",
+        "com.grofers.customerapp" to "grocery", "com.zeptoconsumerapp" to "grocery",
+    )
+
+    /** The spoken name for an app package ("myntra"), or null. */
+    fun appWord(pkg: String): String? = appNames.entries.firstOrNull { it.value == pkg }?.key
+
     data class Parsed(
         val tokens: List<String>,
         val quantity: Int? = null,

@@ -157,6 +157,25 @@ class RubricPhrasesTest {
         assertEquals("item", (f.steps[2] as Step.Tap).slot)
     }
 
+    @Test fun `B2 an Amazon flow is offered on Myntra and Flipkart, confirmed first`() {
+        val amazon = "in.amazon.mShop.android.shopping"
+        val home = screen(amazon, id = 41) { edit(hint = "Search Amazon.in") }
+        val shop = FlowCompiler().compile(
+            "a3", "Search for wireless earbuds on Amazon and add the first result to cart.",
+            listOf(Fingerprints.type(home, 0, "wireless earbuds", 1_000)), "Amazon",
+        ).flow
+        for ((app, pkg) in listOf("Myntra" to "com.myntra.android", "Flipkart" to "com.flipkart.android")) {
+            val d = assertIs<Decision.Confirm>(decide("Search for a phone case on $app and add the first result to cart.", listOf(flow, shop)))
+            assertEquals(pkg, d.candidate.targetApp)
+            assertEquals("phone case", d.candidate.slots["item"])
+            assertTrue(d.question.startsWith("I learned this on Amazon.") && d.question.contains("on ${app.lowercase()}"), d.question)
+            val moved = shop.retargeted(pkg, app)
+            assertEquals(pkg, (moved.steps.first() as Step.LaunchApp).packageName)
+        }
+        // The flow for the named app wins when there is one; a food flow is never tried on Amazon.
+        assertIs<Decision.OfferTeach>(decide("Order a Margherita pizza from Domino's on Amazon.", listOf(flow)))
+    }
+
     @Test fun `T12 unknown intent offers to teach`() {
         assertIs<Decision.OfferTeach>(decide("Book a cab to the airport."))
     }

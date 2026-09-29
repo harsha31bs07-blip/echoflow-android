@@ -18,8 +18,10 @@ data class Candidate(
     val flow: Flow,
     val score: Double,
     val slots: Map<String, String>,
-    /** "exact", "template", "similar" or "llm". */
+    /** "exact", "template", "similar", "llm" or "cross-app". */
     val source: String,
+    /** Run this flow in another app of the same kind (bonus B2: an Amazon flow on Myntra). */
+    val targetApp: String? = null,
 ) {
     val missing: List<String> get() = flow.slots.map { it.name }.filter { slots[it].isNullOrBlank() }
 }
@@ -59,11 +61,34 @@ class IntentMatcher {
                 c.copy(score = minOf(c.score, 1 - llm.confidence))
             } else c
         }
-        return merged.sortedByDescending { it.score }
+        // A flow for the app the command names beats trying another app's flow there.
+        val named = Utterances.parse(norm).appMention?.let { Utterances.appNames[it] }
+        val nativeHit = merged.any { it.targetApp == null && it.flow.appPackage == named && it.score >= 0.45 }
+        return merged.filter { !(nativeHit && it.targetApp != null) }.sortedByDescending { it.score }
     }
 
-    private fun localScore(norm: String, flow: Flow): Candidate =
-        rawScore(norm, flow).let { c -> c.copy(slots = cleanSlots(flow, c.slots)) }
+    private fun localScore(norm: String, flow: Flow): Candidate {
+        val own = rawScore(norm, flow).let { c -> c.copy(slots = cleanSlots(flow, c.slots)) }
+        return crossApp(norm, flow)?.takeIf { it.score > own.score } ?: own
+    }
+
+    /**
+     * B2: "…on Myntra" with a flow taught on Amazon (same kind of app): read the command as if it
+     * named the taught app; if the shape fits, offer to run the same steps in the named app. Always
+     * confirmed first (score below the confirm line).
+     */
+    private fun crossApp(norm: String, flow: Flow): Candidate? {
+        val mention = Utterances.parse(norm).appMention ?: return null
+        val target = Utterances.appNames[mention] ?: return null
+        if (target == flow.appPackage) return null
+        val category = Utterances.appCategory[target] ?: return null
+        if (Utterances.appCategory[flow.appPackage] != category) return null
+        val own = Utterances.appWord(flow.appPackage) ?: return null
+        val asTaught = norm.split(' ').joinToString(" ") { if (it == mention) own else it }
+        val c = rawScore(asTaught, flow)
+        if (c.source != "template" && c.source != "exact") return null
+        return Candidate(flow, minOf(c.score, CROSS_APP_SCORE), cleanSlots(flow, c.slots), "cross-app", targetApp = target)
+    }
 
     private fun rawScore(norm: String, flow: Flow): Candidate {
         // 1. Exact example (T2): the taught slot values apply.
@@ -233,6 +258,7 @@ class IntentMatcher {
     companion object {
         const val SIMILAR_CAP = 0.75
         const val RELAXED_SCORE = 0.88
+        const val CROSS_APP_SCORE = 0.78
         private val ARTICLES = setOf("a", "an", "the", "some", "any")
         private val RELAX_DROP = setOf(
             "a", "an", "the", "some", "me", "please", "can", "could", "would", "will", "you", "i", "im", "like",

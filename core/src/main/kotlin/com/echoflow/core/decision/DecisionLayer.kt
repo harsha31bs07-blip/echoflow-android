@@ -43,6 +43,10 @@ object DecisionLayer {
             return Decision.Disambiguate(options, "I know more than one way to do that. ${names.joinToString("; ")}. Which one?")
         }
         val qty = top.slots["qty"]?.toIntOrNull()
+        top.targetApp?.let { target ->
+            val taughtOn = top.flow.appLabel ?: top.flow.appPackage.substringAfterLast('.')
+            return Decision.Confirm(top, "I learned this on $taughtOn. Do you want me to try the same steps on ${appLabel(target)}: ${describe(top)}? Say yes or no.")
+        }
         return when {
             qty != null && qty > MAX_QTY -> Decision.Confirm(top, "That's $qty items. Are you sure? Say yes to continue.")
             top.score < CONFIRM_BELOW || top.source == "similar" -> Decision.Confirm(
@@ -69,9 +73,19 @@ object DecisionLayer {
         // "order a margherita pizza" + qty 2 -> "order 2 margherita pizza" (the number replaces "a").
         if ("{qty}" !in c.flow.template) c.slots["qty"]?.takeIf { it != "1" }?.let { q -> s = s.replaceFirst(Regex("^(\\S+) (?:(?:a|an|one) )?"), "$1 $q ") }
         if ("{address}" !in c.flow.template) c.slots["address"]?.let { s += " to $it" }
-        val app = c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
+        // A cross-app run says the app it will use ("…on myntra", not "…on amazon").
+        c.targetApp?.let { t ->
+            val own = com.echoflow.core.nlu.Utterances.appWord(c.flow.appPackage)
+            val other = com.echoflow.core.nlu.Utterances.appWord(t)
+            if (own != null && other != null) s = s.split(' ').joinToString(" ") { if (it == own) other else it }
+        }
+        val app = c.targetApp?.let(::appLabel) ?: c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
         return if (s.contains(app, ignoreCase = true)) s else "$s on $app"
     }
+
+    /** "com.myntra.android" -> "Myntra". */
+    fun appLabel(pkg: String): String =
+        (com.echoflow.core.nlu.Utterances.appWord(pkg) ?: pkg.substringAfterLast('.')).replaceFirstChar { it.uppercase() }
 
     private fun ordinal(i: Int) = listOf("first", "second", "third").getOrElse(i) { "next" }
 }

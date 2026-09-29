@@ -1,168 +1,133 @@
-# Known Limitations and Open Design Questions
+# Known limitations
 
-These are the places where the architecture has **no clean answer yet**, or where it depends on heuristics that still need testing on real devices. Each entry states what fails, what the mitigation is, and what is still left open.
+This is an honest list of what EchoFlow can't do yet, or has only partly verified. Each entry says what fails, what EchoFlow does about it, and what is still open. Updated 29 Sept 2026, after the full run of the official tests on the phone ([TEST_RUN.md](TEST_RUN.md)).
 
-## L1. Opaque payment screens (T11)
-**Problem.** Some payment screens are WebViews, use `FLAG_SECURE`, or draw their own UI. They may expose almost no accessibility nodes, so keyword and field checks see nothing.
+## How far testing went
 
-**Mitigation.**
-- A WebView that fills most of the screen but exposes 3 or fewer readable nodes, or a screen with no readable content and no loading spinner, is classified `OPAQUE_UNKNOWN`, which fails closed. As implemented in step 1, this applies to *every* screen, not only after the last taught step. That is stricter than the design, so an unreadable promo screen partway through a flow will stop the replay too.
-- Payment-gateway and bank packages are on a denylist.
-- Replay always ends at `Boundary(PAYMENT)`.
+### L1. One phone, one account, stand-in restaurant
+**What was tested.** Everything on the phone was run on one **Samsung Galaxy S24 FE** (Android 15) with one Zomato, Amazon and Myntra account each.
+- **Domino's doesn't deliver to the test address,** so **Brik Oven** stood in for it in T1–T7. The flow is the same shape (search the restaurant → menu search → ADD → size sheet → cart).
+- **Other phones and brands** are untested. See L12 for known setup steps.
 
-**Still open.** These are heuristics. Every declared app must pass the safety-monitor validation described in [ARCHITECTURE.md § Build order](ARCHITECTURE.md#build-order-risk-first). Apps that fail are removed from the declared list.
+**Still open.** A judge's account, restaurant or app version may show screens we haven't seen. Every recovery is general (no app or restaurant names in the code), but untested layouts can still stop a run. When that happens it stops with a specific message rather than tapping something wrong.
 
-## L2. Cash-on-delivery commits without a payment screen (T11)
-**Problem.** If cash on delivery is preselected, tapping "Place order" places a real order, and no payment screen ever appears.
+### L2. Flows taught in apps we never tried
+**Problem.** Judges will teach new flows live. EchoFlow has been taught on Zomato, Amazon and Swiggy, and has replayed an Amazon flow on Myntra. Other apps may:
+- not report some taps to accessibility services (L7);
+- hide their screens from accessibility services (L8);
+- use pickers EchoFlow doesn't know (L10).
 
-**Mitigation.** COMMIT verbs are never tapped, even if one was demonstrated. The ActionRiskClassifier puts a button in one of two groups:
+**What EchoFlow does.** After teaching, it says how many steps it saved and which values can change. The Flow Inspector shows every step in plain words, so a missing step is visible at once and the flow can be taught again.
 
-- **Always blocked:** pay buttons ("Pay", "Pay ₹349", "Pay now"), "Place order", "Confirm order", "Confirm & pay", "Buy now", and slide-to-pay controls. Tapping one of these trips a hand-off.
-- **Allowed, flagged as moving toward payment:** "Proceed to pay", "Checkout", "Proceed to buy", "Continue to payment". The screen that follows is then checked.
+### L3. T10 "change the account language to Hindi"
+**Problem.** Zomato kept its UI in English when the app language was set to Hindi, so this exact judge action couldn't be reproduced.
+
+**What EchoFlow does.**
+- If most on-screen text is in another script, the stuck message says so: *"The app seems to be in a different language, so I can't find "…" (step N of M). Please switch the app back to English."*
+- A logged-out app trips the login check and stops with *"Your turn…"*. It is reported as **not** succeeded (T14).
+
+**Still open.** Both behaviours are unit-tested. On the phone, T10 was shown with the "dish can't be found" case, which asked within 30 s. Neither the Hindi path nor the logged-out path has been run on the phone.
+
+## Safety
+
+### L4. Opaque payment screens (T11)
+**Problem.** Some payment screens are WebViews, use `FLAG_SECURE`, or draw their own UI, and expose almost no accessibility nodes.
+
+**What EchoFlow does.**
+- A screen with no readable content that stays that way for 6 s is `OPAQUE_UNKNOWN`, and EchoFlow stops (fail closed).
+- Payment-gateway and wallet packages trip PAYMENT on sight.
+- Pay and order buttons are never tapped (L5).
+
+**Still open.** These checks are heuristics. They were checked on real Zomato, Amazon, Swiggy and Myntra screens only.
+
+### L5. Pay and order buttons are recognised by their words (T11)
+**Problem.** With cash on delivery preselected, "Place order" places a real order without any payment screen.
+
+**What EchoFlow does.** Every tap target is classified from its label, view id and child labels.
+- **Never tapped:** "Pay…", "Place order", "Confirm order", "Buy now", slide-to-pay controls. This holds even if one was demonstrated.
+- **Allowed but checked on the next screen:** "Proceed to pay", "Checkout".
+- **Gesture taps:** the tap-at-the-centre fallback is refused if *anything* at that spot could pay, order or delete (`GestureSafety`). That rule came from a real near-miss on Zomato, where the menu's Continue bar sat under Place Order.
+
+**Still open.** The word lists cover English and some Hindi. A pay button with unusual wording, on a screen with no other payment signal, would not be recognised.
+
+### L6. Menu and product pages that mention payments
+**Problem.** Offers such as "10% off with HDFC Credit Card", "Amazon Pay" or "Buy for ₹1,734 with Axis Bank card" mention payments on ordinary pages.
+
+**What EchoFlow does.**
+- Strong payment phrases only count in short labels.
+- Weaker ones (UPI, Cards…) need three distinct hits.
+- Offer rows are never treated as addresses or results.
+- Unit tests cover real menu, product, bag and cart pages.
+
+**Still open.** A page made of several short payment tiles could stop a replay early. That's safe, but it's a false stop.
+
+## Teaching and replay
+
+### L7. Taps some apps never report
+**Observed.** These taps produce no click event, so they aren't recorded while teaching:
+- Amazon's search box and search results;
+- Amazon's Add to Cart;
+- Zomato's search suggestions and result cards;
+- Swiggy's checkout bar.
+
+**What EchoFlow does.** Replay fills these gaps with general recoveries:
+- opens the search bar when the typing step's box is hidden;
+- presses Enter after typing;
+- opens the result matching what was typed;
+- when the command says "first result" or "to cart", the compiler adds those steps itself;
+- opens the cart at the end of a flow taught to finish there.
+
+**Still open.** A missing tap that fits none of these patterns breaks that flow. It shows in the Flow Inspector, and teaching again fixes it.
+
+### L8. Apps that hide their screen from accessibility services
+**Observed.** Swiggy showed only empty containers until the service declared `android:isAccessibilityTool="true"` (0 → 70 readable nodes). EchoFlow is a voice-control tool, a category Google's policy lists as eligible for that flag.
 
 **Still open.**
-- The verb list only covers English and Hindi, and wording differs between apps.
-- Some apps use a commit verb for a button that only navigates. Myntra's bag button "PLACE ORDER" opens address selection, and Amazon's "Buy Now" opens checkout. Flows through those buttons end with a hand-off at the button, which is safe but earlier than the real payment screen.
-- If an app's "Proceed to pay" charged a saved method directly, the only protection would be the next screen's check. UPI PIN, OTP and CVV prompts all trip.
-- Since validation round 2, a screen with one of these buttons but no credential fields is `CHECKOUT` (ARCHITECTURE § CHECKOUT screens). Only taught steps run there, and the button itself is still never tapped. The protection now depends on the commit-verb list recognising that button. An app whose one-tap pay button uses unusual wording, and whose screen has no other payment signal, would show as SAFE, not CHECKOUT, and its button would not be blocked. Every new target app's cart must be dumped and checked (SAFETY_FIXTURES.md).
+- An app that still hides its UI can't be taught; EchoFlow says the screen can't be read.
+- Play Protect may warn when installing a sideloaded app with this flag. Choose **More details → Install anyway**.
 
-## L3. Item-dependent flow shape (T4)
-**Problem.** Different items can lead through different screens. For example, Margherita may open a customization sheet while garlic bread doesn't, or opens a different one.
+### L9. Item-dependent screens
+**Problem.** Different items can lead through different screens. A Margherita opens a size sheet; another dish may not.
 
-**Mitigation.** When a taught screen is *missing*, the engine skips ahead by fingerprint lookahead.
+**What EchoFlow does.**
+- A sheet that appears only for the new item is handled: the preselected options are kept, and the message says so (*"I added farmhouse with the options that were already selected, ₹260."*).
+- A taught screen that doesn't appear is skipped by looking ahead.
+- A size sheet after "Add to bag" (Myntra) picks the only size or asks which one.
 
-**Still open.** When an *untaught* screen appears, the app cannot handle it on its own. It asks instead: "Garlic bread has size options — use the defaults?"
+**Still open.** Required choices with no default (for example "choose 2 toppings") make EchoFlow ask, not choose.
 
-## L4. Pre-existing cart detection (T7)
-**Problem.** Detecting a changed cart relies on the "facts" recorded at checkpoints, which are line items extracted from list screens.
+### L10. Quantity and address need a readable stepper and address list (T5, T6)
+**What EchoFlow does.**
+- **Quantity:** set at the cart with the item's − 1 + stepper. The count is re-read after each tap, and it never goes below 1.
+- **Address:** EchoFlow opens the app's delivery bar and picks the saved address named in the command.
 
-**Mitigation.**
-- This works for simple cart lists.
-- An LLM hint over a redacted element list helps on unfamiliar layouts.
-- The app always asks the user and never removes items on its own.
+**Still open.** Two cases don't work:
+- **A picker in a secure window:** Swiggy's cart-page picker shows black in screenshots, so EchoFlow can't read it. It uses the home-screen bar instead.
+- **Address names that don't match:** the saved label must match what's said ("work" ↔ "Work").
 
-**Still open.** Detection is weak when the cart is a collapsed summary or is drawn with custom views. Popup handling, the other half of T7, is clean.
+### L11. Cross-app runs (B2)
+**What EchoFlow does.** EchoFlow offers an Amazon-taught flow in Myntra or Flipkart only when the command names that app. It always confirms first, and runs the same steps with the same general recoveries. No LLM is involved.
 
-## L5. Latent steps for default values (T5, T6)
-**Problem.** If the teacher kept the default quantity of 1 or the preselected address, no tap was recorded. Without a recorded step, the app has nothing to parametrize.
+**Still open.**
+- Only verified on Myntra (search → first product → Add to Bag).
+- App kinds come from a small fixed map (shopping, food, grocery). A new app must be added to that map to be offered.
 
-**Mitigation.**
-- "Visible but untouched" inference: a slot value that is shown on a recorded screen still gets a step.
-- The teaching guide tells the judge to say slot values out loud ("…to Home"), so the value can be anchored to what is on screen.
+## Setup and voice
 
-**Still open.** This inference is new and has not been tested on real apps.
+### L12. Installation friction
+- **Android 11 or newer** is required. EchoFlow presses a search box's Enter key through an accessibility action that Android 11 introduced.
+- **Android 13 and later** block accessibility services in sideloaded APKs until **Allow restricted settings** is turned on (App info → ⋮). The README walks through it.
+- **Some brands (Xiaomi, Oppo, Vivo, Realme)** may close background services. Allow auto-start and turn off battery optimisation for EchoFlow.
 
-## L6. Language-changed recovery (T10)
-**Problem.** Once the app's language changes, the text features used to match elements no longer match.
+### L13. Voice
+- **Push-to-talk only.** Android's `SpeechRecognizer` has no always-on mode, so there is no wake word.
+- **Speech recognition** uses the phone's recognition service (usually the Google app's). Every question can also be answered by tapping a choice or typing.
+- **English commands only.** The matcher's word rules are English; a Hindi command won't match a taught flow.
 
-**Mitigation.**
-- Detection is clean: the script/language ratio differs from the one seen during teaching.
-- The app asks the user a specific question or reports the problem.
+### L14. The optional LLM
+**What it does.** With a Gemini API key, loosely worded commands can match a flow without a confirmation question. Without a key, those commands still work, but EchoFlow asks "Do you want me to …?" first.
 
-**Still open.** "Try matching by layout" (resource-id and structure only) is best-effort. Apps built with Jetpack Compose often have no resource-ids, which also weakens fingerprints in general.
+**Limits.** The release APK has no key. The LLM only helps matching: it never sees the screen, never taps, and never affects safety.
 
-## L7. Gaps in teaching capture
-**Problem.** Some custom or Compose views don't emit `TYPE_VIEW_CLICKED` events. The IME search key emits no event at all.
-
-**Mitigation.**
-- The compiler infers `SubmitIme` from "text changed, then the screen changed".
-- It infers "unknown transition" steps from differences between screens, and the teacher may need to confirm them.
-
-**Still open.** Inferred steps are less reliable than directly observed ones.
-
-## L8. App launch interpretation
-**Problem.** `LaunchApp` uses `getLaunchIntentForPackage`, the same intent the home screen launcher sends. It is not a deep link.
-
-**Mitigation.** If judges decide this is not allowed, there is a fallback: go to the home screen and tap the app icon through accessibility.
-
-**Still open.** That fallback is fragile, because it depends on the launcher's layout.
-
-## L9. The 30 s budget with a cloud LLM (T10)
-**Problem.** Cloud LLM latency eats into the 30-second limit for reporting that the app is stuck.
-
-**Mitigation.**
-- During a run, at most one LLM call per deviation, with a 4 s timeout.
-- The watchdog is purely local, so T10 holds even if the network goes down.
-
-**Still open.** With the network down, paraphrase matching (T3) falls back to asking for confirmation.
-
-## L10. Cross-app generalization (bonus)
-**Problem.** Replaying a flow learned on Amazon in Myntra depends on the LLM picking the right element for each semantic step.
-
-**Mitigation.** The user confirms first. The local resolver checks each pick, and every action still goes through the safety gate.
-
-**Still open.** This is the least reliable feature. Only a Myntra search and add-to-bag flow will be demoed.
-
-## L11. Installation friction
-**Problem.** Android 13 and later blocks accessibility services in sideloaded APKs until the user enables **Allow restricted settings** (App info → ⋮).
-
-**Mitigation.** The README and the in-app onboarding walk the judges through this step.
-
-## L12. Continuous listening
-**Problem.** `SpeechRecognizer` does not support always-on listening.
-
-**Mitigation.** Voice input is push-to-talk, using the overlay bubble. There is no wake word.
-
-## L13. False hand-offs from payment and offer text (T2–T9)
-**Problem.** Menu, product and home pages mention payment methods in offers ("10% off with HDFC Credit Card", "Amazon Pay", "Pay on Delivery").
-
-**Mitigation.**
-- Strong payment phrases only count in short labels (6 tokens or fewer).
-- Medium ones (UPI, Cards, Wallets…) only count in labels of 4 tokens or fewer, and 3 distinct ones are needed.
-- Unit tests cover typical menu, product, wallet-widget and bag pages.
-
-**Still open.** A page with several short payment-method tiles, such as a wallet-heavy home page, could still stop a replay early. Real dumps will show this ([SAFETY_FIXTURES.md](SAFETY_FIXTURES.md)).
-
-## L14. Guard is always watching (build step 1)
-**Problem.** In step 1 the SafetyGuard watches every screen, not just the screens during a replay. So when the user visits a payment screen by hand, it trips and stays tripped until someone taps **Re-arm** on a safe screen.
-
-**Mitigation.** In step 1 this is only visible in the monitor. The ReplayEngine (build step 3) must arm the guard when a run starts and check it before every step.
-
-## L15. Apps that hide their UI from accessibility services
-**Observed (validation round 1, Samsung phone).** Every Swiggy screen (home, menu, cart) exposed only 6–19 empty layout containers below `android:id/content`: no text, no buttons. SafetyGuard correctly failed closed (`OPAQUE_UNKNOWN`, see the fixtures in `fixtures/sensitive/opaque_unknown/`), but no flow could be taught or replayed on Swiggy in that state.
-
-**Possible causes.**
-1. On Android 14+, the app marks views `accessibilityDataSensitive`, which hides them from services that don't declare `isAccessibilityTool`.
-2. Content that renders without firing accessibility events (Lynx, Compose, React Native), so the last capture is an empty shell.
-3. The app draws its UI without accessibility nodes, or detects accessibility services and hides.
-
-**Mitigation.**
-- The service declares `android:isAccessibilityTool="true"`. EchoFlow is a voice-control tool, in the same category as Google's Voice Access. Google's policy lists "voice-based input tools" as eligible. **Validation round 2 confirmed this fixes Swiggy** (0 → 70 readable nodes).
-- **Risk:** Google says apps that declare the flag without being genuine accessibility tools are rejected by Play *and may be blocked by Play Protect on devices*. That includes sideloaded installs ([RESEARCH.md §3](RESEARCH.md#3-android-platform-constraints)). If a judge's phone shows a Play Protect warning while installing, choose **More details → Install anyway**. If Play Protect later disables EchoFlow, reinstall it with Play Protect scanning paused for the demo.
-- Unreadable screens are re-captured at about 0.5 s, 1 s and 2 s without waiting for events, and Dump always captures fresh.
-- The overlay shows `N nodes · M readable · K withheld` for every screen, so a hidden app is visible immediately.
-
-**Still open.** If an app is still unreadable with these changes, it can't be a target app. Flow 1 then moves to another food app (Zomato first), and the README's target list gets updated.
-
-## L16. Carts with a "Pay using" selector are still PAYMENT (T6)
-**Problem.** CHECKOUT only covers screens whose sole payment signal is the pay or place-order button. A cart that also shows a short "Pay using …" / "Pay with …" label (a Zomato-style cart, in the synthetic tests) still trips `PAYMENT` on that label. So the address and quantity controls on that cart can't be taught or replayed.
-
-**Mitigation.** None yet. This is on purpose: loosening one signal at a time, backed by real dumps, keeps T11 safe.
-
-**Still open.** Once Zomato's real cart has been dumped: if it looks like Swiggy's (a pay button plus a method selector, but no credential fields or method list), extend CHECKOUT to cover a "Pay using" selector too, with a fixture proving it.
-
-## L17. Taps some apps never report (teaching)
-**Observed.** Swiggy's checkout bar, Amazon's search box and Amazon's web search results didn't produce `TYPE_VIEW_CLICKED` events, so those taps weren't recorded.
-
-**Mitigation.** Replay bridges the common gaps generically:
-- a typing step whose field is hidden → tap the screen's "Search" box first;
-- after a search, when the next taught element isn't there → open the first result whose title contains `{item}`;
-- a flow taught to end at checkout → open "View Cart" / "Checkout".
-
-**Still open.** A missing tap that doesn't fit these patterns breaks that flow. The teacher sees the recorded steps in the Flow Inspector and can re-teach.
-
-## L18. Secure or unreadable pickers
-**Observed.** Swiggy's cart-page address picker is a secure window: it shows black in screenshots and exposes only its heading to accessibility.
-
-**Mitigation.** T6 uses the app's home-screen address bar instead, which opens a readable saved-address list.
-
-**Still open.** Apps whose only address picker is secure can't be driven for T6.
-
-## L19. Item-specific option pickers (sizes, customisations)
-**Observed.**
-- Amazon clothing and shoes require choosing a size before Add to Cart.
-- Some Swiggy dishes open a "Choose customization" sheet.
-
-**Mitigation.** Customisation sheets → EchoFlow asks *"add it with the default choices for ₹X?"*.
-
-**Still open.** Size pickers aren't handled. The Amazon flow is taught as *search* (it stops at the results) for that reason.
+### L15. Launching apps
+`LaunchApp` uses the app's launcher intent, the same one the home-screen icon sends. It's not a deep link, and it always starts from the app's home screen.

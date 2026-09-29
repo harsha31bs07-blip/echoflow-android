@@ -62,7 +62,7 @@ The demo should *show* the guard stopping on a real payment screen, and the diag
 
 **What this means for EchoFlow.**
 - Adopt the locator weights in **M12 ElementResolver**. Our minimum confidence to *tap* stays higher (0.7) because a wrong tap costs more here.
-- Adopt the matching cascade in **M9 IntentMatcher.** The regex step is exactly our "exact path"; for the LLM step we use Claude.
+- Adopt the matching cascade in **M9 IntentMatcher.** The regex step is exactly our "exact path"; the optional LLM step uses Gemini.
 - Adopt the deviation classes in **M13 StateClassifier.**
 - Use word-boundary matching for the dismiss whitelist.
 
@@ -89,7 +89,7 @@ The demo should *show* the guard stopping on a real payment screen, and the diag
 
 1. **README / LIMITATIONS:** document the Play Protect risk from `isAccessibilityTool`, and the steps judges should take.
 2. **M12:** use SkillDroid-style weighted locators (weights above) plus our 0.7 minimum confidence for taps.
-3. **M9:** a cascade of regex template → Claude intent matching (with confidence) → app filter.
+3. **M9:** a cascade of regex template → optional Gemini intent matching (with confidence) → app filter.
 4. **M13:** None / Minor / Moderate / Major deviation classes. Dismiss buttons are matched with word-boundary regex.
 5. **Replay:** skip missing steps by looking ahead. Record failures per step as data for recompiling.
 6. **Optional:** a screenshot fallback through `takeScreenshot()`, for opaque screens and the cross-app bonus.

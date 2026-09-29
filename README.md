@@ -13,6 +13,37 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 | **Presentation** | *(add link or file here)* |
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
 
+## Judges' quick start (3 minutes)
+1. Install [`release/EchoFlow.apk`](release/EchoFlow.apk) (Android 11+). Open **EchoFlow → Open Accessibility settings** and turn on **EchoFlow automation**. On Android 13+, if the toggle is greyed out, see [the steps below](#enable-the-accessibility-service-judges-read-this).
+2. Tap the floating **🎤** and say a task it doesn't know, e.g. *"Order a Margherita pizza from Domino's on Zomato."* It answers *"I don't know how to … yet. Want to teach me?"* → say **yes** → do it yourself in Zomato → tap **✓ Done** on the cart (never tap Pay). It says *"Learned: …"*.
+3. Say the same sentence, a paraphrase, or change the dish, the quantity ("two") or the address ("deliver to work"). It runs to the cart and says *"Your turn…"*.
+
+No account, server or API key is needed; everything runs on the phone.
+
+## Scorecard: the official Theme 3 tests
+
+Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md](docs/TEST_RUN.md#results)); every official phrase is also a unit test in [`RubricPhrasesTest`](core/src/test/kotlin/com/echoflow/core/nlu/RubricPhrasesTest.kt).
+
+| Test | Points | On the phone | Unit tests |
+|---|---|---|---|
+| T1 Teach (food) | 5 | ✅ Zomato, confirmation spoken, flow visible in the Flow Inspector | `RubricPhrasesTest` T1 · `FlowCompilerTest` |
+| T2 Exact replay | 5 | ✅ reached the cart unattended, same dish and restaurant | T2 |
+| T3 Paraphrase ×2 | 6 | ✅ both phrases | T3 |
+| T4 Slot: item | 4 | ✅ Farmhouse in the cart | T4 |
+| T5 Slot: quantity | 4 | ✅ cart showed 2 | T5 |
+| T6 Slot: address | 4 | ✅ switched to Work, and back to Home | T6 |
+| T7 Screen change | 6 | ✅ handled by itself (dish already in cart; location pop-up; empty sheet) | `ReplayEngineTest` |
+| T8 Teach (e-commerce) | 4 | ✅ Amazon, second flow | T8 |
+| T9 New search term | 4 | ✅ phone case added from the first result | T8 and T9 |
+| T10 Genuinely stuck | 5 | ✅ asked within 30 s ("couldn't find it, what instead?"); logged-out and other-language messages unit-tested | `ReplayEngineTest` |
+| T11 Credential boundary | 5 (−10) | ✅ never tapped Pay or Place Order; every stop starts *"Your turn."* | `SafetyGuardTest` · `ScreenSafetyClassifierTest` · `GestureSafetyTest` |
+| T12 Unknown intent | 3 | ✅ offers to learn it | T12 |
+| T13 Ambiguity | 2 | ✅ asks before running | T13 |
+| T14 Reporting | 3 | ✅ "Yes …" / "No … stopped at step 5 of 6 (…)" | T14 |
+| B1 Unneeded taps | +3 | ⚠️ unit-tested (a declined call's taps are dropped); not yet staged on the phone | B1 |
+| B2 Other similar app | +4 | ✅ Amazon flow run on Myntra: first result in the bag | B2 · `ReplayEngineTest` |
+| B3 Missing value mid-flow | +3 | ✅ asked for the restaurant, then continued | B3 |
+
 ## What it does (the official test cases, run on a Galaxy S24 FE: [docs/TEST_RUN.md](docs/TEST_RUN.md))
 
 | You say | EchoFlow does | Test |
@@ -44,7 +75,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 Optional: to match paraphrases without confirming first, put a free Gemini API key in `local.properties` as `GEMINI_API_KEY=…` before building. Without it, matching is fully on-device.
 
 ## Design and documentation
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, teach/replay pipelines, the DecisionLayer, SafetyGuard (diagrams)
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md): speech-to-intent, UI-tree capture, generalisation, slot extraction, replay and safety, with diagrams
 - [TEST_MATRIX.md](docs/TEST_MATRIX.md): rubric → modules
 - [TEST_RUN.md](docs/TEST_RUN.md): device results for T1–T14
 - [LIMITATIONS.md](docs/LIMITATIONS.md): known limitations (honest list)
@@ -56,9 +87,12 @@ Optional: to match paraphrases without confirming first, put a free Gemini API k
 
 | Flow | App | Status |
 |---|---|---|
-| Food ordering: item, restaurant, quantity, saved address | **Zomato** | Verified end to end (T1–T5, T7, T10–T14) |
-| Food ordering: item, quantity, saved address | **Swiggy** | Verified end to end (earlier run) |
+| Food ordering: item, restaurant, quantity, saved address | **Zomato** | Verified end to end (T1–T7, T10–T14, B3) |
 | Shopping: search and add the first result to cart | **Amazon** | Verified (T8, T9) |
+| The Amazon flow, run in a similar app | **Myntra** (Flipkart mapped, untested) | Verified (B2) |
+| Food ordering: item, quantity, saved address | **Swiggy** | Verified end to end (earlier run) |
+
+Nothing in the code is specific to these apps: any app that shows its screen to accessibility services can be taught. What's untested is listed in [LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Project layout
 
@@ -88,7 +122,7 @@ To build and test only the safety core, without the Android SDK: `./gradlew -Pec
 1. Open **EchoFlow** and tap **Open Accessibility settings**.
 2. Enable **EchoFlow automation**.
 3. **Android 13+ with a sideloaded APK:** the toggle may be greyed out ("restricted setting"). Go to **Settings → Apps → EchoFlow → ⋮ (top right) → Allow restricted settings**, then repeat step 2.
-4. **If Play Protect warns during install:** tap **More details → Install anyway**. EchoFlow declares itself an accessibility tool (it's operated by voice), and some apps, Swiggy for example, only show their screens to accessibility tools. See [LIMITATIONS.md](docs/LIMITATIONS.md) L15.
+4. **If Play Protect warns during install:** tap **More details → Install anyway**. EchoFlow declares itself an accessibility tool (it's operated by voice), and some apps, Swiggy for example, only show their screens to accessibility tools. See [LIMITATIONS.md](docs/LIMITATIONS.md) L8.
 
 ## Safety monitor (debug)
 In EchoFlow's *Safety monitor (debug)* section you can turn on a strip that shows how SafetyGuard classifies every screen:

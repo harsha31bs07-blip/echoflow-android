@@ -82,6 +82,9 @@ class ReplayEngine(
     /** Things the user should hear at the end ("I kept the size that was already selected."). */
     private val notes = mutableListOf<String>()
 
+    /** "Already in your cart" is decided at most once per run. */
+    private var alreadyInCartNoted = false
+
     /** The address sheet is answered at most once per run. */
     private var addressHandled = false
 
@@ -94,6 +97,7 @@ class ReplayEngine(
         lastTyped = null
         lastTypedValue = null
         addressHandled = false
+        alreadyInCartNoted = false
         customisationHandled = false
         val slots = slotValues.toMutableMap()
         val steps = flow.steps
@@ -147,6 +151,8 @@ class ReplayEngine(
             return result(statusFor(it.trip), it.trip.handOffMessage, steps.size - 1, steps)
         }
         if (final != null) {
+            // Taught to end at checkout or payment: the cart can arrive a moment after the last tap.
+            if (flow.endedAt in setOf("CHECKOUT", "PAYMENT") && !guard.classify(final).isCheckout) final = awaitCheckout(final)
             if (guard.classify(final).isCheckout) {
                 adjustQuantity(final, flow, slots)?.let { return result(it.status, it.message, steps.size - 1, steps) }
                 final = awaitCheckout(readable(host.current()) ?: final)
@@ -342,6 +348,25 @@ class ReplayEngine(
                     continue
                 }
             }
+            // T7: the dish is already in the cart, so its row shows "− 1 +" where "ADD" was. Don't
+            // add another; the cart step sets the quantity that was asked for.
+            if (isAddTap(step) && !alreadyInCartNoted) {
+                val item = slots["item"]
+                if (item != null && cartRow(snap, item) != null) {
+                    alreadyInCartNoted = true
+                    lastTypedValue = null
+                    events += "$item was already in the cart; didn't add another"
+                    notes += "$item was already in your cart, so I didn't add another one."
+                    // Tapping ADD would have closed the search keyboard, which hides the cart bar.
+                    if (snap.windows.any { it.type == WindowType.INPUT_METHOD }) {
+                        events += "closed the keyboard"
+                        act(PlannedAction.Back, GateContext(isRecovery = true), snap)
+                        host.awaitSettled(snap.id, 1_500)
+                    }
+                    return StepResult.Done
+                }
+            }
+
             // After a search, the taught next element isn't on the results list: open the first
             // result that matches what was just typed ({restaurant} or {item}): result taps that
             // weren't reported while teaching. Twice at most (Zomato: suggestion, then the card).
@@ -423,11 +448,11 @@ class ReplayEngine(
     }
 
     private fun resolve(step: Step, snap: ScreenSnapshot, slots: Map<String, String>): Resolution? = when (step) {
-        is Step.Tap -> if (step.slot != null) {
+        is Step.Tap -> (if (step.slot != null) {
             ElementResolver(SLOT_TAP_SCORE).resolve(snap, step.target, slots, requiredValue = slots[step.slot])
         } else {
             resolver.resolve(snap, step.target, slots)
-        }
+        })?.takeIf { r -> !isAddTap(step) || saysAdd(snap, r) }
         is Step.TypeText -> ElementResolver(FIELD_SCORE).resolve(snap, step.target, slots, editableOnly = true)
         is Step.RepeatTap -> resolver.resolve(snap, step.target, slots)
         is Step.LaunchApp -> null
@@ -463,6 +488,8 @@ class ReplayEngine(
             }
             is Step.LaunchApp -> ActionOutcome.Performed(snap, null)
         }
+        // The "open the matching result" recovery is only for the step right after typing.
+        if (outcome is ActionOutcome.Performed && step is Step.Tap) lastTypedValue = null
         return when (outcome) {
             is ActionOutcome.Performed -> tripped() ?: StepResult.Done
             is ActionOutcome.Blocked -> tripped()
@@ -684,6 +711,23 @@ class ReplayEngine(
         }
     }
 
+    /**
+     * A taught "ADD" tap may only land on something that says add (the button, or a clickable
+     * whose text says so): never on the dish name when the ADD button has become "− 1 +".
+     */
+    private fun saysAdd(snap: ScreenSnapshot, r: Resolution): Boolean {
+        val labels = (listOf(snap.elements[r.index], snap.elements[r.actionIndex]) + snap.descendants(r.actionIndex, maxDepth = 2))
+            .mapNotNull { it.label?.let(TextNormalizer::tokens) }
+        return labels.any { "add" in it }
+    }
+
+    /** A taught "ADD" / "Add to cart" tap. */
+    private fun isAddTap(step: Step): Boolean {
+        if (step !is Step.Tap || step.pick != null) return false
+        val label = TextNormalizer.normalize(step.target.text ?: step.target.contentDescription)
+        return label == "add" || label == "add to cart" || label == "add item" || label == "add to bag"
+    }
+
     /** A taught tap whose target is a search button or box (by its label, row text or view id). */
     private fun isSearchTap(step: Step): Boolean {
         if (step !is Step.Tap || step.slot != null || step.pick != null) return false
@@ -879,7 +923,7 @@ class ReplayEngine(
 
     private fun result(status: RunStatus, message: String, i: Int, steps: List<Step>) = ReplayResult(
         status = status,
-        message = (notes + message).joinToString(" "),
+        message = (notes + message).joinToString(" ") { it.replaceFirstChar(Char::uppercaseChar) },
         stoppedAtStep = i + 1,
         totalSteps = steps.size,
         stepDescription = steps.getOrNull(i)?.description,

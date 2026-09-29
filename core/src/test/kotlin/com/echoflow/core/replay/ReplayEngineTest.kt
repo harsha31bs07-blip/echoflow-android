@@ -224,4 +224,23 @@ class ReplayEngineTest {
         val blank = screen(pkg) { add { com.echoflow.core.model.UiElement(it, windowId = 1, className = "android.webkit.WebView", packageName = pkg, bounds = com.echoflow.core.model.Bounds(0, 0, 1080, 2400)) } }
         assertTrue(guard.gate(PlannedAction.Back, blank, GateContext(isRecovery = true)) is com.echoflow.core.safety.GateDecision.Block)
     }
+
+    @Test fun `dish already in the cart is not added again (T7)`() = runTest {
+        val inCart: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                val a = container(); text("Garlic Bread", a); text("₹99", a)
+                // The stepper sits on one line: − 1 +
+                fun cell(label: String, left: Int, clickable: Boolean) = add {
+                    com.echoflow.core.model.UiElement(it, a, 1, className = "android.widget.TextView", packageName = pkg, text = label,
+                        bounds = com.echoflow.core.model.Bounds(left, 900, left + 70, 960), clickable = clickable)
+                }
+                cell("−", 800, true); cell("1", 880, false); cell("+", 960, true)
+                val b = container(); text("Paneer Tikka", b); text("₹199", b); button("ADD", b)
+            }
+        }
+        val p = FakePhone(screens + ("results" to inCart), mapOf(("home" to "Search for restaurant and food") to "search"), "home")
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "garlic bread"))
+        assertTrue(r.events.any { it.contains("already in the cart") }, "$r / clicked=${p.clicked}")
+        assertTrue("+" !in p.clicked && "ADD" !in p.clicked, p.clicked.toString())
+    }
 }

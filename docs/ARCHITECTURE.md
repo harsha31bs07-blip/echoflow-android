@@ -67,11 +67,11 @@ flowchart TD
   A["Speech (Android SpeechRecognizer)<br/>or typed text"] --> M{"Meta-intent?<br/>teach · done · stop · continue ·<br/>did the last run succeed · what do you know"}
   M -->|yes| X["Handled by the Orchestrator"]
   M -->|no| E["1 · Exact: matches a saved example → 1.00"]
-  E -->|no| T["2 · Template: 'order a {item} pizza from {restaurant} on zomato'<br/>as a pattern; extracts the values → 0.95"]
+  E -->|no| T["2 · Template: 'order a {item} pizza from {restaurant} on zomato'<br/>as a pattern, which also extracts the values → 0.95"]
   T -->|no| R["3 · Relaxed template: ignores articles, qualifiers,<br/>plurals, 'please', app name → 0.88"]
   R -->|no| S["4 · Similarity: word overlap with slot values masked<br/>(capped at 0.75, so it always confirms)"]
   S --> C["5 · Cross-app (B2): the command names another app of the same kind<br/>('…on Myntra' for an Amazon flow) → 0.78, always confirmed"]
-  C --> G["6 · Optional Gemini: only if 1–3 found nothing;<br/>its pick is merged in, never trusted alone"]
+  C --> G["6 · Optional Gemini: only if 1–3 found nothing,<br/>its pick is merged in, never trusted alone"]
   G --> D["DecisionLayer"]
 ```
 
@@ -183,7 +183,7 @@ flowchart TD
   SAFE -->|yes| HAND["Stop: 'Your turn. …' (T11)"]
   SAFE -->|no| POP{"Pop-up, error page,<br/>options sheet, cart dialog?"}
   POP -->|"promo / location pop-up"| DIS["Close it (Close, Not now, ✕…)"] --> L
-  POP -->|"'Replace cart?'"| Q1["Ask the user; never auto-confirm"] --> L
+  POP -->|"'Replace cart?'"| Q1["Ask the user, never auto-confirm"] --> L
   POP -->|"'Something went wrong'"| RETRY["Tap Try again once"] --> L
   POP -->|"size / options sheet"| OPT["Keep the preselected choice,<br/>or ask which size"] --> L
   POP -->|no| FIND{"Find the step's element<br/>(weighted match ≥ 0.7)"}
@@ -194,7 +194,7 @@ flowchart TD
   REC -->|"result tap not reported while teaching"| RES["Open the result matching what was typed"] --> L
   REC -->|"dish already in cart"| SKIP["Don't add another (T7)"] --> S
   REC -->|"a later step is on screen"| AHEAD["Skip ahead"] --> S
-  REC -->|"off screen"| SCROLL["Scroll (3×; 8× on product pages)"] --> L
+  REC -->|"off screen"| SCROLL["Scroll (3×, or 8× on product pages)"] --> L
   REC -->|"searched value not found"| NF["Ask: 'I searched for … but couldn't find it.<br/>What should I get instead?' (T10)"]
   REC -->|"12 s with no progress"| STUCK["Stop with a specific reason:<br/>'I couldn't find … (step 5 of 6)' (T10)"]
 ```

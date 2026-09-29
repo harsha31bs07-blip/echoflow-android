@@ -21,8 +21,8 @@ android {
         applicationId = "com.echoflow"
         minSdk = 30 // AccessibilityAction.ACTION_IME_ENTER
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.1.3"
+        versionCode = 8
+        versionName = "1.1.4"
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProp("GEMINI_API_KEY")}\"")
         buildConfigField("String", "GEMINI_MODEL", "\"${localProp("GEMINI_MODEL", "gemini-flash-lite-latest")}\"")
     }

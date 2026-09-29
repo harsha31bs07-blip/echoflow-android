@@ -127,7 +127,14 @@ This is an honest list of what EchoFlow can't do yet, or has only partly verifie
 ### L14. The optional LLM
 **What it does.** With a Gemini API key, loosely worded commands can match a flow without a confirmation question. Without a key, those commands still work, but EchoFlow asks "Do you want me to …?" first.
 
-**Limits.** The release APK has no key built in; a key can be pasted in the app (Advanced → Smarter matching) and stays on the phone. The LLM only helps matching: it never sees the screen, never taps, and never affects safety.
+With a key, it also helps a replay that's stuck on a screen it wasn't taught ([ARCHITECTURE.md §5b](ARCHITECTURE.md)).
+
+**Limits.**
+- **No key built in.** The release APK has none; a key can be pasted in the app (Advanced → AI help) and stays on the phone.
+- **What Gemini sees when stuck.** A list of the screen's button and text labels, with typed text dropped and numbers and emails masked. It's never asked about payment, OTP, password, login or cart screens.
+- **Suggestions only.** Its suggestions are checked and gated like any other action, and it never decides safety.
+- **Suggestions can be wrong.** A suggestion is only followed if it's safe to tap, and at most twice per step. A wrong but safe suggestion (closing the wrong pop-up) costs a little time before the specific stuck message.
+- **It may be asked during a slow load.** On a screen that is only loading for more than 5 s, Gemini may be asked anyway. It usually answers "still loading", which costs one call.
 
 ### L15. Launching apps
 `LaunchApp` uses the app's launcher intent, the same one the home-screen icon sends. It's not a deep link, and it always starts from the app's home screen.

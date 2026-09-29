@@ -56,6 +56,15 @@ Tapping the edge handle and saying *"Order a Farmhouse pizza from Brik Oven on Z
 - **Spelling:** a spoken value a letter or two away from the taught one uses the taught spelling ("brick oven" → brik oven, "margarita" → margherita). The same command then reached Brik Oven's cart: Farmhouse, ₹343.
 - **Sheets:** bottom-sheet dialogs count as pop-ups, and an unlabelled ✕ (id `crossButton`) closes them. Asking for "Brick Oven Pizzeria" on purpose: the sheet was closed, the dish wasn't on that menu, EchoFlow asked what to get instead, and "nothing" stopped it without adding anything.
 
+## AI help when stuck (30 Sept, just after midnight)
+
+With a Gemini key pasted in the app, and EchoFlow's built-in pop-up rules switched off (a debug-build test switch, so only the AI helper could get past the pop-up):
+
+| Command | What happened |
+|---|---|
+| "order a farmhouse pizza from brick oven pizzeria on zomato" | Stuck at step 3 on Zomato's "Serving from exceptional distance" sheet. EchoFlow asked Gemini, which answered *dismiss the 'Okay, got it!' popup blocking the screen*. The button passed the safety check and was tapped, and the run carried on: menu search, no Farmhouse there, asked what to get instead, "nothing", stopped with nothing added. Event: `AI helper: closed "Okay, got it!"` |
+| "order a margherita pizza from brik oven on zomato" (rules back on) | Normal run to the cart (hand-off). Zomato's "Step back. Grab a snack." interstitial stayed up more than 5 s, so Gemini was asked once and said *still loading*; EchoFlow waited, then continued. |
+
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.

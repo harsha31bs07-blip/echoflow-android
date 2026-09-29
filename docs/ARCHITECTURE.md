@@ -43,6 +43,7 @@ flowchart LR
     RUNS -->|"Did the last run succeed?"| ORC
   end
   IM <-.->|"optional, advisory"| LLM["Gemini API"]
+  RE <-.->|"stuck only: one checked suggestion"| LLM
 ```
 
 The code is split so that the logic can be tested without a phone:
@@ -54,7 +55,9 @@ The code is split so that the logic can be tested without a phone:
 
 **Rules that every part follows:**
 1. **The only way to act is `ActionGateway.perform()`, and every call passes `SafetyGuard` first.** No other code can reach the service's action APIs.
-2. **The LLM is advisory.** Its answer is merged into the local matcher's candidates and still goes through the DecisionLayer. It never sees screen contents, and it never taps anything.
+2. **The LLM is advisory.**
+   - **For matching:** its answer is merged into the local matcher's candidates and still goes through the DecisionLayer.
+   - **For stuck replays** (§5b): it only suggests one recovery. EchoFlow checks the suggestion and passes it through the same safety gate as everything else. The LLM never makes a safety decision.
 3. **Fail closed.** A screen it can't read counts as unsafe. An element it isn't sure about is not tapped; it asks instead.
 4. **Sensitive content is never stored.** Password and OTP text is never recorded, and screen dumps are redacted (typed text dropped, digit runs and emails masked).
 
@@ -222,6 +225,25 @@ Scores are normalised over the features the descriptor actually has. A tap needs
 **Actions.** Actions are sent with `ACTION_CLICK`, `ACTION_SET_TEXT`, `ACTION_IME_ENTER` and `ACTION_SCROLL`. Some apps accept a click and ignore it. For those, a tap gesture at the element's centre is tried, but only if nothing at that spot could pay, order or delete (`GestureSafety`, which came from a real near-miss on Zomato's cart).
 
 ---
+
+## 5b. AI help when a replay is stuck (optional)
+
+Replay is deterministic, and every recovery above runs without an LLM. With a Gemini key, there is one more, last-resort option. The idea follows SkillDroid: replay templates without an LLM, and use the LLM only when the screen deviates. **The AI is the safety net, not the driver.**
+
+```mermaid
+flowchart TD
+  S["Step stuck ≥ 5 s,<br/>every built-in recovery tried"] --> K{"Gemini key set?<br/>Screen not payment / OTP /<br/>password / login / cart?"}
+  K -->|no| STOP["Specific stuck message (T10)"]
+  K -->|yes| REQ["Send: task, stuck step, what was tried,<br/>redacted list of on-screen elements<br/>(typed text dropped, digits and emails masked)"]
+  REQ --> ADV["Gemini picks ONE: close pop-up · this is the step's button ·<br/>back · scroll · wait · ask the user · stop"]
+  ADV --> CHK{"EchoFlow checks it:<br/>element was on screen? SAFE to tap?<br/>confidence ≥ 0.75 for 'this is the button'?"}
+  CHK -->|no| STOP
+  CHK -->|yes| GATE["ActionGateway → SafetyGuard → act"] --> NEXT["Carry on; the event is logged<br/>('AI helper: closed …')"]
+```
+
+- **Limits:** at most 2 suggestions per step, a 4.5 s timeout per call, and never on sensitive or checkout screens. An element the model wasn't shown, or one the risk check doesn't call SAFE, is refused. So the model can't make EchoFlow pay, place an order or delete anything.
+- **Asking you:** a question from the model is spoken like any other. "No" or "stop" ends the run without tapping anything else.
+- **On the phone:** with the built-in pop-up rules switched off (debug builds only), Zomato's "Serving from exceptional distance" sheet was closed on Gemini's suggestion, and the run carried on ([TEST_RUN.md](TEST_RUN.md)).
 
 ## 6. Safety (T11)
 

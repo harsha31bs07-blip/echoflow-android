@@ -56,6 +56,7 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 | "Search for wireless earbuds on Amazon and add the first result to cart." (taught), then "…a phone case…" | A second flow in a second app; opens the first product under "Results" and adds it to the cart | T8, T9 |
 | "Search for sunglasses on Myntra and add the first result to cart." (only ever taught on Amazon) | *"I learned this on Amazon. Do you want me to try the same steps on Myntra…?"* → yes → searches Myntra, opens the first product, taps Add to Bag (and the size sheet's Done) | B2 |
 | *(the app can't find the dish, or you're logged out)* | *"I searched for "…" but couldn't find it. What should I get instead?"* within 30 s, or stops at a login screen: *"Your turn: please log in"*. Never taps the wrong thing | T10 |
+| *(stuck on a screen it wasn't taught, with an optional Gemini key)* | Gemini sees the screen's labels (redacted) and suggests one way out, such as closing an unfamiliar pop-up. EchoFlow checks the suggestion is safe, then carries on. Never on payment or login screens | T7, T10 |
 | "Book a cab to the airport." | *"I don't know how to … yet. Want to teach me?"* | T12 |
 | "Order pizza." | *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | T13 |
 | "Did the last run succeed?" | *"Yes, …"* or *"No, … stopped at step 5 of 6 (Tap "ADD") …"* | T14 |

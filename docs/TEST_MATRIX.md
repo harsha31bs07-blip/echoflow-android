@@ -30,7 +30,7 @@ Where a row says ⚠️, the reason is in [LIMITATIONS.md](LIMITATIONS.md). File
 
 | Bonus | How EchoFlow does it | Unit tests | On the phone |
 |---|---|---|---|
-| **B1** Unneeded touches (+3) | `FlowCompiler` drops taps in other apps (a call's accept/decline buttons), double taps and detours, and reports how many it ignored | "B1 taps in the phone app during teaching are dropped" | ⚠️ not yet staged with a real call |
+| **B1** Unneeded touches (+3) | `FlowCompiler` drops taps in other apps (a call's accept/decline buttons), double taps and detours, and reports how many it ignored | "B1 taps in the phone app during teaching are dropped" | ✅ real call declined while teaching; its tap dropped |
 | **B2** Similar apps (+4) | `IntentMatcher.crossApp`: the command names a different app of the same kind → confirmed, then `Flow.retargeted` runs the same steps there; general recoveries find the search bar, first product and Add to bag | "B2 an Amazon flow is offered on Myntra and Flipkart…"; `ReplayEngineTest` "an Amazon flow on Myntra…" | ✅ Myntra |
 | **B3** Missing value mid-flow (+3) | A step needing a value the command didn't give asks when reached: *"Which restaurant should I order from? Last time it was brik oven."*, then continues | "B3 asks for the restaurant and accepts same as last time"; `ReplayEngineTest` "missing item asks mid-flow" | ✅ |
 

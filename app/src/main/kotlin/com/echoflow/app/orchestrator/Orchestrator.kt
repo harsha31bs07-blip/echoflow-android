@@ -227,7 +227,8 @@ class Orchestrator(context: Context) {
         flows.save(result.flow)
         val f = result.flow
         val slotText = if (f.slots.isEmpty()) "Nothing in it can be changed." else "You can change the " + f.slots.joinToString(", ") { if (it.name == "qty") "quantity" else it.name } + "."
-        val noise = if (result.dropped.isEmpty()) "" else " I ignored ${result.dropped.size} accidental or unneeded taps."
+        val n = result.dropped.size
+        val noise = when (n) { 0 -> ""; 1 -> " I ignored 1 accidental or unneeded tap."; else -> " I ignored $n accidental or unneeded taps." }
         status("Learned: “${f.examples.firstOrNull() ?: f.template}” (${f.steps.size} steps)")
         val learned = f.examples.firstOrNull() ?: f.template
         say((note?.let { "$it " } ?: "") + "Learned: $learned. I saved ${f.steps.size} steps. $slotText$noise You can see it in the EchoFlow app.")

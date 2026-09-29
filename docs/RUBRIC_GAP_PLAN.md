@@ -46,7 +46,7 @@ Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt
 ## Status (29 Sept, evening), after the phone run ([TEST_RUN.md](TEST_RUN.md))
 - ✅ **Passed on the phone:** T1, T2, T3 (both phrases), T4, T5, T7 (handled without asking), T8, T9, T11, T12, T13, T14, B3. T10 was run as "stuck" (Zomato ignores a Hindi app language) and asked within 30 s.
 - ✅ **T6:** verified with the account's Work and Home addresses.
-- ⚠️ **B1:** staged incoming call not tried yet.
+- ✅ **B1:** a real incoming call, declined while teaching, was dropped from the flow (after a recorder fix).
 - ✅ **B2:** a flow taught on Amazon is offered on Myntra or Flipkart (confirmed first) and run with the same steps there. Verified on the phone with Myntra: the first sunglasses result went into the bag.
 - The demo script follows the required a→e order ([DEMO_SCRIPT.md](DEMO_SCRIPT.md)).
 

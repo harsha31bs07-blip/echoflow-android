@@ -40,7 +40,7 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 | T12 Unknown intent | 3 | ✅ offers to learn it | T12 |
 | T13 Ambiguity | 2 | ✅ asks before running | T13 |
 | T14 Reporting | 3 | ✅ "Yes …" / "No … stopped at step 5 of 6 (…)" | T14 |
-| B1 Unneeded taps | +3 | ⚠️ unit-tested (a declined call's taps are dropped); not yet staged on the phone | B1 |
+| B1 Unneeded taps | +3 | ✅ a real incoming call declined while teaching: its tap was dropped (*"I ignored 1 accidental or unneeded tap"*) | B1 |
 | B2 Other similar app | +4 | ✅ Amazon flow run on Myntra: first result in the bag | B2 · `ReplayEngineTest` |
 | B3 Missing value mid-flow | +3 | ✅ asked for the restaurant, then continued | B3 |
 

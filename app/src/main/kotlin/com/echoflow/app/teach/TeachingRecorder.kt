@@ -39,7 +39,7 @@ class TeachingRecorder(
         val pkg = event.packageName?.toString() ?: return
         if (pkg == ownPackage || pkg.startsWith("com.android.systemui")) return
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> onClick(event)
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> onClick(event, pkg)
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> onText(event)
         }
     }
@@ -54,7 +54,7 @@ class TeachingRecorder(
         }
     }
 
-    private fun onClick(event: AccessibilityEvent) {
+    private fun onClick(event: AccessibilityEvent, pkg: String) {
         val bounds = Rect().also { event.source?.getBoundsInScreen(it) ?: return }
         val cls = event.className?.toString()
         android.util.Log.i("EchoTeach", "click event $cls $bounds text=${event.text} desc=${event.contentDescription}")
@@ -70,7 +70,11 @@ class TeachingRecorder(
             return
         }
         typingBounds = null
-        val a = Fingerprints.tap(snap, index, clock())
+        // A pop-up from another app (an incoming call's Decline button) can be matched against
+        // the app underneath. The event says where the tap really happened: keep that, so the
+        // compiler drops it as a tap in another app (bonus B1).
+        val a = Fingerprints.tap(snap, index, clock()).let { t -> if (t.packageName != pkg) t.copy(packageName = pkg) else t }
+        if (a.packageName != snap.packageName) android.util.Log.i("EchoTeach", "  -> tap in $pkg, not ${snap.packageName}")
         synchronized(actions) { actions += a }
         lastLabel = a.target.display
     }

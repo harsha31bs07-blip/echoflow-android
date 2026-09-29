@@ -34,7 +34,7 @@
 | **T12** | "Book a cab to the airport." | Score 0.30: *"I don't know how to … yet. Want to teach me?"* No flow ran | ✅ |
 | **T13** | "Order pizza." | Score 0.70 (the item is missing): asked *"Do you want me to order a pizza from a restaurant on zomato? I'll ask you which one."* | ✅ |
 | **T14** | "Did the last run succeed?" (after a failed run) | *"No, the last run didn't succeed. Order a margherita pizza from brik oven on zomato stopped at step 5 of 6 (Tap "ADD"). …"* After a hand-off it answers *"Yes, the last run succeeded…"* | ✅ |
-| **B1** | incoming call during teaching | Unit-tested (taps in the phone app are dropped); not staged on the phone | ⚠️ |
+| **B1** | incoming call during teaching, declined | First try: the Decline tap on the call pop-up was matched against YouTube's screen underneath and kept as a blank step. Fixed (the tap keeps the app its click came from). Second call: *"Learned: search for chess videos on youtube. I saved 3 steps. … I ignored 1 accidental or unneeded tap."* (dropped: tap in com.samsung.android.incallui) | ✅ |
 | **B2** | "Search for sunglasses on Myntra and add the first result to cart." (Myntra was never taught; the Amazon flow was) | Matched the Amazon flow as a cross-app candidate (0.78) and asked *"I learned this on Amazon. Do you want me to try the same steps on Myntra: …? Say yes or no."* → yes → opened Myntra's search bar, typed, pressed Enter, opened the first product (**Carlton London Women Oversized Sunglasses**), tapped the page's **Add to Bag**. Myntra's bag then held that exact product. The Amazon flow (T9) and the Zomato flow (T4) were re-run afterwards and still pass | ✅ |
 | **B3** | "I want to order margherita pizza on zomato" | Asked which restaurant mid-run, then continued | ✅ |
 

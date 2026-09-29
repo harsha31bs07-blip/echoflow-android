@@ -6,7 +6,6 @@
 
 **Stand-ins (the only differences from the judges' scripts):**
 - **Domino's → Brik Oven.** Domino's shows *"Outside delivery range"* for the test phone's address, so the same flow was taught with Brik Oven (menu items "Margherita Pizza" and "Briks Farmhouse Pizza"). The flow has a `{restaurant}` slot, so nothing is specific to either restaurant.
-- **T6** needs a saved **Work** address; the test account has only "Home" addresses, so T6 was checked in unit tests and on Swiggy (below), not yet on Zomato.
 - **T10 (Hindi):** Zomato ignores Android's per-app language (set to hi-IN, the UI stayed English), so the language change couldn't be reproduced. The equivalent "genuinely stuck" case (a dish the restaurant doesn't have) was run instead; the logged-out case is covered by a unit test (a login screen stops the run, says *"Your turn: please log in"*, and is reported as not succeeded).
 
 ## Flows taught (live, by command + taps)
@@ -26,7 +25,7 @@
 | **T3** | "I want to order margherita pizza on zomato" | Matched; the restaurant wasn't said, so it asked for it mid-run (B3), then continued to the cart (₹285) | ✅ |
 | **T4** | "Order a Farmhouse pizza from Brik Oven on Zomato." | Cart: **Briks Farmhouse Pizza** ×1 (not Margherita), ₹343 | ✅ |
 | **T5** | "Order two Margherita pizzas from Brik Oven." | *"set quantity to 2"* at the cart; cart showed **2**, ₹553 | ✅ |
-| **T6** | "…deliver to work" | Not run on Zomato (no Work address on the account). Parsing and matching are unit-tested; address switching was verified on Swiggy (Home ↔ Hostel) | ⚠️ needs a Work address |
+| **T6** | "Order a Margherita from Brik Oven, deliver to work." / "…deliver to home." | Opened Zomato's location picker from the address bar, picked **Work** from *Saved addresses* (event *"delivery address: Work"*). The test account's Work address is in another city where Brik Oven doesn't deliver, so EchoFlow then asked what to get instead and added nothing. "…deliver to home" switched back to **Home** and finished at the cart ("… to Home") | ✅ (switching verified both ways) |
 | **T7** | T2 with a Margherita already in the cart | *"Margherita was already in your cart, so I didn't add another one. Your turn. Everything is ready for payment, total ₹285."* Zomato's location pop-up on every launch and an empty sheet shell were also closed automatically | ✅ (autonomous) |
 | **T8** | (teaching above) | Second flow, second app, distinct from T1 | ✅ |
 | **T9** | "Search for a phone case on Amazon and add the first result to cart." | Searched, opened the **first product under "Results"** (skipping the AI summary and video ad), scrolled the product page, tapped Add to Cart: Amazon showed *"Added to cart"* (a phone case) | ✅ |

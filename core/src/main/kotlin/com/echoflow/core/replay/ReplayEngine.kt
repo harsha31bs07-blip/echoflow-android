@@ -441,7 +441,8 @@ class ReplayEngine(
             // (Not for a search button: scrolling hides it in some apps.)
             // Add to Cart sits a few screens down a product page: allow more scrolling there.
             val addToCartStep = step is Step.Tap && step.pick == "add_to_cart"
-            if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !isSearchTap(step)) {
+            // (Never for typing: text fields sit at the top, and the list there is suggestions.)
+            if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !isSearchTap(step) && step !is Step.TypeText) {
                 val list = scrollableList(snap)
                 if (list != null) {
                     scrolls++
@@ -594,13 +595,15 @@ class ReplayEngine(
                 // Skip icon descriptions and icon-font glyphs (no letters after normalising).
                 .filter { l -> !l.contains("icon", ignoreCase = true) && TextNormalizer.tokens(l).isNotEmpty() && TextNormalizer.normalize(l) !in setOf("selected", "default") }
                 .toList()
-            if (labels.size < 2) continue // a name plus the full address line
-            val name = labels.first().trim()
+            // Distances ("0 m", "291 km") and phone numbers aren't the address's name.
+            val named = labels.filterNot { l -> DISTANCE.matches(l.trim()) || l.contains("phone", ignoreCase = true) }
+            if (named.size < 2) continue // a name plus the full address line
+            val name = named.first().trim()
             val n = TextNormalizer.tokens(name)
             if (n.isEmpty() || n.size > 3 || NOT_ADDRESS.any { TextNormalizer.normalize(name).contains(it) }) continue
             // Offers and prices ("Buy for" / "₹1,734 with Axis Bank Credit Card") aren't addresses.
-            if (labels.take(2).any { SafetyLexicon.amountOf(TextNormalizer.tokens(it)) != null }) continue
-            if (labels.drop(1).none { it.length > 20 }) continue // must have a real address line
+            if (named.take(2).any { SafetyLexicon.amountOf(TextNormalizer.tokens(it)) != null }) continue
+            if (named.drop(1).none { it.length > 20 }) continue // must have a real address line
             out.putIfAbsent(name, row)
         }
         return out
@@ -617,8 +620,18 @@ class ReplayEngine(
         val snap = readable(host.current()) ?: return null
         val bar = snap.appElements().firstOrNull { e ->
             e.visible && TextNormalizer.normalize(e.label).let { l -> ADDRESS_BARS.any { l.startsWith(it) } }
-        } ?: return null // no address bar on this app's start screen; nothing to do
-        if (ElementResolver.valueMatch(want, bar.label, emptyList()) > 0) {
+        }
+            // Zomato: an unlabelled "location_container" at the top holding "Home" + the address.
+            ?: snap.appElements().firstOrNull { e ->
+                e.visible && e.clickable && e.bounds.top < snap.screenHeight / 5 &&
+                    TextNormalizer.viewIdTokens(e.viewId).any { it == "location" || it == "address" }
+            }
+            ?: return null // no address bar on this app's start screen; nothing to do
+        // Already there: the bar's own text names it ("Delivering to Work"), or its short name
+        // child is exactly it (Zomato's "Home" / "Work" title).
+        val alreadySet = ElementResolver.valueMatch(want, bar.label, emptyList()) > 0 ||
+            snap.descendants(bar.index, maxDepth = 4).any { d -> TextNormalizer.normalize(d.label) == TextNormalizer.normalize(want) }
+        if (alreadySet) {
             events += "delivery address already $want"
             return null
         }
@@ -1028,6 +1041,7 @@ class ReplayEngine(
     companion object {
         const val STEP_BUDGET_MS = 12_000L
         const val MAX_RESULT_OPENS = 3
+        private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
         private val NO_RESULTS = listOf(

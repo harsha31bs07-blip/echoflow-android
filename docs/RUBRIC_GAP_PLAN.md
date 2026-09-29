@@ -45,7 +45,7 @@ Core fixes are done and unit-tested: `core/src/test/.../nlu/RubricPhrasesTest.kt
 
 ## Status (29 Sept, evening), after the phone run ([TEST_RUN.md](TEST_RUN.md))
 - ✅ **Passed on the phone:** T1, T2, T3 (both phrases), T4, T5, T7 (handled without asking), T8, T9, T11, T12, T13, T14, B3. T10 was run as "stuck" (Zomato ignores a Hindi app language) and asked within 30 s.
-- ⚠️ **T6:** needs a saved **Work** address on the Zomato account.
+- ✅ **T6:** verified with the account's Work and Home addresses.
 - ⚠️ **B1:** staged incoming call not tried yet.
 - ❌ **B2:** Myntra not installed.
 - The demo script follows the required a→e order ([DEMO_SCRIPT.md](DEMO_SCRIPT.md)).

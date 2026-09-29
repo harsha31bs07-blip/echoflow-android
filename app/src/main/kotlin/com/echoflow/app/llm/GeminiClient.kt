@@ -3,6 +3,9 @@ package com.echoflow.app.llm
 import com.echoflow.app.BuildConfig
 import com.echoflow.core.flow.Flow
 import com.echoflow.core.nlu.LlmIntent
+import com.echoflow.core.replay.RecoveryAdvice
+import com.echoflow.core.replay.RecoveryPrompt
+import com.echoflow.core.replay.RecoveryRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -71,6 +74,21 @@ class GeminiClient(
             lastError = "bad JSON from model"
             null
         }
+    }
+
+    /**
+     * Help for a replay that's stuck on an unfamiliar screen (see [RecoveryAdvisor]). Gemini sees
+     * the task, the stuck step and a redacted list of on-screen elements (typed text dropped,
+     * long numbers and emails masked; never sent from payment, OTP, password or login screens).
+     * The engine checks and gates whatever comes back.
+     */
+    suspend fun adviseRecovery(request: RecoveryRequest): RecoveryAdvice? {
+        if (!enabled) return null
+        val text = generate(RecoveryPrompt.build(request)) ?: return null
+        val advice = RecoveryPrompt.parse(text, request.screen.map { it.id }.toSet())
+        android.util.Log.i("EchoGemini", "recovery advice for step ${request.stepNumber}: $advice")
+        if (advice == null) lastError = "unreadable recovery advice"
+        return advice
     }
 
     private suspend fun generate(prompt: String): String? = withTimeoutOrNull(TIMEOUT_MS) {

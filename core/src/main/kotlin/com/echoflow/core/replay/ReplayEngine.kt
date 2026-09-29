@@ -71,6 +71,10 @@ class ReplayEngine(
     private val guard: SafetyGuard,
     private val resolver: ElementResolver = ElementResolver(),
     private val stepBudgetMs: Long = STEP_BUDGET_MS,
+    /** Optional AI help when a step is stuck on an unfamiliar screen (see [consultAdvisor]). */
+    private val advisor: RecoveryAdvisor? = null,
+    /** Built-in pop-up closing. Off only in debug testing, to exercise the [advisor] on real pop-ups. */
+    private val popupRules: Boolean = true,
 ) {
     private val events = mutableListOf<String>()
 
@@ -221,6 +225,7 @@ class ReplayEngine(
         var openedResults = 0
         var lastOpen: String? = null
         var triedRetry = false
+        var advised = 0
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
@@ -356,7 +361,7 @@ class ReplayEngine(
             }
 
             // A popup covering the screen (promo, rating, location): dismiss via whitelist.
-            if (triedDismiss < 2) {
+            if (triedDismiss < 2 && popupRules) {
                 val dismiss = dismissButton(snap)
                 if (dismiss != null) {
                     triedDismiss++
@@ -480,12 +485,128 @@ class ReplayEngine(
                 }
             }
 
+            // Last resort, only when every recovery above has run out: an AI model looks at the
+            // redacted screen and suggests one thing to try. Checked here, gated as usual.
+            if (advisor != null && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS) {
+                advised++
+                when (val o = consultAdvisor(flow, steps, i, snap, slots)) {
+                    AdviceOutcome.Acted -> continue
+                    is AdviceOutcome.Finished -> return o.result
+                    AdviceOutcome.Nothing -> Unit
+                }
+            }
+
             // Nothing to do but wait for the screen (loading).
             host.awaitSettled(snap.id, 1_500)
         }
 
         val snap = host.current()
         return StepResult.Stop(RunStatus.HALTED, stuckMessage(step, i, steps.size, snap, slots))
+    }
+
+    private sealed interface AdviceOutcome {
+        data object Acted : AdviceOutcome
+        data object Nothing : AdviceOutcome
+        data class Finished(val result: StepResult) : AdviceOutcome
+    }
+
+    /**
+     * Asks the [advisor] what to do on a screen EchoFlow can't place, and does it only if it's
+     * safe: never on sensitive or checkout screens, only elements from the list it was shown,
+     * only taps the risk check calls SAFE, and a "this is the step's button" answer needs
+     * [ADVICE_TARGET_CONFIDENCE]. The action still goes through the safety gate.
+     */
+    private suspend fun consultAdvisor(flow: Flow, steps: List<Step>, i: Int, snap: ScreenSnapshot, slots: MutableMap<String, String>): AdviceOutcome {
+        val a = advisor ?: return AdviceOutcome.Nothing
+        val verdict = guard.classify(snap)
+        if (verdict.kinds.isNotEmpty() || verdict.isCheckout) return AdviceOutcome.Nothing
+        val items = RecoveryPrompt.screenItems(snap)
+        if (items.isEmpty()) return AdviceOutcome.Nothing
+        val step = steps[i]
+        fun fill(s: String) = slots.entries.fold(s) { acc, (k, v) -> acc.replace("{$k}", v) }
+        val request = RecoveryRequest(
+            task = fill(flow.template), step = fill(step.description), stepNumber = i + 1, totalSteps = steps.size,
+            app = flow.appLabel, tried = events.toList(), screen = items,
+        )
+        val advice = a.advise(request)
+        if (advice == null) {
+            events += "asked the AI helper; no answer"
+            return AdviceOutcome.Nothing
+        }
+        val ids = items.map { it.id }.toSet()
+        fun name(index: Int) = snap.elements[index].let { it.label ?: it.viewId?.substringAfter(":id/") ?: it.simpleClassName }
+        fun safeTap(index: Int): Int? {
+            if (index !in ids) return null
+            val target = Descriptors.clickableFor(snap, index)
+            val t = snap.elements[target]
+            val ok = t.clickable && !t.editable && !t.password &&
+                risk.assess(snap, t).risk == com.echoflow.core.safety.ActionRisk.SAFE &&
+                risk.assess(snap, snap.elements[index]).risk == com.echoflow.core.safety.ActionRisk.SAFE
+            return target.takeIf { ok }
+        }
+        return when (advice) {
+            is RecoveryAdvice.Dismiss -> {
+                val target = safeTap(advice.id)
+                if (target == null) {
+                    events += "AI helper suggested \"${if (advice.id in ids) name(advice.id) else "?"}\"; not safe to tap, ignored"
+                    AdviceOutcome.Nothing
+                } else {
+                    events += "AI helper: closed \"${name(advice.id)}\" (${advice.reason})"
+                    val o = act(PlannedAction.Click(snap.id, target), GateContext(isRecovery = true), snap)
+                    if (o is ActionOutcome.Performed) AdviceOutcome.Acted else AdviceOutcome.Nothing
+                }
+            }
+            is RecoveryAdvice.Target -> {
+                if (advice.id !in ids || advice.confidence < ADVICE_TARGET_CONFIDENCE) {
+                    events += "AI helper wasn't sure enough (${"%.2f".format(advice.confidence)}); ignored"
+                    return AdviceOutcome.Nothing
+                }
+                val e = snap.elements[advice.id]
+                val resolution = when {
+                    step is Step.Tap -> safeTap(advice.id)?.let { Resolution(advice.id, it, advice.confidence, 0.0) }
+                    step is Step.TypeText && e.editable && !e.password -> Resolution(advice.id, advice.id, advice.confidence, 0.0)
+                    else -> null
+                }
+                if (resolution == null) {
+                    events += "AI helper suggested \"${name(advice.id)}\"; not usable for this step, ignored"
+                    return AdviceOutcome.Nothing
+                }
+                events += "AI helper: \"${name(advice.id)}\" is this step (${advice.reason})"
+                when (val r = perform(step, snap, resolution, slots)) {
+                    is StepResult.Retry -> AdviceOutcome.Acted
+                    else -> AdviceOutcome.Finished(r)
+                }
+            }
+            is RecoveryAdvice.Back -> {
+                events += "AI helper: went back (${advice.reason})"
+                act(PlannedAction.Back, GateContext(isRecovery = true), snap)
+                AdviceOutcome.Acted
+            }
+            is RecoveryAdvice.Scroll -> scrollableList(snap)?.let { list ->
+                events += "AI helper: scrolled (${advice.reason})"
+                act(PlannedAction.Scroll(snap.id, list.index, forward = true), GateContext(isRecovery = true), snap)
+                AdviceOutcome.Acted
+            } ?: AdviceOutcome.Nothing
+            is RecoveryAdvice.Wait -> {
+                events += "AI helper: still loading (${advice.reason})"
+                host.awaitSettled(snap.id, 2_000)
+                AdviceOutcome.Acted
+            }
+            is RecoveryAdvice.Ask -> {
+                val answer = host.ask(advice.question)?.trim()
+                events += "asked (AI helper's question): ${advice.question} → ${answer ?: "no answer"}"
+                when {
+                    answer.isNullOrBlank() -> AdviceOutcome.Finished(StepResult.Stop(RunStatus.NO_ANSWER, "I asked: ${advice.question} I didn't get an answer, so I stopped at step ${i + 1}."))
+                    TextNormalizer.tokens(answer).any { it in setOf("no", "stop", "cancel", "nothing") } ->
+                        AdviceOutcome.Finished(StepResult.Stop(RunStatus.HALTED, "Okay, I stopped at step ${i + 1} without tapping anything else."))
+                    else -> AdviceOutcome.Acted // the user may have fixed the screen; look again
+                }
+            }
+            is RecoveryAdvice.Stop -> {
+                events += "AI helper: ${advice.reason.ifBlank { "nothing sensible to do here" }}"
+                AdviceOutcome.Nothing
+            }
+        }
     }
 
     private suspend fun launch(step: Step.LaunchApp, steps: List<Step>, slots: Map<String, String>): StepResult {
@@ -1128,6 +1249,10 @@ class ReplayEngine(
 
     companion object {
         const val STEP_BUDGET_MS = 12_000L
+        /** AI help: at most this many suggestions per step, only after the step was stuck this long. */
+        const val MAX_ADVICE = 2
+        const val ADVISE_AFTER_MS = 5_000L
+        const val ADVICE_TARGET_CONFIDENCE = 0.75
         const val MAX_RESULT_OPENS = 3
         private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */

@@ -101,6 +101,7 @@ class EchoAccessibilityService : AccessibilityService() {
                     }
                     java.io.File(filesDir, "debug_snap.txt").writeText("${s.packageName} ${s.activityName} ${EchoRuntime.guard.classify(s).label}\n$lines")
                 }
+                intent.hasExtra("popup_rules") -> EchoRuntime.debugPopupRulesOff = !intent.getBooleanExtra("popup_rules", true)
                 intent.getBooleanExtra("done", false) -> o.onDonePressed()
                 intent.getBooleanExtra("stop", false) -> o.onStopPressed()
                 else -> intent.getStringExtra("text")?.let(o::onTyped)

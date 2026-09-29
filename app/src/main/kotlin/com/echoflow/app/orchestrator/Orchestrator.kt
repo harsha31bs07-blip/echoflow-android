@@ -259,7 +259,10 @@ class Orchestrator(context: Context) {
         val started = System.currentTimeMillis()
         runJob = scope.launch(Dispatchers.Default) {
             val result = try {
-                ReplayEngine(AppReplayHost(this@Orchestrator), EchoRuntime.guard).run(flow, slots)
+                // With a Gemini key, a step stuck on an unfamiliar screen gets AI help (checked and gated).
+                val advisor = if (gemini.enabled) com.echoflow.core.replay.RecoveryAdvisor { gemini.adviseRecovery(it) } else null
+                val popupRules = !(com.echoflow.app.BuildConfig.DEBUG && EchoRuntime.debugPopupRulesOff)
+                ReplayEngine(AppReplayHost(this@Orchestrator), EchoRuntime.guard, advisor = advisor, popupRules = popupRules).run(flow, slots)
             } catch (e: CancellationException) {
                 ReplayResult(RunStatus.CANCELLED, "Stopped.", 0, flow.steps.size, null, emptyList())
             } catch (e: Exception) {

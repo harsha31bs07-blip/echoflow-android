@@ -296,9 +296,11 @@ class MainActivity : Activity() {
 
         advancedBox = kit.card {
             // Optional LLM: the user's own key, so the APK ships without one.
-            addView(kit.text("Smarter matching (optional)", 15f, Palette.TEXT, bold = true))
-            addView(kit.caption("Paste a Gemini API key (free at aistudio.google.com) and EchoFlow understands looser wordings without asking \"Do you want me to…?\" first. " +
-                "Gemini only sees your command and the names of your learned flows, never the screen, and it never taps anything. The key stays on this phone."))
+            addView(kit.text("AI help (optional)", 15f, Palette.TEXT, bold = true))
+            addView(kit.caption("Paste a Gemini API key (free at aistudio.google.com) and EchoFlow gets two extras: it understands looser wordings without asking \"Do you want me to…?\" first, " +
+                "and when a run gets stuck on a screen it wasn't taught (an unfamiliar pop-up, a renamed button) it asks Gemini what to try. " +
+                "Gemini sees your command, the names of your learned flows and, only when stuck, the screen's button and text labels (typed text and numbers removed; never payment or login screens). " +
+                "EchoFlow checks every suggestion and never pays. The key stays on this phone."))
             keyInput = EditText(this@MainActivity).apply {
                 hint = "Gemini API key"
                 setHintTextColor(Palette.MUTED)

@@ -137,6 +137,53 @@ class ReplayEngineTest {
         assertTrue(r.events.any { it.contains("closed popup") }, r.events.toString())
     }
 
+    /** A pop-up EchoFlow's own rules don't know: its only way out says "Continue browsing". */
+    private val oddPopup: (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) { val d = container(className = "android.app.Dialog"); text("Serving from exceptional distance", d); button("Continue browsing", d); button("Delete saved addresses", d) }
+    }
+
+    @Test fun `stuck on an unfamiliar pop-up without the AI helper stops without tapping`() = runTest {
+        val p = FakePhone(screens + ("odd" to oddPopup), mapOf(("odd" to "Continue browsing") to "home"), "odd")
+        val r = ReplayEngine(p, p.guard).run(flow().copy(steps = flow().steps.drop(1)), mapOf("item" to "garlic bread"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+    }
+
+    @Test fun `the AI helper closes an unfamiliar pop-up, then the flow continues`() = runTest {
+        val p = FakePhone(screens + ("odd" to oddPopup), mapOf(("odd" to "Continue browsing") to "home", ("home" to "Search for restaurant and food") to "search", ("results" to "ADD") to "cart"), "odd")
+        val asked = mutableListOf<RecoveryRequest>()
+        val advisor = RecoveryAdvisor { req ->
+            asked += req
+            RecoveryAdvice.Dismiss(req.screen.first { it.label == "Continue browsing" }.id, "the sheet's only way out")
+        }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(flow().copy(steps = flow().steps.drop(1)), mapOf("item" to "garlic bread"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals("Continue browsing", p.clicked.first(), p.clicked.toString())
+        assertTrue(r.events.any { it.startsWith("AI helper: closed \"Continue browsing\"") }, r.events.toString())
+        // It was told the task and the stuck step, and only what's on screen.
+        assertEquals(1, asked.size)
+        assertTrue(asked.single().step.contains("Search for restaurant and food"), asked.single().step)
+        assertTrue(asked.single().screen.any { it.label == "Delete saved addresses" })
+    }
+
+    @Test fun `the AI helper can never make EchoFlow tap something risky`() = runTest {
+        val p = FakePhone(screens + ("odd" to oddPopup), emptyMap(), "odd")
+        val advisor = RecoveryAdvisor { req -> RecoveryAdvice.Dismiss(req.screen.first { it.label?.startsWith("Delete") == true }.id, "clear it") }
+        val r = ReplayEngine(p, p.guard, stepBudgetMs = 8_000, advisor = advisor).run(flow().copy(steps = flow().steps.drop(1)), mapOf("item" to "garlic bread"))
+        assertTrue(p.clicked.none { it.startsWith("Delete") }, p.clicked.toString())
+        assertTrue(r.events.any { it.contains("not safe to tap") }, r.events.toString())
+        assertTrue(r.status != RunStatus.COMPLETED && r.status != RunStatus.HANDED_OFF, r.toString())
+    }
+
+    @Test fun `the AI helper's answers are read strictly`() {
+        val ids = setOf(3, 7)
+        assertEquals(RecoveryAdvice.Dismiss(7, "close"), RecoveryPrompt.parse("""{"action":"dismiss","id":7,"reason":"close"}""", ids))
+        assertEquals(null, RecoveryPrompt.parse("""{"action":"dismiss","id":99,"reason":"x"}""", ids)) // not on screen
+        assertEquals(null, RecoveryPrompt.parse("I think you should tap the button", ids))
+        assertEquals(RecoveryAdvice.Target(3, 0.9, "renamed"), RecoveryPrompt.parse("```json\n{\"action\":\"target\",\"id\":3,\"confidence\":0.9,\"reason\":\"renamed\"}\n```", ids))
+        assertTrue(RecoveryPrompt.parse("""{"action":"ask","question":"Should I close the offer?","reason":"unsure"}""", ids) is RecoveryAdvice.Ask)
+    }
+
     @Test fun `missing item asks mid-flow (B3)`() = runTest {
         val p = phone()
         p.answers.addLast("veg burger")

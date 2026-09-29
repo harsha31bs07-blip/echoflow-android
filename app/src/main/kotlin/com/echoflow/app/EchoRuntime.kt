@@ -23,6 +23,9 @@ object EchoRuntime {
     val bus = EchoBus()
     val snapshots = LiveSnapshotStore()
 
+    /** Debug builds only (adb test hook): turn off built-in pop-up closing to test the AI helper. */
+    @Volatile var debugPopupRulesOff = false
+
     @Volatile
     var service: EchoAccessibilityService? = null
         private set

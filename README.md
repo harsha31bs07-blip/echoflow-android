@@ -72,7 +72,15 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 4. **Replay:** tap 🎤 and say the command, a paraphrase, or a different item, quantity or address.
 5. **Inspect:** EchoFlow → *Learned flows* → tap a flow to see its steps and changeable values.
 
-Optional: to understand looser wordings without confirming first, open **EchoFlow → Advanced → Smarter matching** and paste a free Gemini API key (from aistudio.google.com). Gemini only sees the command and the names of learned flows, never the screen. Without a key, matching is fully on the phone. Developers can instead set `GEMINI_API_KEY=…` in `local.properties` before building.
+Optional **AI help**: open **EchoFlow → Advanced → AI help** and paste a free Gemini API key (from aistudio.google.com). Two things change:
+- **Looser wordings.** They're understood without asking "Do you want me to…?" first.
+- **Stuck screens.** When a run is stuck on a screen it wasn't taught, such as an unfamiliar pop-up or a renamed button, EchoFlow first tries all its own recoveries. Only then does it ask Gemini for one suggestion:
+  - Gemini sees the button and text labels, with typed text and numbers removed;
+  - it's never asked about payment, login, OTP or cart screens;
+  - EchoFlow follows a suggestion only if it passes the same safety checks as everything else, so it never pays, orders or deletes;
+  - every AI step is logged in the run's history.
+
+Without a key, everything runs on the phone. Developers can instead set `GEMINI_API_KEY=…` in `local.properties` before building.
 
 ## Accessibility and ease of use
 - **Voice first, but never voice only.** Every question can be answered out loud, by tapping a choice, or by typing.

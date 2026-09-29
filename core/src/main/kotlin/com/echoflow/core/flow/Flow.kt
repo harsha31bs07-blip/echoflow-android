@@ -96,7 +96,9 @@ sealed class Step {
         override val description get() =
             if (pick == "first") "Tap the first result" + (slot?.let { " for {$it}" } ?: "")
             else if (pick == "add_to_cart") "Tap \"Add to cart\""
-            else "Tap \"${target.display}\"" + (slot?.let { " (the one matching {$it})" } ?: "")
+            // "the button near …" is already a phrase: don't wrap it in quotes as if it were a label.
+            else "Tap " + target.display.let { d -> if (d.startsWith("the button near")) d else "\"$d\"" } +
+                (slot?.let { " (the one matching {$it})" } ?: "")
     }
 
     @Serializable
@@ -108,9 +110,13 @@ sealed class Step {
         val slot: String? = null,
         val activity: String? = null,
     ) : Step() {
-        override val description get() = "Type ${slot?.let { "{$it}" } ?: "\"$literal\""} into " +
+        override val description get() = "Type ${slot?.let { "{$it}" } ?: "\"$literal\""} into " + when {
+            // Apps' own names for their search box ("rs search", "Search for restaurants"): say it plainly.
+            target.display.contains("search", ignoreCase = true) -> "the search box"
             // A bare class name ("EditText") says nothing: call it what it is.
-            (target.display.takeIf { it != target.className.substringAfterLast('.') }?.let { "\"$it\"" } ?: "the text box")
+            target.display == target.className.substringAfterLast('.') -> "the text box"
+            else -> "\"${target.display}\""
+        }
     }
 
     /** Tap the same element (a "+" stepper) enough times that the quantity equals the slot value. */

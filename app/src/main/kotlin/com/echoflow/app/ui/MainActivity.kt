@@ -554,7 +554,8 @@ class MainActivity : Activity() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            addView(kit.text(Words.template(f.template, appLabel = f.appLabel), 16f, bold = true))
+            // The taught values ("margherita", "brik oven"), highlighted as the parts that can change.
+            addView(kit.text(Words.template(f.template, taught(f), f.appLabel), 16f, bold = true))
             addView(kit.chipRows(chips, perRow = 3))
         }
         val chevron = kit.text("›", 24f, Palette.MUTED).apply { setPadding(kit.dp(8), 0, 0, 0) }
@@ -563,10 +564,12 @@ class MainActivity : Activity() {
             minimumHeight = kit.dp(64)
             isClickable = true
             foreground = RippleDrawable(ColorStateList.valueOf(0x22000000), null, kit.rounded(Color.WHITE, 18f))
-            contentDescription = "${Words.template(f.template, appLabel = f.appLabel).toString().replace(Regex("\\s+"), " ").trim()}, in $app, ${f.steps.size} steps. Open details."
+            contentDescription = "${Words.template(f.template, taught(f), f.appLabel).toString().replace(Regex("\\s+"), " ").trim()}, in $app, ${f.steps.size} steps. Open details."
             setOnClickListener { openFlow(f) }
         }
     }
+
+    private fun taught(f: Flow) = f.slots.associate { it.name to it.taughtValue }
 
     /** Circle colour and letter colour per app. */
     private fun appColors(f: Flow): Pair<Int, Int> {

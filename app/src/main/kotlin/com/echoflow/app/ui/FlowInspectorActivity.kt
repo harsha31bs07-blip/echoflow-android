@@ -153,7 +153,17 @@ class FlowInspectorActivity : Activity() {
 
     private fun stepsCard(flow: Flow) = kit.card {
         addView(cardTitle("Steps"))
+        // Steps grouped into named phases ("Open Zomato", "Find the restaurant", …): easier to
+        // read than a flat list (arXiv 2606.20978 found the same for agents reading demos).
+        var phase: String? = null
+        var phaseNo = 0
         flow.steps.forEachIndexed { i, step ->
+            val p = phaseOf(step, phase, flow)
+            if (p != phase) {
+                phase = p
+                phaseNo++
+                addView(phaseHeader(phaseNo, p))
+            }
             addView(stepRow(i + 1, step))
         }
         val where = if (flow.endedAt.uppercase() in setOf("CHECKOUT", "PAYMENT")) "at checkout" else "at the end"
@@ -166,6 +176,24 @@ class FlowInspectorActivity : Activity() {
                 },
             ).apply { minimumHeight = kit.dp(44) }
         )
+    }
+
+    /** The phase a step belongs to; a plain tap continues the phase before it. */
+    private fun phaseOf(step: Step, previous: String?, flow: Flow): String = when (step) {
+        is Step.LaunchApp -> "Open ${step.appLabel ?: flow.appLabel ?: "the app"}"
+        is Step.TypeText -> step.slot?.let { "Find the ${Words.slotName(it)}" } ?: "Search"
+        is Step.RepeatTap -> "Set the quantity"
+        is Step.Tap -> when {
+            step.pick == "first" -> "Pick the first result"
+            step.pick == "add_to_cart" || step.target.display.trim().lowercase().let { it == "add" || it.startsWith("add to") || it == "add item" } -> "Add to cart"
+            previous == "Add to cart" || previous == "Set the quantity" -> "Go to the cart"
+            else -> previous ?: "Start"
+        }
+    }
+
+    private fun phaseHeader(number: Int, name: String) = kit.text("$number · $name", 13f, Palette.CORAL, bold = true).apply {
+        isAccessibilityHeading = true
+        setPadding(0, kit.dp(if (number == 1) 4 else 14), 0, kit.dp(2))
     }
 
     private fun stepRow(number: Int, step: Step): View {
@@ -216,9 +244,16 @@ class FlowInspectorActivity : Activity() {
 
     private fun statsCaption(flow: Flow): View {
         val n = flow.steps.size
-        val kept = "$n ${if (n == 1) "step" else "steps"}"
-        val first = if (flow.recordedActions > 0) "Recorded ${flow.recordedActions} actions, kept $kept." else "Kept $kept."
-        return kit.caption("$first Accidental taps are left out automatically.").apply {
+        val r = flow.recordedActions
+        fun count(k: Int, one: String, many: String) = "$k ${if (k == 1) one else many}"
+        val text = when {
+            r <= 0 -> "EchoFlow saved ${count(n, "step", "steps")}."
+            n > r -> "You showed ${count(r, "action", "actions")}. EchoFlow saved ${count(n, "step", "steps")}: some apps don't report every tap, " +
+                "so it worked out the rest (like opening the app) from what you said."
+            n < r -> "You made ${count(r, "action", "actions")}. EchoFlow kept the ${count(n, "step", "steps")} it needs and left out accidental or unneeded taps."
+            else -> "EchoFlow saved all ${count(n, "step", "steps")} you showed."
+        }
+        return kit.caption(text).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(kit.dp(8), kit.dp(4), kit.dp(8), kit.dp(12))
         }

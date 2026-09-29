@@ -1220,11 +1220,17 @@ class ReplayEngine(
     }
 
     private fun stuckMessage(step: Step, i: Int, total: Int, snap: ScreenSnapshot?, slots: Map<String, String>): String {
-        val what = stepTarget(step)?.fill(slots)?.display ?: "the next button"
+        val shown = stepTarget(step)?.fill(slots)?.display
+        // A label goes in quotes; a phrase ("the button near …", "the next button") doesn't.
+        val what = when {
+            shown == null -> "the next button"
+            shown.startsWith("the button near") -> shown
+            else -> "\"$shown\""
+        }
         val language = snap?.let { nonLatinShare(it) } ?: 0.0
         return when {
-            language > 0.5 -> "The app seems to be in a different language, so I can't find \"$what\" (step ${i + 1} of $total). Please switch the app back to English."
-            else -> "I couldn't find \"$what\" on this screen (step ${i + 1} of $total), so I stopped without tapping anything."
+            language > 0.5 -> "The app seems to be in a different language, so I can't find $what (step ${i + 1} of $total). Please switch the app back to English."
+            else -> "I couldn't find $what on this screen (step ${i + 1} of $total), so I stopped without tapping anything."
         }
     }
 

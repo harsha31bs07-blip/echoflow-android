@@ -925,7 +925,7 @@ class ReplayEngine(
                     !l.startsWith("view sponsored") && !l.startsWith("sponsored ad from") && !l.startsWith("results for") && !l.startsWith("showing results") &&
                         !l.startsWith("ref ") && !l.contains("http") && !l.contains("location") &&
                         !l.contains("filter") && !l.endsWith(" icon") &&
-                        // A delivery address line ("…, Bengaluru, Karnataka 560054, India") isn't a result.
+                        // A delivery address line ("…, Bengaluru, Karnataka 560001, India") isn't a result.
                         !PINCODE.containsMatchIn(e.label.orEmpty()) && !l.endsWith(" india")
                 }
             }

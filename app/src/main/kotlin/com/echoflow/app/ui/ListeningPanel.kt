@@ -52,7 +52,7 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
         main.removeCallbacks(closeLater)
         if (root != null) {
             prompt.text = question ?: "Listening…"
-            words.text = HINT
+            words.text = hint()
             words.setTextColor(HINT_COLOR)
             dots.level = 0f
             dots.mode = VoiceDots.Mode.WAITING
@@ -63,9 +63,9 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        words = kit.text(HINT, 22f, HINT_COLOR, bold = true).apply {
+        words = kit.text(hint(), 22f, HINT_COLOR, bold = true).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            maxLines = 3
+            maxLines = 4
             ellipsize = TextUtils.TruncateAt.START // keep the newest words in view
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             setPadding(0, kit.dp(10), 0, kit.dp(6))
@@ -141,6 +141,16 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
         }
     }
 
+    /** One of the user's own learned commands as the example, or how to teach one. */
+    private fun hint(): String {
+        val example = runCatching { EchoRuntime.orchestrator.flows.all() }.getOrNull()
+            ?.randomOrNull()?.examples?.firstOrNull()
+            // "…from brik oven on zomato" -> "…from brik oven": short enough to read at a glance.
+            ?.let { e -> if (e.length > 36) e.replace(Regex("\\s+(on|in|using)\\s+\\w+$"), "") else e }
+            ?.takeIf { it.length <= 52 }
+        return example?.let { "Try “${it.replaceFirstChar { c -> c.uppercase() }}”" } ?: HINT
+    }
+
     fun hide() {
         main.removeCallbacks(closeLater)
         val r = root ?: return
@@ -161,7 +171,7 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
     ).apply { gravity = Gravity.BOTTOM }
 
     private companion object {
-        const val HINT = "Say something like “Order a margherita pizza”"
+        const val HINT = "Say a command, or “teach” and a new one"
         const val SHEET = 0xFF161A33.toInt() // solid ink, so nothing shows through the words
         const val PROMPT = 0xFFC9CCE0.toInt()
         const val HINT_COLOR = 0xFF8D92AD.toInt()

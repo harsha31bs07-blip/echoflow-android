@@ -24,6 +24,7 @@ Everything below is on the branch `claude/elegant-einstein-c96kwl`. **`main`, th
   - the handle and the edge glow fade in and out;
   - a **haptic tick** on every button;
   - all of it turns off with "Remove animations".
+- **Listening panel:** its hint suggests one of your own learned commands ("Try “Search for lofi music on youtube”").
 - **Messages:**
   - progress shows real values ("Type brik oven into the text box");
   - the stuck message no longer nests quotes;

@@ -21,18 +21,24 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.echoflow.core.runlog.RunStatus
 
-/** EchoFlow's colours (the presentation deck's palette). */
+/**
+ * EchoFlow's colours (the presentation deck's palette). Coral, mint, red and the muted grey are
+ * the deck's hues darkened just enough for WCAG AA: white text on them, and them as text on the
+ * light backgrounds, all reach 4.5:1 (the launcher icon keeps the brighter deck colours).
+ */
 object Palette {
     const val INK = 0xFF161A33.toInt()
     const val INK_SOFT = 0xFF2A2F55.toInt()
-    const val CORAL = 0xFFFF6B4A.toInt()
-    const val MINT = 0xFF22B8A7.toInt()
+    const val CORAL = 0xFFC8401F.toInt() // deck FF6B4A: white on it was 2.8:1
+    const val MINT = 0xFF0F766E.toInt() // deck 22B8A7: white on it was 2.5:1
     const val GOLD = 0xFFF4B63F.toInt()
-    const val RED = 0xFFE5484D.toInt()
+    const val RED = 0xFFC52A30.toInt()
     const val BG = 0xFFF4F5FA.toInt()
     const val CARD = Color.WHITE
     const val TEXT = 0xFF161A33.toInt()
-    const val MUTED = 0xFF6B7085.toInt()
+    const val MUTED = 0xFF5B6075.toInt() // ≥ 5.4:1 on every background here
+    /** Gold is a fill only (INK text on it); this is gold as text. */
+    const val GOLD_TEXT = 0xFF8A5A00.toInt()
     const val LINE = 0xFFE3E5EE.toInt()
     const val MINT_TINT = 0xFFE3F6F3.toInt()
     const val CORAL_TINT = 0xFFFFECE7.toInt()
@@ -98,10 +104,15 @@ class Kit(val ctx: Context) {
         setBackgroundColor(Palette.INK)
         setPadding(dp(20), dp(20), dp(20), dp(24))
         if (onBack != null) addView(text("‹ Back", 15f, Palette.GOLD).apply {
-            setPadding(0, 0, 0, dp(8))
+            // A full-size touch target, announced as a button.
+            minHeight = dp(48)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, dp(16), dp(4))
+            contentDescription = "Back"
+            accessibilityDelegate = Kit.ROLE_BUTTON
             setOnClickListener { onBack() }
         })
-        addView(text(title, 26f, Color.WHITE, bold = true))
+        addView(text(title, 26f, Color.WHITE, bold = true).apply { isAccessibilityHeading = true })
         subtitle?.let { addView(text(it, 14f, 0xFFC9CCE0.toInt()).apply { setPadding(0, dp(6), 0, 0) }) }
     }
 
@@ -113,7 +124,11 @@ class Kit(val ctx: Context) {
         setLineSpacing(dp(2).toFloat(), 1f)
     }
 
-    fun heading(value: String) = text(value, 18f, bold = true).apply { setPadding(0, dp(20), 0, dp(8)) }
+    /** A section title; marked as a heading so TalkBack users can jump between sections. */
+    fun heading(value: String) = text(value, 18f, bold = true).apply {
+        setPadding(0, dp(20), 0, dp(8))
+        isAccessibilityHeading = true
+    }
 
     fun body(value: CharSequence) = text(value, 15f)
 
@@ -156,7 +171,7 @@ class Kit(val ctx: Context) {
         setTextColor(color)
         background = pressable(rounded(Color.WHITE, 24f, color, 1.5f))
         stateListAnimator = null
-        minHeight = dp(46)
+        minHeight = dp(48)
         setPadding(dp(18), dp(10), dp(18), dp(10))
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
         setOnClickListener { onClick() }
@@ -174,7 +189,13 @@ class Kit(val ctx: Context) {
             marginEnd = dp(6)
             topMargin = dp(6)
         }
-        onClick?.let { c -> setOnClickListener { c() } }
+        onClick?.let { c ->
+            // Tappable chips get a full 48dp target and are announced as buttons.
+            minHeight = dp(48)
+            gravity = Gravity.CENTER_VERTICAL
+            accessibilityDelegate = ROLE_BUTTON
+            setOnClickListener { c() }
+        }
     }
 
     /** A round icon holder with an emoji or symbol. */
@@ -194,6 +215,16 @@ class Kit(val ctx: Context) {
 
     fun space(heightDp: Int) = View(ctx).apply {
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(heightDp))
+    }
+
+    companion object {
+        /** Makes TalkBack say "button" for a tappable TextView. */
+        val ROLE_BUTTON = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = Button::class.java.name
+            }
+        }
     }
 
     fun divider() = View(ctx).apply {
@@ -248,7 +279,7 @@ object Words {
         RunStatus.HANDED_OFF -> Triple("Ready for you to pay", Palette.MINT, Palette.MINT_TINT)
         RunStatus.COMPLETED -> Triple("Done", Palette.MINT, Palette.MINT_TINT)
         RunStatus.HALTED -> Triple("Stopped", Palette.RED, Palette.RED_TINT)
-        RunStatus.NO_ANSWER -> Triple("Waiting for your answer", 0xFFB7791F.toInt(), Palette.GOLD_TINT)
+        RunStatus.NO_ANSWER -> Triple("Waiting for your answer", Palette.GOLD_TEXT, Palette.GOLD_TINT)
         RunStatus.CANCELLED -> Triple("Cancelled", Palette.MUTED, Palette.LINE)
     }
 }

@@ -47,6 +47,7 @@ class EchoBubble(
     private lateinit var speak: Button
     private lateinit var done: Button
     private lateinit var stop: Button
+    private lateinit var move: Button
     private lateinit var choices: LinearLayout
     private lateinit var choiceScroll: HorizontalScrollView
     private var pulse: ObjectAnimator? = null
@@ -67,6 +68,8 @@ class EchoBubble(
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
             maxWidth = kit.dp(250)
+            // TalkBack reads status changes and questions as they appear.
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         val statusRow = kit.row(dot, status, gravity = Gravity.TOP)
 
@@ -86,13 +89,13 @@ class EchoBubble(
             orchestrator.onSpeakPressed()
         }
         done = pillButton("✓ Done", Palette.MINT, Palette.INK) { orchestrator.onDonePressed() }
-        stop = roundButton("■", Palette.RED, Color.WHITE, sizeDp = 44, visualDp = 40, textSp = 15f, label = "Stop") {
+        stop = roundButton("■", Palette.RED, Color.WHITE, sizeDp = 48, visualDp = 40, textSp = 15f, label = "Stop") {
             orchestrator.onStopPressed()
         }
-        val home = roundButton("⌂", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 44, visualDp = 34, textSp = 16f, label = "Open EchoFlow") {
+        val home = roundButton("⌂", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 34, textSp = 16f, label = "Open EchoFlow") {
             service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        val move = roundButton("⇅", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 44, visualDp = 34, textSp = 16f, label = "Move to the other corner") {
+        move = roundButton("⇅", Palette.INK_SOFT, UTILITY_TEXT, sizeDp = 48, visualDp = 34, textSp = 16f, label = "Move to the other corner") {
             atBottom = !atBottom
             root?.let { wm.updateViewLayout(it, params()) }
         }
@@ -167,6 +170,10 @@ class EchoBubble(
         }
 
         done.visibility = if (s.mode == Mode.TEACHING) View.VISIBLE else View.GONE
+        // Speak, Done, Stop and Open EchoFlow fill the panel while teaching; "move" waits.
+        move.visibility = if (s.mode == Mode.TEACHING) View.GONE else View.VISIBLE
+        // Questions are shown in full (they're also spoken); status lines stay short.
+        status.maxLines = if (s.mode == Mode.ASKING) 6 else 2
         stop.visibility = if (s.mode == Mode.RUNNING || s.mode == Mode.TEACHING || s.mode == Mode.ASKING) View.VISIBLE else View.GONE
         speak.isEnabled = s.mode == Mode.IDLE || s.mode == Mode.TEACHING
         speak.alpha = if (speak.isEnabled) 1f else 0.4f
@@ -224,9 +231,9 @@ class EchoBubble(
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             background = pressable(kit.rounded(fill, 22f))
             setPadding(kit.dp(14), 0, kit.dp(14), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(44)).apply {
-                marginStart = kit.dp(8)
-                marginEnd = kit.dp(8)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(48)).apply {
+                marginStart = kit.dp(4)
+                marginEnd = kit.dp(6)
             }
         }
 
@@ -241,7 +248,7 @@ class EchoBubble(
         maxLines = 1
         background = pressable(kit.rounded(Palette.GOLD_TINT, 22f, Palette.GOLD, 1.5f))
         setPadding(kit.dp(14), 0, kit.dp(14), 0)
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(44)).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(48)).apply {
             marginEnd = kit.dp(8)
         }
     }
@@ -249,6 +256,9 @@ class EchoBubble(
     /** A gentle breathing dot while EchoFlow is listening. */
     private fun startPulse() {
         if (pulse?.isRunning == true) return
+        // "Remove animations" in the phone's accessibility settings: keep the dot still.
+        val scale = android.provider.Settings.Global.getFloat(service.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        if (scale == 0f) return
         pulse = ObjectAnimator.ofFloat(dot, View.ALPHA, 1f, 0.25f).apply {
             duration = 550
             repeatMode = ValueAnimator.REVERSE

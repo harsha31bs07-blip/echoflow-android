@@ -273,6 +273,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(kit.dp(4), kit.dp(8), kit.dp(4), kit.dp(8))
             isClickable = true
+            accessibilityDelegate = Kit.ROLE_BUTTON
             background = RippleDrawable(ColorStateList.valueOf(0x22000000), null, kit.rounded(Color.WHITE, 12f))
             contentDescription = "Advanced settings, collapsed"
             setOnClickListener { setAdvancedOpen(advancedBox.visibility != View.VISIBLE) }
@@ -397,7 +398,7 @@ class MainActivity : Activity() {
                 statusActions.addView(kit.secondaryButton("Stop", Palette.RED) { EchoRuntime.orchestrator.onStopPressed() })
             }
             Mode.ASKING -> {
-                badge("?", Color.WHITE, Palette.GOLD)
+                badge("?", Palette.INK, Palette.GOLD)
                 headline(s.question ?: s.status, GOLD_DARK, Palette.GOLD_TINT)
                 detail = if (s.choices.isEmpty()) "Answer out loud, or type your answer below." else "Answer out loud, tap a choice, or type below."
                 if (s.choices.isNotEmpty()) {
@@ -495,10 +496,10 @@ class MainActivity : Activity() {
         }
     }
 
-    /** A chip big enough to tap comfortably (44dp+), wrapping to two lines for long commands. */
+    /** A chip big enough to tap comfortably (48dp+), wrapping to two lines for long commands. */
     private fun tapChip(label: String, color: Int, tint: Int, onClick: () -> Unit) = kit.chip(label, color, tint, onClick).apply {
         textSize = 14f
-        minHeight = kit.dp(44)
+        minHeight = kit.dp(48)
         gravity = Gravity.CENTER_VERTICAL
         maxLines = 2
         ellipsize = TextUtils.TruncateAt.END
@@ -544,7 +545,7 @@ class MainActivity : Activity() {
         val key = "${f.appPackage} ${f.appLabel ?: ""}".lowercase()
         return when {
             "zomato" in key -> 0xFFE23744.toInt() to Color.WHITE
-            "swiggy" in key -> 0xFFFC8019.toInt() to Color.WHITE
+            "swiggy" in key -> 0xFFFC8019.toInt() to Palette.INK
             "amazon" in key -> Palette.GOLD to Palette.INK
             else -> Palette.INK to Color.WHITE
         }
@@ -594,7 +595,8 @@ class MainActivity : Activity() {
                 visibility = if (showRunDetails) View.VISIBLE else View.GONE
             }
             val toggle = kit.text(if (showRunDetails) "Hide details" else "Details  ›", 14f, Palette.INK_SOFT, bold = true).apply {
-                minHeight = kit.dp(44)
+                minHeight = kit.dp(48)
+                accessibilityDelegate = Kit.ROLE_BUTTON
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, kit.dp(6), 0, kit.dp(6))
                 isClickable = true

@@ -74,6 +74,13 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 
 Optional: to understand looser wordings without confirming first, open **EchoFlow → Advanced → Smarter matching** and paste a free Gemini API key (from aistudio.google.com). Gemini only sees the command and the names of learned flows, never the screen. Without a key, matching is fully on the phone. Developers can instead set `GEMINI_API_KEY=…` in `local.properties` before building.
 
+## Accessibility and ease of use
+- **Voice first, but never voice only.** Every question can be answered out loud, by tapping a choice, or by typing.
+- **Readable.** All text and buttons meet WCAG AA contrast (at least 4.5:1). Text sizes follow the phone's font-size setting.
+- **Easy to hit.** Every button and tappable chip is at least 48dp, including on the floating bubble.
+- **Works with TalkBack.** Screen and section titles are headings. Icon buttons have spoken labels. Status changes and questions are announced as they appear, and questions are shown in full, not cut off.
+- **Calm.** With "Remove animations" turned on, the listening dot stops pulsing.
+
 ## Design and documentation
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): speech-to-intent, UI-tree capture, generalisation, slot extraction, replay and safety, with diagrams
 - [TEST_MATRIX.md](docs/TEST_MATRIX.md): rubric → modules

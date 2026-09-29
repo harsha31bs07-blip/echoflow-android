@@ -332,6 +332,29 @@ class EchoBubble(
         val m = if (value) 0 else kit.dp(SHADOW_ROOM_DP)
         root?.setPadding(m, m, m, m)
         root?.let { runCatching { wm.updateViewLayout(it, params()) } }
+        // Gentle transitions (none with "Remove animations"): the panel grows out of its corner,
+        // the handle fades in.
+        if (reducedMotion()) return
+        if (value) {
+            handle.alpha = 0f
+            handle.animate().alpha(1f).setDuration(220).start()
+        } else {
+            panel.pivotX = panel.width.takeIf { it > 0 }?.toFloat() ?: kit.dp(280).toFloat()
+            panel.pivotY = if (atBottom) (panel.height.takeIf { it > 0 }?.toFloat() ?: kit.dp(160).toFloat()) else 0f
+            panel.alpha = 0f
+            panel.scaleX = 0.92f
+            panel.scaleY = 0.92f
+            panel.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(200)
+                .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        }
+    }
+
+    private fun reducedMotion() =
+        android.provider.Settings.Global.getFloat(service.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
+    /** A light tick under the finger for the main buttons. */
+    private fun tick(v: View) {
+        v.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
     }
 
     private fun updateGlow() {
@@ -363,6 +386,7 @@ class EchoBubble(
         isClickable = true
         isLongClickable = true
         setOnClickListener {
+            tick(it)
             setCollapsed(false)
             orchestrator.onSpeakPressed()
         }
@@ -392,7 +416,7 @@ class EchoBubble(
         minWidth = 0
         minimumWidth = 0
         setPadding(0, 0, 0, 0)
-        setOnClickListener { onClick() }
+        setOnClickListener { tick(it); onClick() }
     }
 
     /**
@@ -416,7 +440,7 @@ class EchoBubble(
         val inset = kit.dp((sizeDp - visualDp) / 2f)
         background = pressable(InsetDrawable(disc, inset))
         layoutParams = LinearLayout.LayoutParams(kit.dp(sizeDp), kit.dp(sizeDp)).apply { marginEnd = kit.dp(4) }
-        setOnClickListener { onClick() }
+        setOnClickListener { tick(it); onClick() }
     }
 
     private fun plainDisc(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }

@@ -30,16 +30,33 @@ class EdgeGlow(private val service: AccessibilityService) {
     fun set(color: Int?) {
         if (color == this.color) return
         this.color = color
+        val still = reducedMotion()
         if (color == null) {
-            view?.let { v -> v.stop(); v.visibility = View.GONE }
+            // Fade out, then stop drawing (at once with "Remove animations").
+            view?.let { v ->
+                v.animate().cancel()
+                if (still) { v.stop(); v.visibility = View.GONE }
+                else v.animate().alpha(0f).setDuration(220).withEndAction {
+                    if (this.color == null) { v.stop(); v.visibility = View.GONE }
+                }.start()
+            }
             return
         }
         val v = view ?: GlowView(service).also {
             view = it
             runCatching { wm.addView(it, params()) }.onFailure { view = null; return }
         }
+        val wasHidden = v.visibility != View.VISIBLE || v.alpha < 1f
+        v.animate().cancel()
         v.visibility = View.VISIBLE
-        v.start(color, reducedMotion())
+        v.start(color, still)
+        // Fade in when it appears; a colour change while shown just switches.
+        if (wasHidden && !still) {
+            v.alpha = 0f
+            v.animate().alpha(1f).setDuration(260).start()
+        } else {
+            v.alpha = 1f
+        }
     }
 
     fun hide() {

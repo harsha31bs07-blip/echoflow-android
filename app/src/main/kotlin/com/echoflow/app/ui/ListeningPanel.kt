@@ -86,7 +86,7 @@ class ListeningPanel(private val service: AccessibilityService, private val onCa
                 topMargin = kit.dp(10)
                 marginEnd = kit.dp(10)
             }
-            setOnClickListener { onCancel() }
+            setOnClickListener { it.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK); onCancel() }
         }
         card = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL

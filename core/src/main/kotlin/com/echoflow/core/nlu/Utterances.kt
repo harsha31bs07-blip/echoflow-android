@@ -27,7 +27,13 @@ object Utterances {
         "and", "deliver", "delivered", "delivery", "send", "bring", "place", "my", "it", "up", "show", "open",
         "at", "with", "using", "via", "quantity", "qty", "pieces", "piece", "plates", "plate", "items", "item",
         "x", "just", "now", "quickly", "again", "same", "one", "ones", "go", "do", "that", "this", "let", "us", "lets",
+        // Casual lead-ins ("I am craving…", "I really fancy…").
+        "am", "is", "are", "craving", "crave", "fancy", "feel", "feeling", "wanna", "gonna", "really", "hungry", "kinda",
     )
+
+    /** Pointer words before a source and generic nouns after it: "from that brick oven place". */
+    private val sourcePointers = setOf("the", "that", "this", "those", "our", "my")
+    private val sourceNouns = setOf("place", "restaurant", "shop", "store", "outlet", "joint", "cafe")
 
     val appNames = mapOf(
         "swiggy" to "in.swiggy.android",
@@ -115,12 +121,15 @@ object Utterances {
         val fromIdx = tokens.indices.firstOrNull { i -> tokens[i] == "from" && !used[i] && i + 1 < tokens.size && !used[i + 1] }
         if (fromIdx != null) {
             var k = fromIdx + 1
-            if (k < tokens.size && tokens[k] == "the") k++
+            while (k < tokens.size && tokens[k] in sourcePointers) k++
             val words = mutableListOf<String>()
             while (k < tokens.size && words.size < 3 && !used[k] && tokens[k] !in sourceStops) {
                 words += tokens[k]
                 k++
             }
+            // "…brick oven place": the generic noun isn't part of the name (it's still consumed).
+            while (k < tokens.size && !used[k] && tokens[k] in sourceNouns) k++
+            while (words.size > 1 && words.last() in sourceNouns) words.removeAt(words.size - 1)
             if (words.isNotEmpty() && words.none { it.all(Char::isDigit) }) {
                 source = words.joinToString(" ")
                 for (j in fromIdx until k) used[j] = true

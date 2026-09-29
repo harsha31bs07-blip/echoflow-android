@@ -314,7 +314,7 @@ class MainActivity : Activity() {
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(10) }
             }
             addView(keyInput)
-            addView(kit.row(
+            addView(buttonRow(
                 kit.primaryButton("Save key", Palette.MINT) {
                     EchoRuntime.prefs.geminiKey = keyInput.text.toString()
                     (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(keyInput.windowToken, 0)
@@ -406,7 +406,7 @@ class MainActivity : Activity() {
                 badge("● REC", Color.WHITE, Palette.CORAL)
                 headline("Learning: ${s.status}", CORAL_DARK, Palette.CORAL_TINT)
                 detail = "Do it in the app and stop before paying, then tap ✓ Done."
-                statusActions.addView(kit.row(
+                statusActions.addView(buttonRow(
                     kit.primaryButton("✓ Done", Palette.MINT) { EchoRuntime.orchestrator.onDonePressed() }.apply { layoutParams = halfWidth(end = 4) },
                     kit.secondaryButton("Stop", Palette.RED) { EchoRuntime.orchestrator.onStopPressed() }.apply { layoutParams = halfWidth(start = 4) },
                 ))
@@ -447,10 +447,16 @@ class MainActivity : Activity() {
         statusBox.background = kit.rounded(boxTint, 14f)
     }
 
+    /** Half of a two-button row. (No top margin here: it clipped the buttons; see [buttonRow].) */
     private fun halfWidth(start: Int = 0, end: Int = 0) = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-        topMargin = kit.dp(10)
         marginStart = kit.dp(start)
         marginEnd = kit.dp(end)
+    }
+
+    /** Two buttons side by side, with the gap above on the row itself. */
+    private fun buttonRow(a: View, b: View) = kit.row(a, b).apply {
+        setPadding(0, kit.dp(10), 0, 0)
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun refresh() {

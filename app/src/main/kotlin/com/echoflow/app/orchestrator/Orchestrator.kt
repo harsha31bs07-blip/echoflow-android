@@ -36,7 +36,7 @@ enum class Mode { IDLE, LISTENING, TEACHING, RUNNING, ASKING }
 
 data class UiState(
     val mode: Mode = Mode.IDLE,
-    val status: String = "Tap Speak and say a command, or \"teach …\"",
+    val status: String = "Say a command, or \"teach\" and a new one.",
     val question: String? = null,
     val choices: List<String> = emptyList(),
 )
@@ -94,7 +94,7 @@ class Orchestrator(context: Context) {
             val text = listen()
             if (before != Mode.TEACHING) _state.value = _state.value.copy(mode = Mode.IDLE)
             if (text.isNullOrBlank()) {
-                status(if (voice?.recognitionAvailable == false) "Speech recognition isn't available on this phone" else "I didn't catch that. Tap Speak and try again.")
+                status(if (voice?.recognitionAvailable == false) "Speech recognition isn't available on this phone" else "I didn't catch that. Tap 🎤 and try again.")
                 return@launch
             }
             handle(text)

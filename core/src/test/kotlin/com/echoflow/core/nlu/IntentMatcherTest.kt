@@ -96,4 +96,13 @@ class IntentMatcherTest {
         assertEquals(MetaIntent.Stop, m.meta("Stop"))
         assertEquals(null, m.meta("order garlic bread"))
     }
+
+    @Test fun `casual wording keeps clean values`() {
+        val p = Utterances.parse("i am craving a cheesy margherita from that brick oven place")
+        assertEquals("brick oven", p.source)
+        assertEquals("cheesy margherita", p.item)
+        // A real three-word name still fits, and "from the X" still works.
+        assertEquals("belgian waffle co", Utterances.parse("order waffles from the belgian waffle co").source)
+        assertEquals("dominos", Utterances.parse("get me a margherita from dominos").source)
+    }
 }

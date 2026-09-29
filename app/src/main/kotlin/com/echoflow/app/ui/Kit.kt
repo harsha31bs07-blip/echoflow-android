@@ -94,6 +94,8 @@ class Kit(val ctx: Context) {
 
     fun row(vararg views: View, gravity: Int = Gravity.CENTER_VERTICAL) = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
+        // Baseline alignment shifts buttons with different text sizes and clips their bottoms.
+        isBaselineAligned = false
         this.gravity = gravity
         views.forEach(::addView)
     }

@@ -177,7 +177,8 @@ class EchoBubble(
         lastMode = s.mode
         // Minimal mode: open whenever EchoFlow is busy; tuck away a few seconds after it's done.
         main.removeCallbacks(collapse)
-        if (!minimal() || s.mode != Mode.IDLE) setCollapsed(false) else if (!collapsed) main.postDelayed(collapse, IDLE_COLLAPSE_MS)
+        // (Longer messages stay up longer, so "Your turn. Everything is ready…" can be read.)
+        if (!minimal() || s.mode != Mode.IDLE) setCollapsed(false) else if (!collapsed) main.postDelayed(collapse, readingTime(s.status))
         updateGlow()
         val listening = s.mode == Mode.LISTENING || (s.mode == Mode.TEACHING && s.status.startsWith("Listening"))
         val dotColor = when (s.mode) {
@@ -214,6 +215,8 @@ class EchoBubble(
     // --- minimal mode ---------------------------------------------------------------------------
 
     private fun minimal() = EchoRuntime.prefs.minimalBubble
+
+    private fun readingTime(text: String) = (IDLE_COLLAPSE_MS + text.length * 60L).coerceAtMost(MAX_READ_MS)
 
     /** Re-reads the minimal-mode setting (it changed in EchoFlow's settings). */
     fun refreshMode() {
@@ -380,6 +383,7 @@ class EchoBubble(
         const val MAX_WIDTH_DP = 300
         /** Idle this long after a run or an answer: tuck into the edge handle. */
         const val IDLE_COLLAPSE_MS = 6_000L
+        const val MAX_READ_MS = 15_000L
         /** After the service starts, show the full panel briefly so people see where it is. */
         const val FIRST_COLLAPSE_MS = 8_000L
         /** Ink at ~55% with a light edge: visible on light and dark apps without shouting. */

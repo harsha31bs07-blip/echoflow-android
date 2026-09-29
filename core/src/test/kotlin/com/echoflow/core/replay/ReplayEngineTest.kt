@@ -306,4 +306,16 @@ class ReplayEngineTest {
         assertTrue(r.events.none { it.contains("address") }, r.events.toString())
         assertEquals(listOf("Add to Cart"), p.clicked)
     }
+
+    @Test fun `a search that finds nothing asks for something else at once and continues (T10)`() = runTest {
+        var searches = 0
+        val none: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { edit(hint = "Search for restaurants and food"); text("No results found for your search") } }
+        val p = FakePhone(screens + ("results" to { id -> if (searches++ == 0) none(id) else screens.getValue("results")(id) }), mapOf(
+            ("home" to "Search for restaurant and food") to "search", ("results" to "ADD") to "cart"), "home")
+        p.answers.addLast("paneer tikka")
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "zzqx unicorn waffles"))
+        assertTrue(p.questions.first().contains("zzqx unicorn waffles") && p.questions.first().contains("instead"), p.questions.toString())
+        assertEquals(listOf("zzqx unicorn waffles", "paneer tikka"), p.typed)
+        assertEquals("Paneer Tikka", p.addedRow, r.toString())
+    }
 }

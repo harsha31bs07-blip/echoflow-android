@@ -6,6 +6,7 @@ import com.echoflow.core.flow.ElementResolver
 import com.echoflow.core.flow.Flow
 import com.echoflow.core.flow.Resolution
 import com.echoflow.core.flow.SlotDef
+import com.echoflow.core.flow.SourceSlots
 import com.echoflow.core.flow.Step
 import com.echoflow.core.flow.fill
 import com.echoflow.core.gateway.ActionOutcome
@@ -308,6 +309,32 @@ class ReplayEngine(
                 return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
             }
 
+
+            // T10: the step right after searching for a value can't be found, and the app says it
+            // found nothing (or nothing matching shows after a few seconds): ask for another value
+            // right away instead of hunting (specific, and well inside 30 s).
+            val typedBefore = steps.getOrNull(i - 1) as? Step.TypeText
+            val searched = typedBefore?.slot?.let { slots[it] }
+            if (searched != null && !askedAboutValue && step is Step.Tap && step.pick == null && openedResults == 0) {
+                val waited = host.nowMs() - started
+                if (noResults(snap) || (step.slot == null && triedIme && waited > QUICK_ASK_MS && firstResult(snap, searched) == null)) {
+                    askedAboutValue = true
+                    val slotName = typedBefore.slot!!
+                    val where = slots.entries.firstOrNull { it.key in SourceSlots.names && it.key != slotName }?.value?.let { " at $it" } ?: ""
+                    events += "searched for \"$searched\"$where and found nothing"
+                    val answer = host.ask("I searched for \"$searched\"$where but couldn't find it. What should I get instead?")?.trim()
+                    val stopWords = setOf("no", "nothing", "stop", "cancel", "leave it", "never mind", "nevermind")
+                    if (answer.isNullOrBlank() || TextNormalizer.normalize(answer) in stopWords) {
+                        return StepResult.Stop(
+                            if (answer.isNullOrBlank()) RunStatus.NO_ANSWER else RunStatus.HALTED,
+                            "I searched for \"$searched\"$where but couldn't find it, so I stopped at step ${i + 1} without adding anything.",
+                        )
+                    }
+                    slots[slotName] = slotAnswer(answer, flow.slots.firstOrNull { it.name == slotName })
+                    events += "user asked for \"${slots[slotName]}\" instead of \"$searched\""
+                    return StepResult.SkipTo(i - 1)
+                }
+            }
 
             // The app's own error page ("Something went wrong. Try again"): retry once.
             if (!triedRetry) {
@@ -913,6 +940,11 @@ class ReplayEngine(
         return snap.elements.filter { it.visible && inPopup(it) }.mapNotNull { it.label }
     }
 
+    /** The app says a search found nothing. */
+    private fun noResults(snap: ScreenSnapshot): Boolean = snap.appElements().any { e ->
+        e.visible && TextNormalizer.normalize(e.label).let { l -> l.isNotEmpty() && l.split(' ').size <= 14 && NO_RESULTS.any { l.contains(it) } }
+    }
+
     /** "Try again" / "Retry" (exact labels only, never "Retry payment") on an error page. */
     private fun retryButton(snap: ScreenSnapshot): Int? {
         val labels = snap.appElements().filter { it.visible }.mapNotNull { it.label?.let(TextNormalizer::normalize) }
@@ -996,6 +1028,13 @@ class ReplayEngine(
     companion object {
         const val STEP_BUDGET_MS = 12_000L
         const val MAX_RESULT_OPENS = 3
+        /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
+        const val QUICK_ASK_MS = 4_000L
+        private val NO_RESULTS = listOf(
+            "no results", "no result found", "no matching", "nothing found", "no items found", "no dishes",
+            "couldn t find", "couldnt find", "could not find", "didn t find", "did not match", "no match", "0 results",
+            "no products", "we couldn t", "sorry we",
+        )
         const val MAX_PRODUCT_SCROLLS = 8
         private val ADD_TO_CART_LABELS = listOf("add to cart", "add to bag", "add to basket", "add to trolley")
         /** How far below a result title its price/rating may sit (px) to count as a product card. */

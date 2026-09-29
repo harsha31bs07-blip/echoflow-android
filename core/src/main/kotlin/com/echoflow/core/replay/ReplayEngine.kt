@@ -16,10 +16,12 @@ import com.echoflow.core.nlu.IntentMatcher
 import com.echoflow.core.model.UiElement
 import com.echoflow.core.model.WindowType
 import com.echoflow.core.runlog.RunStatus
+import com.echoflow.core.safety.EmptySheet
 import com.echoflow.core.safety.GuardState
 import com.echoflow.core.safety.SafetyGuard
 import com.echoflow.core.safety.SafetyLexicon
 import com.echoflow.core.safety.SensitiveKind
+import com.echoflow.core.safety.Trip
 import com.echoflow.core.text.TextNormalizer
 import kotlinx.coroutines.CancellationException
 
@@ -142,7 +144,7 @@ class ReplayEngine(
             final = readable(host.awaitSettled(s.id, 2_000) ?: host.current())
         }
         (guard.currentState as? GuardState.Tripped)?.let {
-            return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps)
+            return result(statusFor(it.trip), it.trip.handOffMessage, steps.size - 1, steps)
         }
         if (final != null) {
             if (guard.classify(final).isCheckout) {
@@ -162,7 +164,7 @@ class ReplayEngine(
                     }
                     guard.handOffAtCheckout(cart)?.let { return result(RunStatus.HANDED_OFF, it.handOffMessage, steps.size - 1, steps) }
                 }
-                (guard.currentState as? GuardState.Tripped)?.let { return result(RunStatus.HANDED_OFF, it.trip.handOffMessage, steps.size - 1, steps) }
+                (guard.currentState as? GuardState.Tripped)?.let { return result(statusFor(it.trip), it.trip.handOffMessage, steps.size - 1, steps) }
             }
         }
         return result(RunStatus.COMPLETED, "Done. I finished all ${steps.size} steps.", steps.size - 1, steps)
@@ -206,6 +208,7 @@ class ReplayEngine(
         var staleRetries = 0
         var blankSince: Long? = null
         var triedOpenSearch = false
+        var closedEmptySheet = false
         var openedResults = 0
         var lastOpen: String? = null
         var triedRetry = false
@@ -213,6 +216,14 @@ class ReplayEngine(
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
             val preview = guard.classify(snap)
+            if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN) && !closedEmptySheet && EmptySheet.matches(snap)) {
+                // An empty sheet left on screen (Zomato): Back closes it.
+                closedEmptySheet = true
+                events += "closed an empty sheet with back"
+                act(PlannedAction.Back, GateContext(isRecovery = true), snap)
+                host.awaitSettled(snap.id, 1_500)
+                continue
+            }
             if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) {
                 // Blank frames during loading: give the app time to draw, counted from when the
                 // screen went blank; only a screen that stays unreadable ends the run.
@@ -475,8 +486,16 @@ class ReplayEngine(
         is ActionOutcome.Performed -> "done"
     }
 
+    /**
+     * A hand-off at the payment boundary (checkout, payment, OTP, password) is the normal end of a
+     * purchase flow. A login or unreadable screen means the run couldn't do its job (T10), so
+     * "did the last run succeed?" must answer no (T14).
+     */
+    private fun statusFor(trip: Trip): RunStatus =
+        if (trip.kind == SensitiveKind.LOGIN || trip.kind == SensitiveKind.OPAQUE_UNKNOWN) RunStatus.HALTED else RunStatus.HANDED_OFF
+
     private fun tripped(): StepResult.Stop? =
-        (guard.currentState as? GuardState.Tripped)?.let { StepResult.Stop(RunStatus.HANDED_OFF, it.trip.handOffMessage) }
+        (guard.currentState as? GuardState.Tripped)?.let { StepResult.Stop(statusFor(it.trip), it.trip.handOffMessage) }
 
     /**
      * Saved-address rows of a "Select delivery address" sheet/screen: label (e.g. "Home") → row

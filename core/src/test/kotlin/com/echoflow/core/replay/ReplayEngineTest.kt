@@ -201,4 +201,27 @@ class ReplayEngineTest {
             assertEquals(listOf(expected, "Add to Cart"), p.clicked)
         }
     }
+
+    @Test fun `logged out - a login screen stops the run as not succeeded (T10, T14)`() = runTest {
+        val login: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { text("Log in or sign up"); edit(hint = "Enter phone number", inputType = com.echoflow.core.model.InputTypes.TYPE_CLASS_PHONE); button("Continue") } }
+        val p = FakePhone(screens + ("home" to login), emptyMap(), "search")
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "garlic bread"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(r.message.contains("Your turn"), r.message)
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+        val report = com.echoflow.core.runlog.RunRecord(id = "r", utterance = "order garlic bread", flowId = "food", flowName = "order {item}",
+            slots = mapOf("item" to "garlic bread"), startedAtMs = 0, status = r.status, stoppedAtStep = r.stoppedAtStep,
+            totalSteps = r.totalSteps, stepDescription = r.stepDescription, message = r.message).spokenSummary()
+        assertTrue(report.startsWith("No"), report)
+    }
+
+    @Test fun `back is allowed only on an empty sheet shell`() {
+        val guard = SafetyGuard(ScreenSafetyClassifier())
+        val empty = screen(pkg) { add { com.echoflow.core.model.UiElement(it, windowId = 1, className = "android.view.View", packageName = pkg, viewId = "$pkg:id/touch_outside", clickable = true, bounds = com.echoflow.core.model.Bounds(0, 0, 1080, 2400)) } }
+        assertTrue(com.echoflow.core.safety.EmptySheet.matches(empty))
+        assertTrue(guard.gate(PlannedAction.Back, empty, GateContext(isRecovery = true)) is com.echoflow.core.safety.GateDecision.Allow)
+        assertTrue(guard.gate(PlannedAction.Click(empty.id, 0), empty, GateContext(isRecovery = true)) is com.echoflow.core.safety.GateDecision.Block)
+        val blank = screen(pkg) { add { com.echoflow.core.model.UiElement(it, windowId = 1, className = "android.webkit.WebView", packageName = pkg, bounds = com.echoflow.core.model.Bounds(0, 0, 1080, 2400)) } }
+        assertTrue(guard.gate(PlannedAction.Back, blank, GateContext(isRecovery = true)) is com.echoflow.core.safety.GateDecision.Block)
+    }
 }

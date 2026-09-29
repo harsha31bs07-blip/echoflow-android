@@ -101,6 +101,8 @@ class SafetyGuard(
         val preview = screenClassifier.classify(snapshot)
         if (preview.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) {
             lastVerdict = preview
+            // The one exception: Back on an empty sheet shell (see EmptySheet).
+            if (action is PlannedAction.Back && EmptySheet.matches(snapshot)) return GateDecision.Allow(ActionRisk.SAFE)
             return GateDecision.Block(BlockReason.SENSITIVE_SCREEN, "screen not readable yet", null)
         }
         val verdict = onSnapshot(snapshot)

@@ -360,7 +360,7 @@ class ReplayEngine(
                 val dismiss = dismissButton(snap)
                 if (dismiss != null) {
                     triedDismiss++
-                    events += "closed popup via \"${snap.elements[dismiss].label}\""
+                    events += "closed popup via \"${snap.elements[dismiss].let { it.label ?: it.viewId?.substringAfter(":id/") ?: "✕" }}\""
                     act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, dismiss)), GateContext(isRecovery = true), snap)
                     continue
                 }
@@ -1021,7 +1021,11 @@ class ReplayEngine(
         val appWindows = snap.windows.filter { it.type == WindowType.APPLICATION }
         val top = appWindows.maxByOrNull { it.layer }
         val popupWindow = top?.takeIf { appWindows.size > 1 && it.bounds.area < snap.screenArea * 0.9 }
-        val inPopup: (UiElement) -> Boolean = if (popupWindow != null) {
+        // A bottom-sheet dialog fills the screen (its dimmed background is "touch_outside").
+        val sheetWindow = snap.elements.firstOrNull { it.viewId?.endsWith(":id/touch_outside") == true }?.windowId
+        val inPopup: (UiElement) -> Boolean = if (sheetWindow != null) {
+            { it.windowId == sheetWindow }
+        } else if (popupWindow != null) {
             { it.windowId == popupWindow.id }
         } else {
             val roots = snap.elements.filter { e -> POPUP_CLASSES.any { e.className.contains(it, ignoreCase = true) } || e.viewId?.contains("dialog", true) == true || e.viewId?.contains("bottom_sheet", true) == true }
@@ -1049,6 +1053,12 @@ class ReplayEngine(
     private fun dismissButton(snap: ScreenSnapshot): Int? {
         val labels = popupLabels(snap)
         if (labels.isEmpty()) return null
+        // An unlabelled ✕ found by its id ("crossButton", "close_button") closes without agreeing to anything.
+        val sheetWindow = snap.elements.firstOrNull { it.viewId?.endsWith(":id/touch_outside") == true }?.windowId
+        snap.appElements().firstOrNull { e ->
+            e.visible && e.clickable && e.label.isNullOrBlank() && (sheetWindow == null || e.windowId == sheetWindow) &&
+                TextNormalizer.viewIdTokens(e.viewId).let { t -> t.any { it in CLOSE_ID_WORDS } && t.none { it in setOf("cart", "order", "account") } }
+        }?.let { return it.index }
         val candidates = snap.appElements().filter { e -> e.visible && e.label != null && e.label in labels }
         return candidates.firstOrNull { e ->
             val t = TextNormalizer.tokens(e.label).joinToString(" ")
@@ -1166,7 +1176,8 @@ class ReplayEngine(
         private val ADD_ITEM_WORDS = listOf("add item", "add to cart", "add to bag")
         private val CART_WORDS =listOf("view cart", "checkout", "go to cart", "view bag", "go to bag", "proceed to cart")
         private val POPUP_CLASSES = listOf("Dialog", "BottomSheet", "PopupWindow")
-        private val DISMISS = listOf("close", "not now", "no thanks", "skip", "later", "maybe later", "dismiss", "got it", "ok", "okay", "x", "×", "✕", "cancel")
+        private val DISMISS = listOf("close", "not now", "no thanks", "skip", "later", "maybe later", "dismiss", "got it", "okay got it", "ok got it", "got it thanks", "ok", "okay", "x", "×", "✕", "cancel")
+        private val CLOSE_ID_WORDS = setOf("close", "cross", "dismiss")
         private val DISMISS_DESC = listOf("close", "dismiss", "cross", "close button", "navigate up")
 
         fun isYes(answer: String): Boolean {

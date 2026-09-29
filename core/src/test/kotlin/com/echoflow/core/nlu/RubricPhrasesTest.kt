@@ -109,6 +109,15 @@ class RubricPhrasesTest {
         assertEquals("dominos", d.candidate.slots["restaurant"])
     }
 
+    @Test fun `speech spellings of taught names are read as the taught names`() {
+        // Speech recognition writes "margarita" and "dominoes"; the app knows "margherita" and "dominos".
+        val d = assertIs<Decision.Proceed>(decide("Order a margarita pizza from dominoes on Zomato."))
+        assertEquals("margherita", d.candidate.slots["item"])
+        assertEquals("dominos", d.candidate.slots["restaurant"])
+        // A really different value is kept.
+        assertEquals("farmhouse", assertIs<Decision.Proceed>(decide("Order a Farmhouse pizza from Domino's on Zomato.")).candidate.slots["item"])
+    }
+
     @Test fun `T5 quantity in words with a plural`() {
         val d = assertIs<Decision.Proceed>(decide("Order two Margherita pizzas from Domino's."))
         assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos", "qty" to "2"), d.candidate.slots)

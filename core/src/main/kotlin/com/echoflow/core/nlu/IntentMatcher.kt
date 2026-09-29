@@ -254,8 +254,32 @@ class IntentMatcher {
         while (words.size > 1 && words.first() in ARTICLES) words = words.drop(1)
         val q = def?.qualifiers.orEmpty().map(::singular).toSet()
         if (q.isNotEmpty()) words = words.filter { singular(it) !in q }
-        if (words.isEmpty() || words.all { it in ARTICLES }) null else k to words.joinToString(" ")
+        if (words.isEmpty() || words.all { it in ARTICLES }) null else k to soundsLikeTaught(words.joinToString(" "), def?.taughtValue)
     }.toMap()
+
+    /**
+     * Speech recognition spells names the common way ("brick oven" for "Brik Oven",
+     * "margarita" for "margherita"). A value that differs from the taught one by a letter or two
+     * per word is the taught one, spelled as the app spells it.
+     */
+    private fun soundsLikeTaught(value: String, taught: String?): String {
+        val t = taught?.let(TextNormalizer::tokens) ?: return value
+        val v = TextNormalizer.tokens(value)
+        if (v.size != t.size || v == t) return value
+        val close = v.zip(t).all { (a, b) -> a == b || (minOf(a.length, b.length) >= 4 && editDistance(a, b) <= if (b.length >= 8) 2 else 1) }
+        return if (close) t.joinToString(" ") else value
+    }
+
+    private fun editDistance(a: String, b: String): Int {
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
+        }
+        return prev[b.length]
+    }
 
     companion object {
         const val SIMILAR_CAP = 0.75

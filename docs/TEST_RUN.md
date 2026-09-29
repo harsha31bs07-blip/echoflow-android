@@ -50,6 +50,12 @@ Judges will teach new flows live, so we taught one the same way in an app EchoFl
 
 (Spotify was tried first, but its own search showed "Something went wrong" for every query, so it wasn't a fair test.)
 
+## Spoken, not typed (29 Sept, night)
+
+Tapping the edge handle and saying *"Order a Farmhouse pizza from Brik Oven on Zomato"* was heard as "order a farmhouse pizza from **Brick** oven Zomato". The first try opened a different restaurant, *Brick Oven Pizzeria*, where Zomato showed a "Serving from exceptional distance / Okay, got it!" sheet. EchoFlow didn't recognise that sheet and stopped without tapping anything. Two fixes, both then checked on the phone:
+- **Spelling:** a spoken value a letter or two away from the taught one uses the taught spelling ("brick oven" → brik oven, "margarita" → margherita). The same command then reached Brik Oven's cart: Farmhouse, ₹343.
+- **Sheets:** bottom-sheet dialogs count as pop-ups, and an unlabelled ✕ (id `crossButton`) closes them. Asking for "Brick Oven Pizzeria" on purpose: the sheet was closed, the dish wasn't on that menu, EchoFlow asked what to get instead, and "nothing" stopped it without adding anything.
+
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.

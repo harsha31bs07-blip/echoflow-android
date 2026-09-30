@@ -37,6 +37,8 @@ Owners: **C** = Claude (code, tests, docs), **H** = Harsha (phone, decisions), *
 
 **Update, 30 Sept evening (v1.1.6):** W4 done in code (15 a minute per network, 900 a day; deploy pending), B2 re-verified on Myntra, the "stop" lock-up fixed, teaching starts in about 3 s, AI-helper quality improved, and OnePlus background-kill handling added (see TEST_RUN.md).
 
+**Update, 30 Sept night (v1.1.7, branch):** W2 cart-bar recovery, W6 split size/colour labels and the E3 address words (ghar, office) are done; the listening panel's ✕ keeps the controls open. Relay limits deployed.
+
 **Reading the table:** nothing is failing, but four things could still cost points live:
 - a judge-taught flow in an app that hides its taps (T1–T9: up to 37 points);
 - the intermittent cart-bar miss (T2, 5);

@@ -151,6 +151,9 @@ Each of these was found on the device, fixed, and re-run:
 - **AI helper quality:** it now sees how the stuck element looked when taught, the next step, where each element is and what's in a pop-up; a suggestion that changes nothing isn't tried again; asked after 5 s (was 7), up to 3 times per step.
 - **A tap refused because the button was redrawn** (YouTube's search) ended the run; it's now found again and retried. YouTube 3/3 after the fix.
 - **✕ on the listening panel folded everything into the handle** (reported on a OnePlus, 30 Sept). It now closes only the microphone and opens the controls (speak, home, move, ✕), which tuck away after the usual idle time. Verified on the S24 FE.
+- **Cart bar with different text (W2):** a taught tap on "1 item added · Continue" now finds the bar that's there ("2 items added", "View cart") when the usual match fails. Unit-tested; Zomato orders passed.
+- **Size and colour on separate labels (W6):** "Size:" then "XL" is read and said back.
+- **"ghar" / "office" for Home / Work (E3):** verified on the phone. "deliver to office" picked Work (Brik Oven doesn't deliver there, so it said so and stopped); "deliver to ghar" picked Home and reached payment, ₹285 (cart emptied).
 - **B2 re-checked on Myntra** after the "first result" changes: first sunglasses into the bag (bag emptied).
 
 ## Manual checklist before recording the demo

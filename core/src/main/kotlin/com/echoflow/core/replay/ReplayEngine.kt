@@ -342,6 +342,9 @@ class ReplayEngine(
             }
 
             val resolution = resolve(step, snap, slots)
+                // The taught tap was the cart bar ("1 item added · Continue"), whose text changes
+                // with the count and whose layout shifts after an options sheet: take the bar that's there.
+                ?: cartBarFor(step, snap)?.also { events += "opened the cart via \"${shortName(snap, it.index)}\"" }
             if (resolution != null) {
                 val r = perform(step, snap, resolution, slots)
                 // The screen changed between finding the element and tapping it: find it again.
@@ -783,7 +786,7 @@ class ReplayEngine(
         val outcome = when (step) {
             is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex).also { if (isAddTap(step)) variants = variantsOn(snap) }, ctx, snap).let { o ->
                 // (Unless the recovery that chose this tap already logged it.)
-                val logged = events.lastOrNull()?.let { it.startsWith("tapped") || it.startsWith("opened the first result") } == true
+                val logged = events.lastOrNull()?.let { it.startsWith("tapped") || it.startsWith("opened the first result") || it.startsWith("opened the cart") } == true
                 if (o is ActionOutcome.Performed && !logged) events += "tapped \"${shortName(snap, r.index)}\""
                 if (o is ActionOutcome.Performed && isAddTap(step)) retryIgnoredAdd(step, snap, r, slots, ctx) ?: o else o
             }
@@ -854,6 +857,19 @@ class ReplayEngine(
             }
             now = host.awaitSettled(now.id, 700) ?: host.current() ?: return null
         }
+    }
+
+    /** For a taught tap on the cart bar: the cart bar on this screen, if any. */
+    private fun cartBarFor(step: Step, snap: ScreenSnapshot): Resolution? {
+        if (step !is Step.Tap || step.slot != null || step.pick != null) return null
+        val taught = (listOfNotNull(step.target.text, step.target.contentDescription) + step.target.context).map(TextNormalizer::normalize)
+        if (taught.none { t -> CART_BAR.containsMatchIn(t) || CART_WORDS.any { t == it || t.startsWith("$it ") } }) return null
+        val bar = snap.appElements().firstOrNull { e ->
+            e.visible && TextNormalizer.normalize(e.label).let { l -> CART_BAR.containsMatchIn(l) || CART_WORDS.any { l == it || l.startsWith("$it ") } }
+        } ?: return null
+        val target = Descriptors.clickableFor(snap, bar.index)
+        if (!snap.elements[target].clickable) return null
+        return Resolution(bar.index, target, 0.8, 0.0)
     }
 
     private fun cartBarShown(snap: ScreenSnapshot) = snap.appElements().any { e ->
@@ -930,7 +946,9 @@ class ReplayEngine(
      * Hostel, …") and pick the saved address from the list.
      */
     private suspend fun ensureAddress(flow: Flow, slots: MutableMap<String, String>): StepResult.Stop? {
-        val want = slots["address"] ?: return null
+        val want = slots["address"]?.let { w ->
+            ADDRESS_ALIASES.entries.firstOrNull { TextNormalizer.normalize(w) in it.key }?.value ?: w
+        } ?: return null
         if (flow.steps.any { it is Step.Tap && it.slot == "address" }) return null // taught explicitly
         val snap = readable(host.current()) ?: return null
         val bar = snap.appElements().firstOrNull { e ->
@@ -973,7 +991,12 @@ class ReplayEngine(
     private suspend fun handleAddressSheet(snap: ScreenSnapshot, flow: Flow, slots: MutableMap<String, String>): StepResult.Stop? {
         val options = addressOptions(snap)
         val key = "address:${flow.appPackage}"
-        fun find(want: String?) = want?.let { w -> options.entries.firstOrNull { ElementResolver.valueMatch(w, it.key, emptyList()) > 0 } }
+        fun find(want: String?) = want?.let { w ->
+            // "ghar" is Home, "office" / "daftar" is Work (Hindi and everyday words for the saved names).
+            (listOf(w) + ADDRESS_ALIASES.filterKeys { TextNormalizer.normalize(w) in it }.values).firstNotNullOfOrNull { name ->
+                options.entries.firstOrNull { ElementResolver.valueMatch(name, it.key, emptyList()) > 0 }
+            }
+        }
         var chosen = find(slots["address"])
         if (chosen == null && slots["address"] == null) {
             chosen = find(host.recall(key))?.also { events += "used last time's address \"${it.key}\"" }
@@ -1288,10 +1311,20 @@ class ReplayEngine(
     }
 
     /** Options already set on a product page: "Size: XL", "Colour: Fog Teal". */
-    private fun variantsOn(snap: ScreenSnapshot): List<String> = snap.appElements()
-        .mapNotNull { e -> e.label?.trim()?.let { VARIANT.find(it) }?.let { m -> "${m.groupValues[1].lowercase()} ${m.groupValues[2].trim()}" } }
-        .distinctBy { it.substringBefore(' ') }
-        .take(2)
+    private fun variantsOn(snap: ScreenSnapshot): List<String> {
+        val labelled = snap.appElements().filter { it.visible && !it.label.isNullOrBlank() }
+        val found = mutableListOf<String>()
+        labelled.forEachIndexed { k, e ->
+            val l = e.label!!.trim()
+            VARIANT.find(l)?.let { m -> found += "${m.groupValues[1].lowercase()} ${m.groupValues[2].trim()}"; return@forEachIndexed }
+            // Split across two elements: "Size:" then "XL" (Amazon).
+            VARIANT_NAME.find(l)?.let { m ->
+                labelled.getOrNull(k + 1)?.label?.trim()?.takeIf { it.length in 1..24 && VARIANT_NAME.find(it) == null }
+                    ?.let { v -> found += "${m.groupValues[1].lowercase()} $v" }
+            }
+        }
+        return found.distinctBy { it.substringBefore(' ') }.take(2)
+    }
 
     private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
         .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) >= item.length }
@@ -1501,6 +1534,11 @@ class ReplayEngine(
         const val QUICK_ASK_MS = 4_000L
         const val ADD_EFFECT_WAIT_MS = 3_000L
         private val NAV_TAB = Regex("\\btab \\d+ of \\d+\\b")
+        private val ADDRESS_ALIASES = mapOf(
+            setOf("ghar", "mera ghar", "my place", "house") to "home",
+            setOf("office", "daftar", "my office", "workplace") to "work",
+        )
+        private val VARIANT_NAME = Regex("^(size|colour|color)\\s*:?$", RegexOption.IGNORE_CASE)
         private val VARIANT = Regex("^(size|colour|color)\\s*:\\s*(.{1,24})$", RegexOption.IGNORE_CASE)
         /** Home-screen apps (Samsung One UI, Pixel, MIUI, Lawnchair and others). */
         private val LAUNCHER = Regex("launcher|\\.home$|\\.homescreen|lawnchair|trebuchet", RegexOption.IGNORE_CASE)

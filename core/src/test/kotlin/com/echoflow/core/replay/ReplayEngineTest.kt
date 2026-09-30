@@ -145,6 +145,25 @@ class ReplayEngineTest {
         assertEquals(listOf("Search for restaurant and food"), p.clicked)
     }
 
+    @Test fun `a taught tap on the cart bar finds the bar when its text and layout changed (W2)`() = runTest {
+        val menu: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                text("Menu"); text("Recommended")
+                val bar = container(clickable = true); text("2 items added", bar); text("View cart", bar)
+            }
+        }
+        val p = FakePhone(screens + ("menu" to menu), mapOf(("menu" to "2 items added") to "cart"), "menu")
+        val barTap = Step.Tap(com.echoflow.core.flow.ElementDescriptor(
+            viewId = "in.swiggy.android:id/container", className = "android.view.ViewGroup",
+            context = listOf("1 item added", "Continue"), centerX = 0.5f, centerY = 0.93f,
+        ))
+        val f = flow().copy(steps = listOf(barTap))
+        val r = ReplayEngine(p, p.guard).run(f, mapOf("item" to "garlic bread"))
+        assertTrue(r.status != RunStatus.HALTED, r.toString())
+        assertTrue(p.clicked.size == 1 && p.clicked.single() in setOf("2 items added", "View cart"), p.clicked.toString())
+        assertTrue(r.events.any { it.startsWith("opened the cart via") }, r.events.toString())
+    }
+
     @Test fun `picks the ADD button in the row of the requested item`() = runTest {
         for ((item, row) in listOf("veg burger" to "Veg Burger", "garlic bread" to "Garlic Bread", "paneer tikka" to "Paneer Tikka")) {
             val p = phone()
@@ -314,7 +333,7 @@ class ReplayEngineTest {
                 titles.forEach { t -> val row = container(clickable = true); text(t, row) }
             }
         }
-        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); text("Size: XL"); button("Add to Cart") } }
+        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); text("Size: XL"); text("Colour:"); text("Fog Teal"); button("Add to Cart") } }
         val added: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Added to Cart") } }
         val flow = Flow(
             "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
@@ -346,7 +365,7 @@ class ReplayEngineTest {
             assertEquals(RunStatus.COMPLETED, r.status, r.toString())
             assertEquals(listOf(expected, "Add to Cart"), p.clicked)
             // The reply names what was added and the option the app chose by itself.
-            assertTrue(r.message.contains(expected.take(20)) && r.message.contains("size XL"), r.message)
+            assertTrue(r.message.contains(expected.take(20)) && r.message.contains("size XL") && r.message.contains("colour Fog Teal"), r.message)
         }
     }
 
@@ -410,7 +429,7 @@ class ReplayEngineTest {
                 t("Sponsored Ad - Spigen Rugged Armor Back Cover Case for Galaxy S24", 1720, card)(this); t("3.8 out of 5 stars", 1800, card)(this); t("₹999", 1900, card)(this)
             }
         }
-        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); text("Size: XL"); button("Add to Cart") } }
+        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); text("Size: XL"); text("Colour:"); text("Fog Teal"); button("Add to Cart") } }
         val added: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Added to Cart") } }
         val flow = Flow(
             "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",

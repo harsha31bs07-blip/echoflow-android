@@ -14,7 +14,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
 
 ## Judges' quick start (3 minutes)
-1. Install [`release/EchoFlow.apk`](release/EchoFlow.apk) (Android 11+). Open **EchoFlow → Open Accessibility settings** and turn on **EchoFlow automation**. On Android 13+, if the toggle is greyed out, see [the steps below](#enable-the-accessibility-service-judges-read-this).
+1. Install [`release/EchoFlow.apk`](release/EchoFlow.apk) (Android 11+). Open **EchoFlow → Turn on EchoFlow** and switch on **EchoFlow automation** (the app says where it is on your phone's brand, and comes back by itself when it's on). On Android 13+, if the toggle is greyed out, see [the steps below](#enable-the-accessibility-service-judges-read-this).
 2. Tap the slim **handle on the right edge** of the screen and say a task it doesn't know, e.g. *"Order a Margherita pizza from Domino's on Zomato."* It answers *"I don't know how to … yet. Want to teach me?"* → say **yes** → do it yourself in Zomato → tap **✓ Done** on the cart (never tap Pay). It says *"Learned: …"*.
 3. Say the same sentence, a paraphrase, or change the dish, the quantity ("two") or the address ("deliver to work"). It runs to the cart and says *"Your turn…"*.
 
@@ -139,8 +139,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 To build and test only the safety core, without the Android SDK: `./gradlew -Pechoflow.jvmOnly=true :core:test`.
 
 ### Enable the accessibility service (judges, read this)
-1. Open **EchoFlow** and tap **Open Accessibility settings**.
-2. Enable **EchoFlow automation**.
+1. Open **EchoFlow** and tap **Turn on EchoFlow**. The line under the button says where the switch is on your phone (Samsung: *Installed apps*; OnePlus, Xiaomi, Pixel: *Downloaded apps*).
+2. Enable **EchoFlow automation**. EchoFlow comes back by itself and asks for the microphone, then to run in the background (allow it: some phones, OnePlus among them, otherwise switch EchoFlow off).
 3. **Android 13+ with a sideloaded APK:** the toggle may be greyed out ("restricted setting"). Go to **Settings → Apps → EchoFlow → ⋮ (top right) → Allow restricted settings**, then repeat step 2.
 4. **If Play Protect warns during install:** tap **More details → Install anyway**. EchoFlow declares itself an accessibility tool (it's operated by voice), and some apps, Swiggy for example, only show their screens to accessibility tools. See [LIMITATIONS.md](docs/LIMITATIONS.md) L8.
 

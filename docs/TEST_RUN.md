@@ -79,6 +79,9 @@ Re-run after the night's UI changes (listening panel, ✕ close, panel redesign,
 | T14 (after a YouTube run) | ✅ *"Yes, the last run succeeded. … completed all 3 steps."* |
 | ✕ mid-run (Zomato, step 2) | ✅ cancelled, nothing added; recorded as "Stopped at step 2, as you asked." |
 
+## Morning bug from real use (30 Sept, 08:22)
+Spoken *"order a farmhouse pizza from Brick oven"* stopped at step 3 with *"I searched for "brik oven" but couldn't find it"*, although Brik Oven was the first search result. Further down, Zomato showed an empty "Restaurant based on your search" section saying **"Uh-oh! No results found!"**, and EchoFlow believed that text. Now a "no results" message only counts when nothing on screen matches the search, and a missing restaurant asks *"Which restaurant should I use instead?"* rather than what to get. Re-run on the phone: reached the cart (Farmhouse, ₹343), cart emptied.
+
 ## Found and fixed on the phone during this run
 - Zomato's cart is a sheet over the menu: the menu's "Continue" bar sits under **Place Order** at the same spot. The gesture fallback now refuses any spot shared with a pay/order/delete button (`GestureSafety`).
 - Zomato's cart ("PAY USING Google Pay UPI" + Place Order) is now CHECKOUT, not PAYMENT, so quantity can be set there; real payment pages still trip PAYMENT.

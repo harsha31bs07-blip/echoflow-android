@@ -329,12 +329,18 @@ class ReplayEngine(
             val searched = typedBefore?.slot?.let { slots[it] }
             if (searched != null && !askedAboutValue && step is Step.Tap && step.pick == null && openedResults == 0) {
                 val waited = host.nowMs() - started
-                if (noResults(snap) || (step.slot == null && triedIme && waited > QUICK_ASK_MS && firstResult(snap, searched) == null)) {
+                // "No results" text only counts if nothing on screen matches what was searched: Zomato
+                // lists the restaurant on top and says "Uh-oh! No results found!" under another
+                // heading below it (e.g. when it's closed).
+                val matchShown = firstResult(snap, searched) != null
+                if (!matchShown && (noResults(snap) || (step.slot == null && triedIme && waited > QUICK_ASK_MS))) {
                     askedAboutValue = true
                     val slotName = typedBefore.slot!!
                     val where = slots.entries.firstOrNull { it.key in SourceSlots.names && it.key != slotName }?.value?.let { " at $it" } ?: ""
                     events += "searched for \"$searched\"$where and found nothing"
-                    val answer = host.ask("I searched for \"$searched\"$where but couldn't find it. What should I get instead?")?.trim()
+                    // A restaurant or store asks for another place; an item asks what to get.
+                    val instead = if (slotName in SourceSlots.names) "Which $slotName should I use instead?" else "What should I get instead?"
+                    val answer = host.ask("I searched for \"$searched\"$where but couldn't find it. $instead")?.trim()
                     val stopWords = setOf("no", "nothing", "stop", "cancel", "leave it", "never mind", "nevermind")
                     if (answer.isNullOrBlank() || TextNormalizer.normalize(answer) in stopWords) {
                         return StepResult.Stop(

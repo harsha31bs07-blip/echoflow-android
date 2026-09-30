@@ -354,6 +354,26 @@ class ReplayEngineTest {
         assertEquals(listOf("Add to Cart"), p.clicked)
     }
 
+    @Test fun `a matching result wins over a no-results message elsewhere on screen`() = runTest {
+        // Zomato: the searched restaurant is listed on top, and a section below says "Uh-oh! No results found!".
+        val mixed: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                edit(hint = "Search for restaurants and food", typed = "garlic bread")
+                text("Recent searches"); text("Clear")
+                val row = container(clickable = true); text("Garlic Bread", row); text("Starting at ₹99", row)
+                text("RESTAURANT BASED ON YOUR SEARCH"); text("Uh-oh! No results found!")
+            }
+        }
+        val p = FakePhone(screens + ("results" to mixed), mapOf(("home" to "Search for restaurant and food") to "search"), "home")
+        val f = flow()
+        // After typing, a tap on a button the new screen doesn't have (like a menu search).
+        val menuSearch = Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Search in menu", className = "android.widget.Button"))
+        val steps = f.steps.take(3) + menuSearch
+        val r = ReplayEngine(p, p.guard, stepBudgetMs = 6_000).run(f.copy(steps = steps), mapOf("item" to "garlic bread"))
+        assertTrue(p.questions.none { it.contains("couldn't find") }, p.questions.toString())
+        assertTrue(r.events.any { it.contains("opened the first result matching") }, r.events.toString())
+    }
+
     @Test fun `a search that finds nothing asks for something else at once and continues (T10)`() = runTest {
         var searches = 0
         val none: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { edit(hint = "Search for restaurants and food"); text("No results found for your search") } }

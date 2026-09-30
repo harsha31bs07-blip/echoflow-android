@@ -1,0 +1,7 @@
+name = "echoflow-relay"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+# Daily request counters (created on first deploy).
+[[kv_namespaces]]
+binding = "COUNTS"

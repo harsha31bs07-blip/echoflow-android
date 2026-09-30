@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Secrets live in local.properties (never committed): GEMINI_API_KEY=..., optional GEMINI_MODEL=...
+// Secrets live in local.properties (never committed): GEMINI_API_KEY=..., optional GEMINI_MODEL=..., GEMINI_RELAY_URL=...
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use(::load)
@@ -25,6 +25,8 @@ android {
         versionName = "1.1.5"
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProp("GEMINI_API_KEY")}\"")
         buildConfigField("String", "GEMINI_MODEL", "\"${localProp("GEMINI_MODEL", "gemini-flash-lite-latest")}\"")
+        // Optional: EchoFlow's relay (relay/), so AI help works with no key in the app.
+        buildConfigField("String", "GEMINI_RELAY_URL", "\"${localProp("GEMINI_RELAY_URL").trimEnd('/')}\"")
     }
 
     buildFeatures {

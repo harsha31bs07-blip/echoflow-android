@@ -351,14 +351,17 @@ class MainActivity : Activity() {
             keyStatus = kit.caption("")
             addView(keyStatus)
             keyTest = kit.caption("")
-            addView(kit.secondaryButton("Test the key") {
+            if (BuildConfig.GEMINI_RELAY_URL.isNotBlank()) {
+                addView(kit.caption("Without a key, this build asks Gemini through EchoFlow's relay: same data as above, and the relay keeps only a daily request count."))
+            }
+            addView(kit.secondaryButton("Test AI help") {
                 keyTest.text = "Asking Gemini…"
                 scope.launch {
                     keyTest.text = com.echoflow.app.llm.GeminiClient(apiKey = {
                         EchoRuntime.prefs.geminiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
                     }).test()
                 }
-            }.apply { contentDescription = "Test the Gemini key" })
+            }.apply { contentDescription = "Test AI help" })
             addView(keyTest)
             addView(kit.divider())
             addView(kit.text("Bubble", 15f, Palette.TEXT, bold = true))
@@ -504,10 +507,12 @@ class MainActivity : Activity() {
             is GuardState.Tripped -> "handed off (${state.trip.kind})"
         }
         val snapshot = EchoRuntime.snapshots.current()
-        val geminiOn = EchoRuntime.prefs.geminiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
+        val relayOn = BuildConfig.GEMINI_RELAY_URL.isNotBlank()
+        val geminiOn = EchoRuntime.prefs.geminiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank() || relayOn
         keyStatus.text = when {
             EchoRuntime.prefs.geminiKey.isNotBlank() -> "✓ Gemini is on with your key."
-            geminiOn -> "✓ Gemini is on (key built into this APK)."
+            BuildConfig.GEMINI_API_KEY.isNotBlank() -> "✓ Gemini is on (key built into this APK)."
+            relayOn -> "✓ AI help is on through EchoFlow's shared relay (no key needed; limited per day). Paste your own key to use it instead."
             else -> "Off: EchoFlow matches commands on the phone and confirms looser wordings first."
         }
         debugInfo.text = "Accessibility service: ${if (connected) "on" else "off"} · Mic: ${if (mic) "allowed" else "not allowed"}\n" +

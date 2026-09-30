@@ -29,15 +29,22 @@ import java.net.URL
  * merged into the local matcher's candidates and still goes through the DecisionLayer; it never
  * sees screen contents or makes safety decisions. Returns null when there is no key, no network
  * or no answer within [TIMEOUT_MS] — the local matcher then works alone.
+ *
+ * With no key, requests go through EchoFlow's relay ([relayUrl], see relay/) if the build has
+ * one: the relay holds the key and forwards only these prompts, with a daily cap.
  */
 class GeminiClient(
     /** Read on every call, so a key pasted in the app takes effect at once. */
     private val apiKey: () -> String = { BuildConfig.GEMINI_API_KEY },
     private val model: String = BuildConfig.GEMINI_MODEL,
+    private val relayUrl: String = BuildConfig.GEMINI_RELAY_URL,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    val enabled: Boolean get() = apiKey().isNotBlank()
+    val enabled: Boolean get() = apiKey().isNotBlank() || relayUrl.isNotBlank()
+
+    /** Requests go through the relay (no key on this phone). */
+    val viaRelay: Boolean get() = apiKey().isBlank() && relayUrl.isNotBlank()
 
     @Volatile var lastError: String? = null
         private set
@@ -100,11 +107,14 @@ class GeminiClient(
         val t0 = System.currentTimeMillis()
         val text = generate("Reply with JSON only: {\"ok\": true}", RECOVERY_TIMEOUT_MS)
         val ms = System.currentTimeMillis() - t0
-        return if (text != null) "✓ Gemini answered in ${"%.1f".format(ms / 1000.0)} s ($model)." else "✗ Gemini didn't answer: ${explain(lastError)}"
+        val how = if (viaRelay) "via EchoFlow's relay" else model
+        return if (text != null) "✓ Gemini answered in ${"%.1f".format(ms / 1000.0)} s ($how)." else "✗ Gemini didn't answer: ${explain(lastError)}"
     }
 
     private fun explain(error: String?): String = when {
         error == null -> "no reply."
+        viaRelay && error.startsWith("HTTP 429") -> error.substringAfter(": ", "the shared daily limit is used up. Try again tomorrow, or paste your own key.")
+        viaRelay && (error.startsWith("HTTP 400") || error.startsWith("HTTP 403")) -> "the relay refused the request ($error)."
         error.startsWith("HTTP 429") -> "the free-tier limit is used up for now (HTTP 429). It resets later; try again in a while."
         error.startsWith("HTTP 400") || error.startsWith("HTTP 403") -> "the key was refused ($error). Check it was pasted in full."
         error.startsWith("HTTP 404") -> "model \"$model\" not found ($error)."
@@ -117,19 +127,27 @@ class GeminiClient(
         return generateOnce(prompt, timeoutMs)
     }
 
-    private suspend fun generateOnce(prompt: String, timeoutMs: Long): String? = (withTimeoutOrNull(timeoutMs) {
+    private suspend fun generateOnce(prompt: String, timeoutMs: Long): String? {
+        val relay = viaRelay
+        // The relay is one more hop (Cloudflare, then Google).
+        val limit = if (relay) timeoutMs + RELAY_EXTRA_MS else timeoutMs
+        return generateVia(relay, prompt, limit)
+    }
+
+    private suspend fun generateVia(relay: Boolean, prompt: String, timeoutMs: Long): String? = (withTimeoutOrNull(timeoutMs) {
         withContext(Dispatchers.IO) {
             runCatching {
-                val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+                val url = URL(if (relay) "$relayUrl/generate" else "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 3_000
                     readTimeout = timeoutMs.toInt()
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("x-goog-api-key", apiKey())
+                    if (relay) setRequestProperty("x-echoflow-client", "1") else setRequestProperty("x-goog-api-key", apiKey())
                 }
-                val body = buildJsonObject {
+                // The relay sets the model and settings itself and returns Gemini's reply unchanged.
+                val body = if (relay) buildJsonObject { put("prompt", prompt) } else buildJsonObject {
                     put("contents", buildJsonArray {
                         add(buildJsonObject { put("parts", buildJsonArray { add(buildJsonObject { put("text", prompt) }) }) })
                     })
@@ -166,5 +184,6 @@ class GeminiClient(
         const val TIMEOUT_MS = 4_500L
         /** Recovery prompts list a whole screen, so they take longer than matching a command. */
         const val RECOVERY_TIMEOUT_MS = 10_000L
+        const val RELAY_EXTRA_MS = 1_500L
     }
 }

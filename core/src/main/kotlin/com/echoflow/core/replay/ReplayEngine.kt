@@ -203,7 +203,7 @@ class ReplayEngine(
         val adds = isAddTap(last) || (last is Step.Tap && last.pick == "add_to_cart") || (last is Step.Tap && TextNormalizer.viewIdTokens(last.target.viewId).let { "add" in it && ("cart" in it || "bag" in it) })
         if (name == null || !adds) return "Done. I finished all ${steps.size} steps."
         val chosen = if (variants.isEmpty()) "" else " The app chose ${variants.joinToString(" and ")}; change it in the cart if you want something else."
-        return "Done. I added \"$name\" to the cart.$chosen"
+        return if (name == "the first result") "Done. I added the first result to the cart.$chosen" else "Done. I added \"$name\" to the cart.$chosen"
     }
 
     private sealed interface StepResult {
@@ -313,7 +313,8 @@ class ReplayEngine(
                 continue
             }
 
-            if (step is Step.Tap && step.pick == "add_to_cart") {
+            // A taught "Add to cart" tap is found the same sturdy way (its place differs per product page).
+            if (step is Step.Tap && (step.pick == "add_to_cart" || isCartButtonTap(step))) {
                 val add = addToCartButton(snap)
                 if (add != null) {
                     events += "tapped \"${add.label ?: "Add to cart"}\" (${add.viewId?.substringAfter(":id/") ?: add.className})"
@@ -358,7 +359,12 @@ class ReplayEngine(
                 }
                 if (first != null) {
                     events += "opened the first result: \"${first.label}\""
-                    pickedName = cardTitle(snap, first)
+                    // Named only when the name shares a word with what was searched: a wrong name is worse than none.
+                    pickedName = cardTitle(snap, first).takeIf { name ->
+                        val words = TextNormalizer.tokens(slots["item"]).filter { it.length >= 3 }.map { it.removeSuffix("s") }
+                        val have = TextNormalizer.tokens(name)
+                        words.isEmpty() || words.any { w -> have.any { it.startsWith(w) || (w.length >= 4 && it.contains(w)) } }
+                    } ?: "the first result"
                     val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
                     if (r is StepResult.Retry && staleRetries++ < 3) continue
                     return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
@@ -522,7 +528,7 @@ class ReplayEngine(
             // A slot value that isn't on screen: scroll a bit, then ask with what we see.
             // (Not for a search button: scrolling hides it in some apps.)
             // Add to Cart sits a few screens down a product page: allow more scrolling there.
-            val addToCartStep = step is Step.Tap && step.pick == "add_to_cart"
+            val addToCartStep = step is Step.Tap && (step.pick == "add_to_cart" || isCartButtonTap(step))
             // (Never for typing: text fields sit at the top, and the list there is suggestions.)
             if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !isSearchTap(step) && step !is Step.TypeText) {
                 val list = scrollableList(snap)
@@ -1165,6 +1171,13 @@ class ReplayEngine(
         return labels.any { "add" in it }
     }
 
+    /** A taught tap on a shop's "Add to cart" / "Add to bag" button (not a menu's small "ADD"). */
+    private fun isCartButtonTap(step: Step): Boolean {
+        if (step !is Step.Tap || step.pick != null || step.slot != null) return false
+        val label = TextNormalizer.normalize(step.target.text ?: step.target.contentDescription)
+        return label == "add to cart" || label == "add to bag" || label == "add to basket"
+    }
+
     /** A taught "ADD" / "Add to cart" tap. */
     private fun isAddTap(step: Step): Boolean {
         if (step !is Step.Tap || step.pick != null) return false
@@ -1356,10 +1369,13 @@ class ReplayEngine(
         n.contains("out of 5 stars") || n.contains("bought in past") || n.startsWith("researched by") || n.contains("mrp") ||
             n.contains("m r p") || n.startsWith("results for") || n.startsWith("showing results") || n.contains("search") ||
             n.startsWith("view sponsored") || n.contains("sponsored video") || n.startsWith("shop the ") || n.contains("store on amazon") ||
-            n.startsWith("pause") || n.startsWith("play ") || Regex("^\\W*\\d").containsMatchIn(n)
+            n.startsWith("pause") || n.startsWith("play ") || n.contains("credit card") || n.contains("debit card") || n.contains("cashback") || Regex("^\\W*\\d").containsMatchIn(n)
 
     /** The product's title on its card: the longest label that isn't a price, rating or badge. */
     private fun cardTitle(snap: ScreenSnapshot, e: UiElement): String {
+        // The result's own text is its title when it reads like one (a bank-offer line on the card can be longer).
+        e.label?.takeIf { l -> l.length >= 15 && !notATitle(TextNormalizer.normalize(l)) && !l.trim().startsWith("₹") && !l.contains("credit card", ignoreCase = true) }
+            ?.let { return productName(it) }
         val card = Descriptors.clickableFor(snap, e.index)
         val labels = (listOf(e) + snap.descendants(card, maxDepth = 8)).mapNotNull { it.label }
             .filter { l -> !notATitle(TextNormalizer.normalize(l)) && !l.trim().startsWith("₹") }

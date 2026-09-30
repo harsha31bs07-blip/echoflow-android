@@ -353,6 +353,8 @@ class ReplayEngineTest {
             listOf("Amazon Basics Charging Cable 1m", "OtterBox Phone Case for Galaxy S24") to "OtterBox Phone Case for Galaxy S24",
             // An ad on top isn't "the first result" (S18).
             listOf("Sponsored Ad - Symbol Men's Polo Tshirt Regular Fit", "Spigen Ultra Hybrid Back Cover for iPhone 15") to "Spigen Ultra Hybrid Back Cover for iPhone 15",
+            // The item ("phone case") is only half in the title: still a match.
+            listOf("JETech Matte Case for iPhone 15 Pro", "Amazon Basics Charging Cable 1m") to "JETech Matte Case for iPhone 15 Pro",
             // A bottom navigation tab is never a result.
             listOf("Home Tab 1 of 6 selected", "Spigen Ultra Hybrid Back Cover for iPhone 15") to "Spigen Ultra Hybrid Back Cover for iPhone 15",
         )) {
@@ -367,6 +369,54 @@ class ReplayEngineTest {
             // The reply names what was added and the option the app chose by itself.
             assertTrue(r.message.contains(expected.take(20)) && r.message.contains("size XL") && r.message.contains("colour Fog Teal"), r.message)
         }
+    }
+
+    @Test fun `a real Amazon results page with an AI summary on top picks the first product`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        val text = javaClass.getResource("/amazon_results_ai_summary.json")!!.readText().trim()
+        val real = com.echoflow.core.model.SnapshotJson.decode(text)
+        val product: (Long) -> ScreenSnapshot = { id -> screen(amz, id) { text("Product details"); button("Add to Cart") } }
+        val flow = Flow(
+            "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("x"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")),
+            listOf(
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.TextView", text = "{item}"), slot = "item", pick = "first"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.Button", text = "Add to Cart")),
+            ),
+        )
+        val p = FakePhone(mapOf("results" to { id -> real.copy(id = id) }, "product" to product), emptyMap(), "results")
+        val r = ReplayEngine(p, p.guard, stepBudgetMs = 4_000).run(flow, mapOf("item" to "phone case"))
+        val opened = r.events.firstOrNull { it.startsWith("opened the first result") }.orEmpty()
+        assertTrue(opened.contains("Ringke"), r.events.toString())
+        assertTrue(p.questions.isEmpty(), p.questions.toString())
+    }
+
+    @Test fun `results that don't resemble the search ask before adding anything (T10)`() = runTest {
+        val amz = "in.amazon.mShop.android.shopping"
+        val results: (Long) -> ScreenSnapshot = { id ->
+            screen(amz, id) {
+                edit(hint = "Search Amazon.in"); text("Showing results for your search"); text("Prime")
+                val row = container(clickable = true); text("Famyo GlowMaxx Glow in The Dark Blanket for Kids - Unicorn", row); text("₹995", row)
+            }
+        }
+        val flow = Flow(
+            "a1", "search for {item} on amazon and add the first result to cart", amz, "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("search for wireless earbuds on amazon and add the first result to cart"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")),
+            listOf(
+                Step.LaunchApp(amz, "Amazon"),
+                Step.TypeText(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.EditText"), slot = "item"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.TextView", text = "{item}"), slot = "item", pick = "first"),
+                Step.Tap(com.echoflow.core.flow.ElementDescriptor(className = "android.widget.Button", text = "Add to Cart")),
+            ),
+        )
+        val p = FakePhone(mapOf("home" to { id -> screen(amz, id) { edit(hint = "Search Amazon.in") } }, "results" to results), emptyMap(), "home")
+        p.answers.addLast("nothing")
+        val r = ReplayEngine(p, p.guard).run(flow, mapOf("item" to "zzqx unicorn gadget"))
+        assertTrue(p.questions.single().contains("don't look like it"), p.questions.toString())
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
     }
 
     @Test fun `logged out - a login screen stops the run as not succeeded (T10, T14)`() = runTest {

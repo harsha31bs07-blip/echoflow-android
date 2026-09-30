@@ -334,9 +334,31 @@ class ReplayEngine(
                 // Product cards load a moment after the list's filter bar: other rows only after a wait.
                 val first = if (keyboardUp && lastTyped != null && !triedIme) null
                     else topResult(snap, slots["item"], allowNonProducts = !keyboardUp && host.nowMs() - started > NON_PRODUCT_WAIT_MS)
+                // Results that don't look like what was searched (Amazon shows related items for a
+                // nonsense search, with no "no results" message): ask before adding anything.
+                val want = slots["item"]
+                if (first != null && want != null && !askedAboutValue && !resemblesSearch(snap, want)) {
+                    askedAboutValue = true
+                    val shown = cardTitle(snap, first)
+                    events += "results for \"$want\" don't look like it (first: \"$shown\")"
+                    val typedAt = steps.take(i).indexOfLast { it is Step.TypeText && it.slot == "item" }
+                    val a = host.ask("I searched for \"$want\", but the results don't look like it. The first one is \"$shown\". Should I add that anyway, or what should I search for instead?")?.trim()
+                    when {
+                        a.isNullOrBlank() -> return StepResult.Stop(RunStatus.NO_ANSWER, "The results for \"$want\" didn't look right and I didn't get an answer, so I stopped at step ${i + 1} without adding anything.")
+                        TextNormalizer.normalize(a) in setOf("no", "nothing", "stop", "cancel", "leave it", "never mind", "nevermind") ->
+                            return StepResult.Stop(RunStatus.HALTED, "Okay. The results for \"$want\" didn't look right, so I stopped at step ${i + 1} without adding anything.")
+                        isYes(a) || TextNormalizer.normalize(a).contains("anyway") -> events += "user said to add it anyway"
+                        typedAt >= 0 -> {
+                            slots["item"] = slotAnswer(a, flow.slots.firstOrNull { it.name == "item" })
+                            events += "user asked for \"${slots["item"]}\" instead of \"$want\""
+                            return StepResult.SkipTo(typedAt)
+                        }
+                        else -> return StepResult.Stop(RunStatus.HALTED, "The results for \"$want\" didn't look right, so I stopped at step ${i + 1}.")
+                    }
+                }
                 if (first != null) {
                     events += "opened the first result: \"${first.label}\""
-                    pickedName = productName(first.label.orEmpty())
+                    pickedName = cardTitle(snap, first)
                     val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
                     if (r is StepResult.Retry && staleRetries++ < 3) continue
                     return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
@@ -1259,8 +1281,22 @@ class ReplayEngine(
      * first few, one whose title names the item wins. Without product cards: the first clickable
      * row with a title-like label (3+ words).
      */
+    /** Elements inside an AI-written summary block ("Researched by AI" on Amazon): never results. */
+    private fun aiSummary(snap: ScreenSnapshot): Set<Int> {
+        val marks = snap.appElements().filter { e -> TextNormalizer.normalize(e.label).let { it == "researched by ai" || it.startsWith("ai generated") || it.contains("summarised by ai") || it.contains("summarized by ai") } }
+        val out = mutableSetOf<Int>()
+        for (m in marks) {
+            var top = m.parent
+            var hops = 0
+            while (top >= 0 && hops < 4 && !snap.elements[top].clickable) { top = snap.elements[top].parent; hops++ }
+            if (top >= 0) out += snap.descendants(top, maxDepth = 12).map { it.index } + top
+        }
+        return out
+    }
+
     private fun topResult(snap: ScreenSnapshot, item: String?, allowNonProducts: Boolean = true): UiElement? {
-        val els = snap.appElements().filter { it.visible }
+        val summary = aiSummary(snap)
+        val els = snap.appElements().filter { it.visible && it.index !in summary }
         // Amazon heads its list with "Results"; banners and AI summaries sit above it.
         val listTop = els.firstOrNull { TextNormalizer.normalize(it.label) in RESULTS_HEADINGS }?.bounds?.bottom ?: 0
         val rows = els
@@ -1273,7 +1309,7 @@ class ReplayEngine(
                         !l.startsWith("ref ") && !l.contains("http") && !l.contains("location") &&
                         !l.contains("filter") && !l.endsWith(" icon") &&
                         // Bottom navigation ("Home Tab 1 of 6") and a card's rating line aren't titles.
-                        !NAV_TAB.containsMatchIn(l) && !l.contains("out of 5 stars") &&
+                        !NAV_TAB.containsMatchIn(l) && !notATitle(l) && !e.label.orEmpty().trim().startsWith("₹") &&
                         // A delivery address line ("…, Bengaluru, Karnataka 560001, India") isn't a result.
                         !PINCODE.containsMatchIn(e.label.orEmpty()) && !l.endsWith(" india")
                 }
@@ -1283,7 +1319,9 @@ class ReplayEngine(
         fun productLike(e: UiElement) = els.any { o ->
             o.bounds.top >= e.bounds.top && o.bounds.top <= e.bounds.bottom + PRODUCT_DETAIL_SPAN &&
                 o.bounds.left < e.bounds.right && o.bounds.right > e.bounds.left &&
-                TextNormalizer.tokens(o.label).let { t -> t.size in 1..6 && (TextNormalizer.containsPhrase(t, OUT_OF_5) || SafetyLexicon.amountOf(t) != null) }
+                (TextNormalizer.tokens(o.label).let { t -> t.size in 1..6 && (TextNormalizer.containsPhrase(t, OUT_OF_5) || SafetyLexicon.amountOf(t) != null) } ||
+                    // A bare star rating under the title ("4.4").
+                    STAR_RATING.matches(o.label.orEmpty().trim()))
         }
         val products = rows.filter(::productLike)
         // "The first result" means the first real product, not an ad; an ad product only if no
@@ -1293,6 +1331,39 @@ class ReplayEngine(
             .ifEmpty { if (allowNonProducts) rows.filterNot { sponsored(snap, it) }.ifEmpty { rows } else emptyList() }
         if (item != null) pool.take(4).firstOrNull { ElementResolver.valueMatch(item, it.label, emptyList()) > 0 }?.let { return it }
         return pool.firstOrNull()
+    }
+
+    /** At least half of the searched words appear in one of the top product titles. */
+    private fun resemblesSearch(snap: ScreenSnapshot, want: String): Boolean {
+        val words = TextNormalizer.tokens(want).filter { it.length >= 3 }.map { if (it.length > 4 && it.endsWith("s")) it.dropLast(1) else it }
+        if (words.isEmpty()) return true
+        val need = (words.size + 1) / 2
+        val searched = TextNormalizer.normalize(want)
+        val summary = aiSummary(snap)
+        val titles = snap.appElements()
+            .filter { it.visible && it.index !in summary && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) >= 15 }
+            .mapNotNull { it.label }
+            .filter { l -> TextNormalizer.normalize(l).let { n -> !notATitle(n) && n != searched } }
+            .take(12)
+        return titles.any { t ->
+            val tokens = TextNormalizer.tokens(t)
+            words.count { w -> tokens.any { tok -> tok == w || tok.startsWith(w) || (w.length >= 4 && tok.contains(w)) } } >= need
+        }
+    }
+
+    /** Price, rating and badge lines on a product card: never its title. */
+    private fun notATitle(n: String): Boolean =
+        n.contains("out of 5 stars") || n.contains("bought in past") || n.startsWith("researched by") || n.contains("mrp") ||
+            n.contains("m r p") || n.startsWith("results for") || n.startsWith("showing results") || n.contains("search") ||
+            n.startsWith("view sponsored") || n.contains("sponsored video") || n.startsWith("shop the ") || n.contains("store on amazon") ||
+            n.startsWith("pause") || n.startsWith("play ") || Regex("^\\W*\\d").containsMatchIn(n)
+
+    /** The product's title on its card: the longest label that isn't a price, rating or badge. */
+    private fun cardTitle(snap: ScreenSnapshot, e: UiElement): String {
+        val card = Descriptors.clickableFor(snap, e.index)
+        val labels = (listOf(e) + snap.descendants(card, maxDepth = 8)).mapNotNull { it.label }
+            .filter { l -> !notATitle(TextNormalizer.normalize(l)) && !l.trim().startsWith("₹") }
+        return productName(labels.maxByOrNull { productName(it).length } ?: e.label.orEmpty())
     }
 
     private fun sponsored(snap: ScreenSnapshot, e: UiElement): Boolean {
@@ -1549,6 +1620,7 @@ class ReplayEngine(
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
         const val ADD_EFFECT_WAIT_MS = 3_000L
+        private val STAR_RATING = Regex("[1-5]\\.[0-9]")
         private val NAV_TAB = Regex("\\btab \\d+ of \\d+\\b")
         private val ADDRESS_ALIASES = mapOf(
             setOf("ghar", "mera ghar", "my place", "house") to "home",

@@ -21,8 +21,8 @@ android {
         applicationId = "com.echoflow"
         minSdk = 30 // AccessibilityAction.ACTION_IME_ENTER
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.0"
+        versionCode = 13
+        versionName = "1.2.1"
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProp("GEMINI_API_KEY")}\"")
         buildConfigField("String", "GEMINI_MODEL", "\"${localProp("GEMINI_MODEL", "gemini-flash-lite-latest")}\"")
         // Optional: EchoFlow's relay (relay/), so AI help works with no key in the app.

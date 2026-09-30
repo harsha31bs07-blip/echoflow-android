@@ -471,8 +471,8 @@ class MainActivity : Activity() {
             }
             Mode.TEACHING -> {
                 badge("● REC", Color.WHITE, Palette.CORAL)
-                headline("Learning: ${s.status}", CORAL_DARK, Palette.CORAL_TINT)
-                detail = "Do it in the app and stop before paying, then tap ✓ Done."
+                headline("Learning…", CORAL_DARK, Palette.CORAL_TINT)
+                detail = "${s.status}\nDo it in the app and stop before paying, then tap ✓ Done. Say \"undo\" to drop the last step."
                 statusActions.addView(buttonRow(
                     kit.primaryButton("✓ Done", Palette.MINT) { EchoRuntime.orchestrator.onDonePressed() }.apply { layoutParams = halfWidth(end = 4) },
                     kit.secondaryButton("Stop", Palette.RED) { EchoRuntime.orchestrator.onStopPressed() }.apply { layoutParams = halfWidth(start = 4) },

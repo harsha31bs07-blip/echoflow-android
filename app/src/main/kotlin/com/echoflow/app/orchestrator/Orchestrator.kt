@@ -141,6 +141,11 @@ class Orchestrator(context: Context) {
         status("“$text”")
         val meta = matcher.meta(text)
         if (_state.value.mode == Mode.TEACHING) {
+            if (TextNormalizer.normalize(text) in UNDO_WORDS) {
+                val removed = recorder?.undo()
+                return say(if (removed == null) "There's nothing to undo yet." else "Okay, I removed: $removed.")
+                    .also { teachingCaption(if (removed == null) "Nothing to undo" else "Removed: $removed") }
+            }
             when (meta) {
                 MetaIntent.Done -> finishTeaching("user")
                 MetaIntent.Stop -> cancelTeaching()
@@ -272,6 +277,8 @@ class Orchestrator(context: Context) {
             capture = { service.captureNow() },
             previous = { EchoRuntime.snapshots.current() },
             onCommitTap = { what -> scope.launch { finishTeaching("PAYMENT", "You reached the pay button ($what), so I stopped recording before it.") } },
+            // Live caption: what was just learned, so a wrong tap is noticed (and "undo" fixes it).
+            onRecorded = { what -> teachingCaption("Got it: $what") },
         )
         _state.value = UiState(Mode.TEACHING, "Teaching “$utterance” — show me, then say done")
         // The command names an installed app ("… on Zomato", "… on play store"): open it now,
@@ -495,7 +502,15 @@ class Orchestrator(context: Context) {
         voice?.speakAsync(text)
     }
 
+    private fun teachingCaption(line: String) {
+        val r = recorder ?: return
+        if (_state.value.mode != Mode.TEACHING) return
+        val n = r.count
+        _state.value = _state.value.copy(status = "$line · $n step${if (n == 1) "" else "s"} so far")
+    }
+
     private companion object {
+        val UNDO_WORDS = setOf("undo", "undo that", "undo it", "undo last step", "undo the last step", "remove last step", "remove the last step", "scratch that", "go back one step")
         const val TAG = "EchoOrchestrator"
     }
 }

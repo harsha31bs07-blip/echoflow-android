@@ -23,6 +23,8 @@ class TeachingRecorder(
     /** Called when the teacher tapped a commit button (pay / place order): teaching must end. */
     private val onCommitTap: (String) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Each recorded step, in words ("tapped \"Search\"", "typed \"margherita\""), for the live caption. */
+    private val onRecorded: (String) -> Unit = {},
 ) {
     private val actions = mutableListOf<RawAction>()
     private val risk = ActionRiskClassifier()
@@ -77,6 +79,14 @@ class TeachingRecorder(
         if (a.packageName != snap.packageName) android.util.Log.i("EchoTeach", "  -> tap in $pkg, not ${snap.packageName}")
         synchronized(actions) { actions += a }
         lastLabel = a.target.display
+        onRecorded("tapped ${a.target.display}")
+    }
+
+    /** Drops the last recorded step; returns it in words, or null if there was none. */
+    fun undo(): String? = synchronized(actions) {
+        val last = actions.removeLastOrNull() ?: return null
+        typingBounds = null
+        if (last.kind == RawKind.TYPE) "typed \"${last.typed.orEmpty()}\"" else "tapped ${last.target.display}"
     }
 
     private fun onText(event: AccessibilityEvent) {
@@ -88,6 +98,7 @@ class TeachingRecorder(
             if (last?.kind == RawKind.TYPE && bounds == typingBounds) {
                 actions[actions.lastIndex] = last.copy(typed = text, atMs = clock())
                 lastLabel = "typed \"$text\""
+                onRecorded(lastLabel!!)
                 return
             }
         }
@@ -98,6 +109,7 @@ class TeachingRecorder(
         val a = Fingerprints.type(snap, index, text, clock())
         synchronized(actions) { actions += a }
         lastLabel = "typed \"$text\""
+        onRecorded(lastLabel!!)
     }
 
     private fun findByBounds(snap: ScreenSnapshot, b: Rect, className: String?, editable: Boolean, exactOnly: Boolean = false): Int? {

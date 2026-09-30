@@ -78,13 +78,16 @@ class EchoBubble(
 
     /** The listening panel's ✕. */
     private fun cancelFromPanel() {
-        foldAfterListening = lastMode != Mode.TEACHING
+        // Only the microphone closes: the controls (speak, home, move, ✕) open in its place, so
+        // the next thing is one tap away. They tuck back into the handle after the usual idle time.
+        foldAfterListening = false
         EchoRuntime.service?.voice?.cancelListening()
-        // Respond at once: close the panel and bring the handle back now, not a second later,
-        // so it can be tapped again straight away.
         listening.hide()
         main.removeCallbacks(endListening)
         endListening.run()
+        main.removeCallbacks(collapse)
+        setCollapsed(false)
+        if (minimal() && lastMode == Mode.IDLE) main.postDelayed(collapse, IDLE_COLLAPSE_MS)
     }
     private var listeningUi = false
     private var foldAfterListening = false

@@ -150,6 +150,7 @@ Each of these was found on the device, fixed, and re-run:
 - **AI said "no match" but EchoFlow still asked to run a similar flow** ("show my wishlist on amazon" → "search … and add the first result to cart?"). Now it offers to learn the command.
 - **AI helper quality:** it now sees how the stuck element looked when taught, the next step, where each element is and what's in a pop-up; a suggestion that changes nothing isn't tried again; asked after 5 s (was 7), up to 3 times per step.
 - **A tap refused because the button was redrawn** (YouTube's search) ended the run; it's now found again and retried. YouTube 3/3 after the fix.
+- **✕ on the listening panel folded everything into the handle** (reported on a OnePlus, 30 Sept). It now closes only the microphone and opens the controls (speak, home, move, ✕), which tuck away after the usual idle time. Verified on the S24 FE.
 - **B2 re-checked on Myntra** after the "first result" changes: first sunglasses into the bag (bag emptied).
 
 ## Manual checklist before recording the demo

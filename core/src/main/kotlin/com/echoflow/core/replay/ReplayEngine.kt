@@ -338,19 +338,7 @@ class ReplayEngine(
                     val slotName = typedBefore.slot!!
                     val where = slots.entries.firstOrNull { it.key in SourceSlots.names && it.key != slotName }?.value?.let { " at $it" } ?: ""
                     events += "searched for \"$searched\"$where and found nothing"
-                    // A restaurant or store asks for another place; an item asks what to get.
-                    val instead = if (slotName in SourceSlots.names) "Which $slotName should I use instead?" else "What should I get instead?"
-                    val answer = host.ask("I searched for \"$searched\"$where but couldn't find it. $instead")?.trim()
-                    val stopWords = setOf("no", "nothing", "stop", "cancel", "leave it", "never mind", "nevermind")
-                    if (answer.isNullOrBlank() || TextNormalizer.normalize(answer) in stopWords) {
-                        return StepResult.Stop(
-                            if (answer.isNullOrBlank()) RunStatus.NO_ANSWER else RunStatus.HALTED,
-                            "I searched for \"$searched\"$where but couldn't find it, so I stopped at step ${i + 1} without adding anything.",
-                        )
-                    }
-                    slots[slotName] = slotAnswer(answer, flow.slots.firstOrNull { it.name == slotName })
-                    events += "user asked for \"${slots[slotName]}\" instead of \"$searched\""
-                    return StepResult.SkipTo(i - 1)
+                    return askInstead(flow, slots, slotName, searched, i - 1, i, "I searched for \"$searched\"$where but couldn't find it.")
                 }
             }
 
@@ -436,6 +424,21 @@ class ReplayEngine(
             val item = lastTypedValue ?: slots["item"]
             if (openedResults < MAX_RESULT_OPENS && item != null && step is Step.Tap && step.slot == null && step.pick == null && steps.take(i).any { it is Step.TypeText }) {
                 val result = firstResult(snap, item)
+                // The match is there but its card says it can't be ordered ("Outside delivery
+                // range", "Currently closed", "Sold out"): opening it leads nowhere, so say why and
+                // ask for another one instead.
+                val unavailable = result?.let { unavailableReason(snap, it) }
+                if (result != null && unavailable != null && !askedAboutValue) {
+                    askedAboutValue = true
+                    val slotName = slots.entries.firstOrNull { it.value == item }?.key
+                    val typedAt = steps.take(i).indexOfLast { it is Step.TypeText && it.slot == slotName }
+                    val name = result.label!!.trim()
+                    events += "\"$name\" says \"$unavailable\"; didn't open it"
+                    if (slotName == null || typedAt < 0) {
+                        return StepResult.Stop(RunStatus.HALTED, "$name says \"$unavailable\", so I stopped at step ${i + 1} without adding anything.")
+                    }
+                    return askInstead(flow, slots, slotName, name, typedAt, i, "$name says \"$unavailable\" right now.")
+                }
                 if (result != null) {
                     openedResults++
                     // Same screen, same result as the last open: the click was accepted and ignored
@@ -497,7 +500,11 @@ class ReplayEngine(
             // (Not while a loading spinner is up: that screen is still arriving.)
             if (advisor != null && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS && !loading(snap)) {
                 advised++
-                when (val o = consultAdvisor(flow, steps, i, snap, slots)) {
+                val asked = host.nowMs()
+                val o = consultAdvisor(flow, steps, i, snap, slots)
+                // Waiting for the model's reply doesn't use up the step's time.
+                started += host.nowMs() - asked
+                when (o) {
                     AdviceOutcome.Acted -> continue
                     is AdviceOutcome.Finished -> return o.result
                     AdviceOutcome.Nothing -> Unit
@@ -510,6 +517,43 @@ class ReplayEngine(
 
         val snap = host.current()
         return StepResult.Stop(RunStatus.HALTED, stuckMessage(step, i, steps.size, snap, slots))
+    }
+
+    /**
+     * Asks for another value for [slotName] (a restaurant, store or item) after [problem], and
+     * goes back to the step that typed it ([retypeAt]); stops if the user says no.
+     */
+    private suspend fun askInstead(flow: Flow, slots: MutableMap<String, String>, slotName: String, was: String, retypeAt: Int, i: Int, problem: String): StepResult {
+        // A restaurant or store asks for another place; an item asks what to get.
+        val instead = if (slotName in SourceSlots.names) "Which $slotName should I use instead?" else "What should I get instead?"
+        val answer = host.ask("$problem $instead")?.trim()
+        val stopWords = setOf("no", "nothing", "stop", "cancel", "leave it", "never mind", "nevermind")
+        if (answer.isNullOrBlank() || TextNormalizer.normalize(answer) in stopWords) {
+            return StepResult.Stop(
+                if (answer.isNullOrBlank()) RunStatus.NO_ANSWER else RunStatus.HALTED,
+                "$problem So I stopped at step ${i + 1} without adding anything.",
+            )
+        }
+        slots[slotName] = slotAnswer(answer, flow.slots.firstOrNull { it.name == slotName })
+        events += "user asked for \"${slots[slotName]}\" instead of \"$was\""
+        return StepResult.SkipTo(retypeAt)
+    }
+
+    /**
+     * The status line on a search result's card when it can't be ordered right now ("Outside
+     * delivery range", "Currently closed", "Sold out"), or null.
+     */
+    private fun unavailableReason(snap: ScreenSnapshot, result: UiElement): String? {
+        val cardIndex = Descriptors.clickableFor(snap, result.index)
+        val card = snap.elements[cardIndex].bounds
+        val inside = snap.descendants(cardIndex).map { it.index }.toSet()
+        return snap.appElements()
+            .filter { e ->
+                e.visible && e.label != null &&
+                    (e.index in inside || card.height > 0 && e.bounds.let { it.left >= card.left && it.top >= card.top && it.right <= card.right && it.bottom <= card.bottom })
+            }
+            .mapNotNull { e -> e.label!!.trim().takeIf { l -> TextNormalizer.normalize(l).let { n -> n.split(' ').size <= 8 && UNAVAILABLE.any { n.contains(it) } } } }
+            .firstOrNull()
     }
 
     /** A visible progress spinner or bar: the screen is still loading. */
@@ -1274,6 +1318,11 @@ class ReplayEngine(
         private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
+        private val UNAVAILABLE = listOf(
+            "outside delivery range", "not delivering", "doesn t deliver", "does not deliver", "not serviceable",
+            "currently closed", "temporarily closed", "closed now", "closed for", "currently unavailable",
+            "not accepting orders", "sold out", "out of stock",
+        )
         private val NO_RESULTS = listOf(
             "no results", "no result found", "no matching", "nothing found", "no items found", "no dishes",
             "couldn t find", "couldnt find", "could not find", "didn t find", "did not match", "no match", "0 results",

@@ -39,6 +39,9 @@ private class FakePhone(
     private val gateway = ActionGateway(guard, this, this, postActionTimeoutMs = 10)
     private var clock = 0L
 
+    /** Time passing outside the engine (a slow network reply). */
+    fun advance(ms: Long) { clock += ms }
+
     fun go(to: String) {
         name = to
         snap = screens.getValue(to)(++nextId)
@@ -164,6 +167,17 @@ class ReplayEngineTest {
         assertEquals(1, asked.size)
         assertTrue(asked.single().step.contains("Search for restaurant and food"), asked.single().step)
         assertTrue(asked.single().screen.any { it.label == "Delete saved addresses" })
+    }
+
+    @Test fun `a slow AI reply doesn't use up the step's time`() = runTest {
+        val p = FakePhone(screens + ("odd" to oddPopup), mapOf(("odd" to "Continue browsing") to "home", ("home" to "Search for restaurant and food") to "search", ("results" to "ADD") to "cart"), "odd")
+        val advisor = RecoveryAdvisor { req ->
+            p.advance(9_000) // longer than what's left of the step's 12 s
+            RecoveryAdvice.Dismiss(req.screen.first { it.label == "Continue browsing" }.id, "the sheet's only way out")
+        }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(flow().copy(steps = flow().steps.drop(1)), mapOf("item" to "garlic bread"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals("Continue browsing", p.clicked.first(), p.clicked.toString())
     }
 
     @Test fun `the AI helper can never make EchoFlow tap something risky`() = runTest {
@@ -372,6 +386,31 @@ class ReplayEngineTest {
         val r = ReplayEngine(p, p.guard, stepBudgetMs = 6_000).run(f.copy(steps = steps), mapOf("item" to "garlic bread"))
         assertTrue(p.questions.none { it.contains("couldn't find") }, p.questions.toString())
         assertTrue(r.events.any { it.contains("opened the first result matching") }, r.events.toString())
+    }
+
+    @Test fun `a result marked outside delivery range is not opened and another one is asked for`() = runTest {
+        // Zomato lists the restaurant, but its card says it can't deliver to this address.
+        var searches = 0
+        val card: (String, String) -> (Long) -> ScreenSnapshot = { name, status ->
+            { id ->
+                screen(pkg, id) {
+                    edit(hint = "Search for restaurants and food", typed = name)
+                    text("Recent searches"); text("Clear")
+                    text("BASED ON YOUR SEARCH")
+                    val row = container(clickable = true); text(name, row); text(status, row)
+                }
+            }
+        }
+        val p = FakePhone(screens + ("results" to { id -> if (searches++ == 0) card("Garlic Bread", "Outside delivery range")(id) else card("Paneer Tikka", "30-35 mins")(id) }),
+            mapOf(("home" to "Search for restaurant and food") to "search"), "home")
+        p.answers.addLast("paneer tikka")
+        val f = flow()
+        val menuSearch = Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Search in menu", className = "android.widget.Button"))
+        val r = ReplayEngine(p, p.guard, stepBudgetMs = 6_000).run(f.copy(steps = f.steps.take(3) + menuSearch), mapOf("item" to "garlic bread"))
+        assertTrue(p.questions.firstOrNull().orEmpty().let { it.contains("Outside delivery range") && it.contains("instead") }, p.questions.toString() + r + p.clicked)
+        assertTrue("Garlic Bread" !in p.clicked, p.clicked.toString())
+        assertEquals(listOf("garlic bread", "paneer tikka"), p.typed)
+        assertTrue(r.events.any { it.contains("opened the first result matching \"paneer tikka\"") }, r.events.toString())
     }
 
     @Test fun `a search that finds nothing asks for something else at once and continues (T10)`() = runTest {

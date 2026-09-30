@@ -107,10 +107,10 @@ object RecoveryPrompt {
             {"action":"target","id":<id>,"confidence":<0..1>,"reason":"..."}  this element IS what the step means (it was renamed, moved or is in another language)
             {"action":"back","reason":"..."}  this screen is unrelated to the task
             {"action":"scroll","reason":"..."}  the needed element is probably further down
-            {"action":"wait","reason":"..."}  the screen is still loading
+            {"action":"wait","reason":"..."}  the screen is still loading (apps often show a quote, a logo, a tip or placeholder shapes while a page loads)
             {"action":"ask","question":"...","reason":"..."}  ask the user ONE short, specific question
             {"action":"stop","reason":"..."}  nothing sensible can be done
-            Rules: use only ids from the list. Never pick anything that pays, places an order, buys, deletes, signs in, accepts terms, grants permissions or changes settings. If unsure, ask.
+            Rules: use only ids from the list. Never pick anything that pays, places an order, buys, deletes, signs in, accepts terms, grants permissions or changes settings. If a status on screen says the task can't be done here (closed, outside delivery range, sold out, unavailable), use "ask" to tell the user and ask what to do instead. If unsure, ask.
         """.trimIndent()
     }
 

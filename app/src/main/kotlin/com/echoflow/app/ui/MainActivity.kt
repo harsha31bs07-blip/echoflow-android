@@ -44,6 +44,7 @@ import java.util.Date
  */
 class MainActivity : Activity() {
     private val scope: CoroutineScope = MainScope()
+    private lateinit var keyTest: TextView
     private val jobs = mutableListOf<Job>()
 
     private lateinit var kit: Kit
@@ -349,6 +350,16 @@ class MainActivity : Activity() {
             ))
             keyStatus = kit.caption("")
             addView(keyStatus)
+            keyTest = kit.caption("")
+            addView(kit.secondaryButton("Test the key") {
+                keyTest.text = "Asking Gemini…"
+                scope.launch {
+                    keyTest.text = com.echoflow.app.llm.GeminiClient(apiKey = {
+                        EchoRuntime.prefs.geminiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
+                    }).test()
+                }
+            }.apply { contentDescription = "Test the Gemini key" })
+            addView(keyTest)
             addView(kit.divider())
             addView(kit.text("Bubble", 15f, Palette.TEXT, bold = true))
             addView(switchRow("Tuck the bubble into the screen edge when idle, and glow the edges while working", EchoRuntime.prefs.minimalBubble) {

@@ -141,6 +141,8 @@ Each of these was found on the device, fixed, and re-run:
 - **Items with an options sheet** (Paneer tikka's "Choose customization"). Asks *"… has extra options. Add it with the default choices for ₹511?"*
 - **Amazon's "Pay" navigation tab** read as a pay button. Navigation tabs are excluded from the CHECKOUT signal; tapping it is still blocked.
 - **Skipping ahead past a needed step** (Amazon's cart tab is on every page). Skip-ahead now runs only after waiting and scrolling, and never skips typing or value steps.
+- **AI helper timed out and the run stopped** (Domino's, 30 Sept). The recovery prompt lists a whole screen and took longer than the 4.5 s allowed, so "asked the AI helper; no answer". Recovery now allows 10 s, the wait doesn't count against the step's 12 s, failures are logged (`EchoGemini`), and *Advanced → Test the key* checks the key, model and network.
+- **Restaurant "Outside delivery range"** (same run). Opening it only showed a loading page. The result card's status is now read before opening; EchoFlow says *"Domino's Pizza says 'Outside delivery range' right now. Which restaurant should I use instead?"* and continues with the answer (verified: switched to Brik Oven). The AI helper is also told that a quote or logo on a blank page means "wait", not "go back" (verified: "still loading").
 
 ## Manual checklist before recording the demo
 

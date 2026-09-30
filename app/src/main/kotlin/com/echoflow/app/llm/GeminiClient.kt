@@ -84,21 +84,47 @@ class GeminiClient(
      */
     suspend fun adviseRecovery(request: RecoveryRequest): RecoveryAdvice? {
         if (!enabled) return null
-        val text = generate(RecoveryPrompt.build(request)) ?: return null
+        val text = generate(RecoveryPrompt.build(request), RECOVERY_TIMEOUT_MS) ?: return null
         val advice = RecoveryPrompt.parse(text, request.screen.map { it.id }.toSet())
         android.util.Log.i("EchoGemini", "recovery advice for step ${request.stepNumber}: $advice")
         if (advice == null) lastError = "unreadable recovery advice"
         return advice
     }
 
-    private suspend fun generate(prompt: String): String? = withTimeoutOrNull(TIMEOUT_MS) {
+    /**
+     * A tiny request to check the key, the model name and the network, for the app's
+     * "Test" button. Returns a short human-readable result.
+     */
+    suspend fun test(): String {
+        if (!enabled) return "No key saved."
+        val t0 = System.currentTimeMillis()
+        val text = generate("Reply with JSON only: {\"ok\": true}", RECOVERY_TIMEOUT_MS)
+        val ms = System.currentTimeMillis() - t0
+        return if (text != null) "✓ Gemini answered in ${"%.1f".format(ms / 1000.0)} s ($model)." else "✗ Gemini didn't answer: ${explain(lastError)}"
+    }
+
+    private fun explain(error: String?): String = when {
+        error == null -> "no reply."
+        error.startsWith("HTTP 429") -> "the free-tier limit is used up for now (HTTP 429). It resets later; try again in a while."
+        error.startsWith("HTTP 400") || error.startsWith("HTTP 403") -> "the key was refused ($error). Check it was pasted in full."
+        error.startsWith("HTTP 404") -> "model \"$model\" not found ($error)."
+        error == "timeout" -> "no reply within ${RECOVERY_TIMEOUT_MS / 1000} s (slow network?)."
+        else -> "$error."
+    }
+
+    private suspend fun generate(prompt: String, timeoutMs: Long = TIMEOUT_MS): String? {
+        lastError = null
+        return generateOnce(prompt, timeoutMs)
+    }
+
+    private suspend fun generateOnce(prompt: String, timeoutMs: Long): String? = (withTimeoutOrNull(timeoutMs) {
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     connectTimeout = 3_000
-                    readTimeout = TIMEOUT_MS.toInt()
+                    readTimeout = timeoutMs.toInt()
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
                     setRequestProperty("x-goog-api-key", apiKey())
@@ -115,21 +141,30 @@ class GeminiClient(
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = conn.responseCode
                 if (code !in 200..299) {
-                    lastError = "HTTP $code"
+                    // The error body names the problem (quota, bad key, unknown model); it never contains the key.
+                    val detail = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
+                        ?.let { Regex("\"message\"\\s*:\\s*\"([^\"]{0,160})").find(it)?.groupValues?.get(1) }
+                    lastError = "HTTP $code" + (detail?.let { ": $it" } ?: "")
                     return@runCatching null
                 }
                 val resp = conn.inputStream.bufferedReader().use { it.readText() }
                 json.parseToJsonElement(resp).jsonObject["candidates"]?.jsonArray?.firstOrNull()
                     ?.jsonObject?.get("content")?.jsonObject?.get("parts")?.jsonArray?.firstOrNull()
                     ?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                    .also { if (it == null) lastError = "empty reply" }
             }.getOrElse {
                 lastError = it.javaClass.simpleName
                 null
             }
         }
-    }
+    } ?: run {
+        if (lastError == null) lastError = "timeout"
+        null
+    }).also { if (it == null) android.util.Log.w("EchoGemini", "no answer: $lastError") }
 
     companion object {
         const val TIMEOUT_MS = 4_500L
+        /** Recovery prompts list a whole screen, so they take longer than matching a command. */
+        const val RECOVERY_TIMEOUT_MS = 10_000L
     }
 }

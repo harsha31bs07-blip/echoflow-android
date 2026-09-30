@@ -138,6 +138,19 @@ class EchoAccessibilityService : AccessibilityService() {
     /** Synchronous capture for the teaching recorder (the screen *before* a tap changes it). */
     fun captureNow(): ScreenSnapshot? = capturer.capture(lastActivity, "teach")?.snapshot
 
+    private val payHighlight by lazy { com.echoflow.app.ui.PayHighlight(this) }
+
+    /** At "Your turn": outline the screen's Pay / Place order button (display only; never tapped). */
+    fun highlightPayButton() {
+        val snap = EchoRuntime.snapshots.current() ?: return
+        val risk = com.echoflow.core.safety.ActionRiskClassifier()
+        val pay = snap.appElements()
+            .filter { it.visible && it.clickable && it.bounds.area > 0 && it.bounds.height < snap.screenHeight / 4 }
+            .filter { risk.assess(snap, it).risk == com.echoflow.core.safety.ActionRisk.COMMIT }
+            .maxByOrNull { it.bounds.top } ?: return // the checkout bar sits at the bottom
+        payHighlight.show(pay.bounds)
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
         // The notification shade or lock screen is up: step aside (the bubble would cover them).

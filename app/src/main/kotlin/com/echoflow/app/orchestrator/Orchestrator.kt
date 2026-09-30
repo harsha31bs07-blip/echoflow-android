@@ -411,6 +411,8 @@ class Orchestrator(context: Context) {
         }
         withContext(Dispatchers.Main) {
             _state.value = UiState(Mode.IDLE, r.message)
+            // "Your turn": show where to finish (the app's Pay / Place order button).
+            if (r.status == RunStatus.HANDED_OFF) EchoRuntime.service?.highlightPayButton()
             say(r.message)
         }
     }

@@ -176,6 +176,8 @@ class Orchestrator(context: Context) {
     private suspend fun command(raw: String) {
         // "Don't order…": nothing to do (it used to be read as an order for "dont …").
         if (Utterances.isNegated(raw)) return say("Okay, I won't do anything.")
+        // "Forget the pizza one": delete a learned flow, after a yes.
+        FORGET.find(TextNormalizer.normalize(raw))?.let { m -> return forget(m.groupValues[1]) }
         val all = flows.all()
         if (all.isEmpty()) {
             offerTeach(raw, "I don't know how to \"$raw\" yet. Want to teach me? Say yes, then show me.")
@@ -504,6 +506,20 @@ class Orchestrator(context: Context) {
         voice?.speakAsync(text)
     }
 
+    private suspend fun forget(what: String) {
+        val words = TextNormalizer.tokens(what).filter { it !in setOf("the", "one", "flow", "task", "about", "that", "my") }
+        val all = flows.all()
+        val hit = all.maxByOrNull { f -> words.count { w -> TextNormalizer.tokens(f.template + " " + (f.appLabel ?: "")).any { it.startsWith(w) } } }
+            ?.takeIf { f -> words.isNotEmpty() && words.any { w -> TextNormalizer.tokens(f.template + " " + (f.appLabel ?: "")).any { it.startsWith(w) } } }
+            ?: return say(if (all.isEmpty()) "I haven't learned anything yet." else "I couldn't tell which one. Say \"what can you do\" to hear them.")
+        val name = DecisionLayer.describe(Candidate(hit, 1.0, hit.slots.associate { it.name to it.taughtValue }, "exact"))
+        val a = askUser("Forget how to $name? Say yes or no.", listOf("yes", "no"))
+        if (a != null && ReplayEngine.isYes(a)) {
+            flows.delete(hit.id)
+            say("Okay, I forgot how to $name.")
+        } else say("Okay, I'll keep it.")
+    }
+
     private fun teachingCaption(line: String) {
         val r = recorder ?: return
         if (_state.value.mode != Mode.TEACHING) return
@@ -512,6 +528,7 @@ class Orchestrator(context: Context) {
     }
 
     private companion object {
+        val FORGET = Regex("^(?:please )?(?:forget|delete|remove|unlearn)(?: how to)? (.+)$")
         val UNDO_WORDS = setOf("undo", "undo that", "undo it", "undo last step", "undo the last step", "remove last step", "remove the last step", "scratch that", "go back one step")
         const val TAG = "EchoOrchestrator"
     }

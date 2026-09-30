@@ -141,6 +141,14 @@ class Orchestrator(context: Context) {
         status("“$text”")
         val meta = matcher.meta(text)
         if (_state.value.mode == Mode.TEACHING) {
+            if (TextNormalizer.normalize(text) in RELAY_WORDS) {
+                val r = recorder
+                if (r != null && EchoRuntime.service != null) {
+                    EchoRuntime.service?.startTapRelay(r)
+                    teachingCaption("Recording your taps myself now")
+                    return say("Okay, I'll record your taps myself from now on. If I missed one, go back and tap it again.")
+                }
+            }
             if (TextNormalizer.normalize(text) in UNDO_WORDS) {
                 val removed = recorder?.undo()
                 return say(if (removed == null) "There's nothing to undo yet." else "Okay, I removed: $removed.")
@@ -281,13 +289,11 @@ class Orchestrator(context: Context) {
             onCommitTap = { what -> scope.launch { finishTeaching("PAYMENT", "You reached the pay button ($what), so I stopped recording before it.") } },
             // Live caption: what was just learned, so a wrong tap is noticed (and "undo" fixes it).
             onRecorded = { what -> teachingCaption("Got it: $what") },
-            // No taps reported while the screen changes (W1): record them ourselves from now on.
+            // The screen changed with no tap reported (W1). Pop-ups also appear on their own
+            // (Zomato's address sheet), so don't switch the tap relay on automatically: suggest it.
             onTapsHidden = {
                 scope.launch(Dispatchers.Main) {
-                    val r = recorder ?: return@launch
-                    EchoRuntime.service?.startTapRelay(r)
-                    teachingCaption("This app hides its taps; I'm recording them myself now")
-                    sayAsync("This app hides its taps from me, so I'll record them myself from now on. If I missed your last tap, go back and tap it again.")
+                    teachingCaption("If I'm missing your taps, say \"record my taps\"")
                 }
             },
         )
@@ -540,6 +546,7 @@ class Orchestrator(context: Context) {
 
     private companion object {
         val FORGET = Regex("^(?:please )?(?:forget|delete|remove|unlearn)(?: how to)? (.+)$")
+        val RELAY_WORDS = setOf("record my taps", "record taps", "record the taps", "you missed my tap", "you are missing my taps", "youre missing my taps")
         val UNDO_WORDS = setOf("undo", "undo that", "undo it", "undo last step", "undo the last step", "remove last step", "remove the last step", "scratch that", "go back one step")
         const val TAG = "EchoOrchestrator"
     }

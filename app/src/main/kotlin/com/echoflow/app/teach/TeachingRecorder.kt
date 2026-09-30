@@ -90,7 +90,7 @@ class TeachingRecorder(
         if (a.packageName != snap.packageName) android.util.Log.i("EchoTeach", "  -> tap in $pkg, not ${snap.packageName}")
         synchronized(actions) { actions += a }
         lastLabel = a.target.display
-        onRecorded("tapped ${a.target.display}")
+        onRecorded("tapped ${readable(a.target.display)}")
     }
 
     /**
@@ -139,8 +139,14 @@ class TeachingRecorder(
         synchronized(actions) { actions += a }
         typingBounds = null
         lastLabel = a.target.display
-        onRecorded("tapped ${a.target.display}")
+        onRecorded("tapped ${readable(a.target.display)}")
         return RelayTap.RECORDED
+    }
+
+    /** Icon-font glyphs (Zomato's search icon reads "錄") aren't words: say "a button" instead. */
+    private fun readable(display: String): String {
+        val kept = display.filter { it.code < 0x2E80 && (it.isLetterOrDigit() || it.isWhitespace() || it in "\"'.,&-:()") }.trim()
+        return if (kept.count { it.isLetterOrDigit() } < 2) "a button" else kept
     }
 
     /** Drops the last recorded step; returns it in words, or null if there was none. */

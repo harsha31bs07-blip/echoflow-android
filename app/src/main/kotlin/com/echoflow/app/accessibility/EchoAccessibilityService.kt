@@ -81,6 +81,13 @@ class EchoAccessibilityService : AccessibilityService() {
         voice.onStatus = { s -> EchoRuntime.orchestrator.status(s) }
         bubble = EchoBubble(this, EchoRuntime.orchestrator).also { it.show() }
         voice.onSpeechUi = { e -> bubble?.onSpeech(e) }
+        // The Android accessibility button, gesture or shortcut (e.g. holding both volume keys,
+        // once assigned to EchoFlow in Accessibility settings): speak without touching the screen.
+        accessibilityButtonController.registerAccessibilityButtonCallback(object : android.accessibilityservice.AccessibilityButtonController.AccessibilityButtonCallback() {
+            override fun onClicked(controller: android.accessibilityservice.AccessibilityButtonController) {
+                EchoRuntime.orchestrator.onSpeakPressed()
+            }
+        })
         uiScope.launch { EchoRuntime.orchestrator.state.collect { bubble?.render(it) } }
         if (BuildConfig.DEBUG) {
             // Debug builds only: `adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "..."`

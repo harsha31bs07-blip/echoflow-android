@@ -191,6 +191,9 @@ class MainActivity : Activity() {
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 },
             ))
+            addView(kit.caption("Hands-free: in Accessibility settings → EchoFlow automation → shortcut, choose the accessibility button or holding both volume keys. It starts listening without touching the screen.").apply {
+                setPadding(0, kit.dp(8), 0, 0)
+            })
         }
         column.addView(readyCard)
     }

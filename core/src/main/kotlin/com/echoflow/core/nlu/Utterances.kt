@@ -69,6 +69,33 @@ object Utterances {
         val core: List<String> = tokens,
     )
 
+    /**
+     * A command with the parts EchoFlow can't do taken out: extras like "with extra cheese" (it
+     * adds items as the app offers them) and "and pay with UPI" (it never pays). Both are said back
+     * to the user instead of ending up in a restaurant or item name.
+     */
+    data class Extras(val command: String, val extras: List<String>, val wantsPayment: Boolean)
+
+    fun splitExtras(utterance: String): Extras {
+        var t = TextNormalizer.normalize(utterance)
+        val pay = PAYMENT_TAIL.find(t)
+        if (pay != null) t = t.substring(0, pay.range.first).trim()
+        val extras = CUSTOMISATION.findAll(t).map { it.value.trim() }.toList()
+        extras.forEach { t = t.replace(" $it", "") }
+        return Extras(t.trim(), extras, pay != null)
+    }
+
+    /** "Don't order…", "do not search…", "never mind…", Hinglish "…mat karo": nothing should run. */
+    fun isNegated(utterance: String): Boolean {
+        val t = TextNormalizer.normalize(utterance)
+        if (t.startsWith("dont forget") || t.startsWith("do not forget")) return false
+        return NEGATION.containsMatchIn(t) || Regex("\\bmat (karo|karna|kar)\\b").containsMatchIn(t)
+    }
+
+    private val PAYMENT_TAIL = Regex("\\s+(?:and\\s+)?(?:then\\s+)?(?:pay|make\\s+(?:the\\s+)?payment|checkout|check\\s+out|place\\s+(?:the\\s+)?order|confirm\\s+(?:the\\s+)?order)\\b.*$")
+    private val CUSTOMISATION = Regex("\\s+(?:with\\s+(?:extra|no|less|more|double|added)|without)\\s+[a-z]+(?:\\s+[a-z]+)?(?=\\s+(?:from|on|to|and)\\b|$)")
+    private val NEGATION = Regex("^(?:please\\s+)?(?:i\\s+)?(?:dont|do not|never|no need to|nevermind|never mind)\\b")
+
     fun stripTeachPrefix(utterance: String): String {
         val tokens = TextNormalizer.tokens(utterance)
         val p = teachPrefixes.firstOrNull { pre -> pre.size <= tokens.size && pre.indices.all { tokens[it] == pre[it] } }

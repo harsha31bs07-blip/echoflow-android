@@ -255,14 +255,19 @@ class ReplayEngine(
             }
             if (preview.isSensitive && guard.onSnapshot(snap).isSensitive) return tripped() ?: StepResult.Stop(RunStatus.HANDED_OFF, "Sensitive screen.")
             if (snap.packageName != null && snap.packageName != flow.appPackage && !isOwnOrSystem(snap.packageName)) {
+                val app = flow.appLabel ?: "the app"
+                // The home screen: the user left on purpose. Never press or tap anything there.
+                if (isLauncher(snap.packageName)) {
+                    return StepResult.Stop(RunStatus.HALTED, "You went to the home screen, so I stopped at step ${i + 1} and didn't tap anything else. Ask me again to start over.")
+                }
                 // Some other app came to the front: try back once, then stop.
                 if (triedDismiss < 1) {
                     triedDismiss++
-                    events += "left ${snap.packageName}; pressed back"
+                    events += "another app (${snap.packageName}) came to the front; pressed back"
                     act(PlannedAction.Back, GateContext(isRecovery = true), snap)
                     continue
                 }
-                return StepResult.Stop(RunStatus.HALTED, "I ended up in another app (${snap.packageName}) at step ${i + 1}.")
+                return StepResult.Stop(RunStatus.HALTED, "Another app opened on top of $app at step ${i + 1}, so I stopped without tapping anything in it.")
             }
 
             // Dialogs that need the user's decision (T7): never auto-confirmed.
@@ -674,7 +679,11 @@ class ReplayEngine(
         val before = host.current()
         when (val o = host.perform(PlannedAction.LaunchApp(step.packageName), GateContext(explicitlyTaught = true, resolverConfidence = 1.0))) {
             is ActionOutcome.Blocked -> return StepResult.Stop(RunStatus.HALTED, "I'm not allowed to open ${step.appLabel ?: step.packageName}.")
-            is ActionOutcome.Failed -> return StepResult.Stop(RunStatus.HALTED, "I couldn't open ${step.appLabel ?: step.packageName}. Is it installed?")
+            is ActionOutcome.Failed -> return StepResult.Stop(RunStatus.HALTED,
+                // Nothing on screen has been read: the accessibility service isn't running, not the app missing.
+                if (o.message.contains("no screen captured") || o.message.contains("accessibility service"))
+                    "I can't see the screen right now. Please turn EchoFlow automation off and on again in Accessibility settings, then ask me again."
+                else "I couldn't open ${step.appLabel ?: step.packageName}. Is it installed?")
             is ActionOutcome.Performed -> Unit
         }
         host.awaitSettled(before?.id ?: 0, 4_000)
@@ -1347,6 +1356,8 @@ class ReplayEngine(
         is Step.LaunchApp -> null
     }
 
+    private fun isLauncher(pkg: String) = LAUNCHER.containsMatchIn(pkg)
+
     private fun isOwnOrSystem(pkg: String) = pkg == "com.echoflow" || pkg.startsWith("com.android.systemui")
 
     private fun result(status: RunStatus, message: String, i: Int, steps: List<Step>) = ReplayResult(
@@ -1369,6 +1380,8 @@ class ReplayEngine(
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
         const val ADD_EFFECT_WAIT_MS = 3_000L
+        /** Home-screen apps (Samsung One UI, Pixel, MIUI, Lawnchair and others). */
+        private val LAUNCHER = Regex("launcher|\\.home$|\\.homescreen|lawnchair|trebuchet", RegexOption.IGNORE_CASE)
         private val CART_BAR = Regex("^\\d+ items? added")
         private val UNAVAILABLE = listOf(
             "outside delivery range", "not delivering", "doesn t deliver", "does not deliver", "not serviceable",

@@ -68,6 +68,8 @@ class Orchestrator(context: Context) {
 
     private var recorder: TeachingRecorder? = null
     private var runJob: Job? = null
+    /** What the current run is doing, for "I'm still working on …". */
+    private var runningWhat: String? = null
 
     /** Counts presses of Speak, so only the newest listening session updates the state. */
     @Volatile private var listenSession = 0
@@ -144,6 +146,14 @@ class Orchestrator(context: Context) {
             }
             return
         }
+        // One task at a time: a second command mid-run would fight the first over the screen.
+        // Stop, "what happened" and the like still work.
+        // (RUNNING is set before "Okay, …" is spoken; the job only starts after it.)
+        val busy = runJob?.isActive == true || _state.value.mode == Mode.RUNNING
+        if (busy && (meta == null || meta is MetaIntent.Teach)) {
+            say("I'm still working on ${runningWhat ?: "the last task"}. Say stop to cancel it, or ask me again when I'm done.")
+            return
+        }
         when (meta) {
             is MetaIntent.Teach -> startTeaching(meta.utterance)
             MetaIntent.Report -> say(runs.last()?.spokenSummary() ?: "I haven't run anything yet.")
@@ -155,30 +165,77 @@ class Orchestrator(context: Context) {
         }
     }
 
-    private suspend fun command(text: String) {
+    private suspend fun command(raw: String) {
+        // "Don't order…": nothing to do (it used to be read as an order for "dont …").
+        if (Utterances.isNegated(raw)) return say("Okay, I won't do anything.")
         val all = flows.all()
         if (all.isEmpty()) {
-            offerTeach(text, "I don't know how to \"$text\" yet. Want to teach me? Say yes, then show me.")
+            offerTeach(raw, "I don't know how to \"$raw\" yet. Want to teach me? Say yes, then show me.")
             return
         }
+        // "…with extra cheese", "…and pay with UPI": not part of any name; said back instead.
+        val split = Utterances.splitExtras(raw)
+        val text = split.command
+        val note = listOfNotNull(
+            split.extras.takeIf { it.isNotEmpty() }?.let { "I can't choose extras like \"${it.joinToString("\", \"")}\", so I'll add it as the app offers it; you can change it in the cart." },
+            "I never pay, so I'll stop at payment for you.".takeIf { split.wantsPayment },
+        ).joinToString(" ")
         status("Matching “$text”…")
-        val local = matcher.match(text, all)
-        val llm = if (local.firstOrNull()?.source in setOf("exact", "template")) null else gemini.matchIntent(text, all)
-        val candidates = if (llm == null) local else matcher.match(text, all, llm)
-        Log.i(TAG, "candidates: " + candidates.joinToString { "${it.flow.id}=${"%.2f".format(it.score)}/${it.source}" } + " llm=$llm err=${gemini.lastError}")
-        when (val d = DecisionLayer.decide(text, candidates)) {
-            is Decision.Proceed -> runFlow(d.candidate, text)
+        val candidates = candidatesFor(text, all)
+        val d = DecisionLayer.decide(text, candidates)
+        // Two tasks in one sentence ("search lofi on youtube and order a pizza from brik oven"):
+        // only when the whole sentence isn't itself a clear match, and each half is.
+        if (!(d is Decision.Proceed && d.candidate.source in setOf("exact", "template"))) {
+            compound(text, all)?.let { (first, second) -> return runBoth(first, second, raw) }
+        }
+        when (d) {
+            is Decision.Proceed -> runFlow(d.candidate, raw, note)
             is Decision.Confirm -> {
                 val a = askUser(d.question, listOf("yes", "no"))
-                if (a != null && ReplayEngine.isYes(a)) runFlow(d.candidate, text) else say("Okay, I won't do that.")
+                if (a != null && ReplayEngine.isYes(a)) runFlow(d.candidate, raw, note) else say("Okay, I won't do that.")
             }
             is Decision.Disambiguate -> {
                 val labels = d.options.map { DecisionLayer.describe(it) }
                 val a = askUser(d.question, labels)
                 val chosen = a?.let { pick(it, d.options) }
-                if (chosen != null) runFlow(chosen, text) else say("Okay, I'll leave it.")
+                if (chosen != null) runFlow(chosen, raw, note) else say("Okay, I'll leave it.")
             }
-            is Decision.OfferTeach -> offerTeach(text, d.message)
+            is Decision.OfferTeach -> offerTeach(raw, d.message)
+        }
+    }
+
+    private suspend fun candidatesFor(text: String, all: List<Flow>): List<Candidate> {
+        val local = matcher.match(text, all)
+        val llm = if (local.firstOrNull()?.source in setOf("exact", "template")) null else gemini.matchIntent(text, all)
+        val candidates = if (llm == null) local else matcher.match(text, all, llm)
+        Log.i(TAG, "candidates: " + candidates.joinToString { "${it.flow.id}=${"%.2f".format(it.score)}/${it.source}" } + " llm=$llm err=${gemini.lastError}")
+        return candidates
+    }
+
+    /** "X and Y" / "X then Y" where both X and Y are clear matches on their own (no AI needed). */
+    private fun compound(text: String, all: List<Flow>): Pair<Candidate, Candidate>? {
+        val words = text.split(' ')
+        for (k in words.indices) {
+            if (words[k] != "and" && words[k] != "then") continue
+            val left = words.take(k).joinToString(" ")
+            val right = words.drop(k + 1).let { if (it.firstOrNull() == "then") it.drop(1) else it }.joinToString(" ")
+            if (left.split(' ').size < 3 || right.split(' ').size < 3) continue
+            val a = (DecisionLayer.decide(left, matcher.match(left, all)) as? Decision.Proceed)?.candidate ?: continue
+            val b = (DecisionLayer.decide(right, matcher.match(right, all)) as? Decision.Proceed)?.candidate ?: continue
+            return a to b
+        }
+        return null
+    }
+
+    /** One task, then the next: only if the first one finished (not at a payment screen). */
+    private suspend fun runBoth(first: Candidate, second: Candidate, raw: String) {
+        say("That's two things. I'll do them one at a time: first ${DecisionLayer.describe(first)}, then ${DecisionLayer.describe(second)}.")
+        runFlow(first, raw)
+        runJob?.join()
+        when (runs.last()?.status) {
+            RunStatus.COMPLETED -> runFlow(second, raw)
+            RunStatus.HANDED_OFF -> say("The first one is waiting for you to pay. When you're done, ask me to ${DecisionLayer.describe(second)}.")
+            else -> say("The first one didn't finish, so I didn't start ${DecisionLayer.describe(second)}.")
         }
     }
 
@@ -262,13 +319,14 @@ class Orchestrator(context: Context) {
 
     // ---------------- replay ----------------
 
-    private suspend fun runFlow(c: Candidate, utterance: String) {
+    private suspend fun runFlow(c: Candidate, utterance: String, note: String = "") {
         if (!prepareGuard()) return
         // B2: the same steps in another app of the same kind (never saved over the taught flow).
         val flow = c.targetApp?.let { c.flow.retargeted(it, DecisionLayer.appLabel(it)) } ?: c.flow
         val slots = c.slots.filterValues { it.isNotBlank() }
         _state.value = UiState(Mode.RUNNING, "Running “${DecisionLayer.describe(c)}”")
-        say("Okay, ${DecisionLayer.describe(c)}.")
+        runningWhat = "“${DecisionLayer.describe(c)}”"
+        say("Okay, ${DecisionLayer.describe(c)}." + if (note.isBlank()) "" else " $note")
         val started = System.currentTimeMillis()
         currentStep = null
         runJob = scope.launch(Dispatchers.Default) {
@@ -350,7 +408,11 @@ class Orchestrator(context: Context) {
 
     private suspend fun listFlows() {
         val all = flows.all()
-        say(if (all.isEmpty()) "I haven't learned anything yet." else "I know ${all.size}: " + all.joinToString("; ") { "${it.template} on ${it.appLabel ?: it.appPackage}" })
+        say(if (all.isEmpty()) "I haven't learned anything yet." else "I know ${all.size}: " + all.joinToString("; ") { f ->
+            val app = f.appLabel ?: f.appPackage
+            // "…on zomato" already names the app.
+            if (f.template.lowercase().contains(app.lowercase())) f.template else "${f.template} on $app"
+        })
     }
 
     // ---------------- voice ----------------

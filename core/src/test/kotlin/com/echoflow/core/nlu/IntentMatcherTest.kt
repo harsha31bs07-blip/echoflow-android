@@ -26,6 +26,49 @@ class IntentMatcherTest {
     private fun decide(u: String, flows: List<Flow> = listOf(food, shop), llm: LlmIntent? = null) =
         DecisionLayer.decide(u, m.match(u, flows, llm))
 
+    private val pizza = Flow(
+        "pizza", "order a {item} pizza from {restaurant} on zomato", "com.application.zomato", "Zomato", "order a {item} pizza from {restaurant} on zomato",
+        listOf("order a margherita pizza from brik oven on zomato"),
+        listOf(SlotDef("item", SlotType.TEXT, "margherita"), SlotDef("restaurant", SlotType.TEXT, "brik oven")), emptyList(),
+    )
+    private val youtube = Flow(
+        "yt", "search for {item} on youtube", "com.google.android.youtube", "YouTube", "search for {item} on youtube",
+        listOf("search for lofi music on youtube"), listOf(SlotDef("item", SlotType.TEXT, "lofi music")), emptyList(),
+    )
+
+    @Test fun `extras and a payment request are split off, not glued onto a name`() {
+        val a = Utterances.splitExtras("Order a farmhouse pizza from Brik Oven with extra cheese")
+        assertEquals("order a farmhouse pizza from brik oven", a.command)
+        assertEquals(listOf("with extra cheese"), a.extras)
+        val b = Utterances.splitExtras("order a farmhouse pizza from brik oven and pay with UPI")
+        assertEquals("order a farmhouse pizza from brik oven", b.command)
+        assertTrue(b.wantsPayment)
+        val c = Utterances.splitExtras("order a farmhouse pizza without onion from brik oven")
+        assertEquals("order a farmhouse pizza from brik oven", c.command)
+        // Names that merely contain these words stay whole.
+        assertEquals("order mac and cheese from brik oven", Utterances.splitExtras("order mac and cheese from brik oven").command)
+        assertEquals("order an extra large pizza from brik oven", Utterances.splitExtras("order an extra large pizza from brik oven").command)
+        val d = assertIs<Decision.Proceed>(decide(a.command, listOf(pizza)))
+        assertEquals("brik oven", d.candidate.slots["restaurant"])
+    }
+
+    @Test fun `negated commands are recognised`() {
+        assertTrue(Utterances.isNegated("Don't order the farmhouse pizza from brik oven"))
+        assertTrue(Utterances.isNegated("please do not search on youtube"))
+        assertTrue(Utterances.isNegated("zomato se pizza order mat karo"))
+        assertTrue(!Utterances.isNegated("order a farmhouse pizza from brik oven"))
+        assertTrue(!Utterances.isNegated("don't forget to order milk"))
+    }
+
+    @Test fun `each half of a two-task sentence matches on its own`() {
+        val flows = listOf(pizza, youtube)
+        assertIs<Decision.Proceed>(decide("search for lofi music on youtube", flows))
+        assertIs<Decision.Proceed>(decide("order a farmhouse pizza from brik oven", flows))
+        // The whole sentence is not a clear match for either flow.
+        val whole = decide("search for lofi music on youtube and order a farmhouse pizza from brik oven", flows)
+        assertTrue(!(whole is Decision.Proceed && whole.candidate.source in setOf("exact", "template")), whole.toString())
+    }
+
     @Test fun `exact utterance proceeds with taught values (T2)`() {
         val d = assertIs<Decision.Proceed>(decide("Order 2 garlic bread"))
         assertEquals("food", d.candidate.flow.id)

@@ -136,6 +136,15 @@ class ReplayEngineTest {
         assertTrue(r.events.any { it.startsWith("ADD didn't respond") }, r.events.toString())
     }
 
+    @Test fun `going to the home screen mid-run stops at once without touching anything there`() = runTest {
+        val launcher: (Long) -> ScreenSnapshot = { id -> screen("com.sec.android.app.launcher", id) { button("Spotify"); button("GPay") } }
+        val p = FakePhone(screens + ("launcher" to launcher), mapOf(("home" to "Search for restaurant and food") to "launcher"), "home")
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "paneer tikka"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(r.message.contains("home screen"), r.message)
+        assertEquals(listOf("Search for restaurant and food"), p.clicked)
+    }
+
     @Test fun `picks the ADD button in the row of the requested item`() = runTest {
         for ((item, row) in listOf("veg burger" to "Veg Burger", "garlic bread" to "Garlic Bread", "paneer tikka" to "Paneer Tikka")) {
             val p = phone()

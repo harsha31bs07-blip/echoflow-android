@@ -23,7 +23,7 @@ export default {
     } catch {
       return error(400, "Bad request.");
     }
-    const prompt = typeof body?.prompt === "string" ? body.prompt : "";
+    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
     if (!prompt || prompt.length > MAX_PROMPT_CHARS || !PROMPTS.some((p) => prompt.startsWith(p))) {
       return error(400, "Not an EchoFlow request.");
     }

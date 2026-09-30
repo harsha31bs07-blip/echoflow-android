@@ -5,3 +5,8 @@ compatibility_date = "2025-09-01"
 # Daily request counters (created on first deploy).
 [[kv_namespaces]]
 binding = "COUNTS"
+
+# Run next to Google's US servers: calls to the Gemini API from some Cloudflare locations are
+# refused with "User location is not supported".
+[placement]
+region = "gcp:us-central1"

@@ -18,7 +18,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 2. Tap the slim **handle on the right edge** of the screen and say a task it doesn't know, e.g. *"Order a Margherita pizza from Domino's on Zomato."* It answers *"I don't know how to … yet. Want to teach me?"* → say **yes** → do it yourself in Zomato → tap **✓ Done** on the cart (never tap Pay). It says *"Learned: …"*.
 3. Say the same sentence, a paraphrase, or change the dish, the quantity ("two") or the address ("deliver to work"). It runs to the cart and says *"Your turn…"*.
 
-No account, server or API key is needed; everything runs on the phone.
+No account or API key is needed. Teaching, matching, replay and every safety check run on the phone; only the optional AI help (below) goes online, and it works out of the box.
 
 ## Scorecard: the official Theme 3 tests
 
@@ -76,7 +76,7 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
 4. **Replay:** tap the handle and say the command, a paraphrase, or a different item, quantity or address.
 5. **Inspect:** EchoFlow → *Learned flows* → tap a flow to see its steps and changeable values.
 
-Optional **AI help**: open **EchoFlow → Advanced → AI help** and paste a free Gemini API key (from aistudio.google.com). Two things change:
+Optional **AI help**, on out of the box: the release APK asks Gemini through EchoFlow's small relay ([`relay/`](relay/), a Cloudflare Worker that holds the key, forwards only EchoFlow's own prompts and caps use per day), so no key is needed on the phone. Anyone can paste their own free Gemini key under **EchoFlow → Advanced → AI help** to use it instead; **Test AI help** there checks it. Two things change:
 - **Looser wordings.** They're understood without asking "Do you want me to…?" first.
 - **Stuck screens.** When a run is stuck on a screen it wasn't taught, such as an unfamiliar pop-up or a renamed button, EchoFlow first tries all its own recoveries. Only then does it ask Gemini for one suggestion:
   - Gemini sees the button and text labels, with typed text and numbers removed;
@@ -84,7 +84,7 @@ Optional **AI help**: open **EchoFlow → Advanced → AI help** and paste a fre
   - EchoFlow follows a suggestion only if it passes the same safety checks as everything else, so it never pays, orders or deletes;
   - every AI step is logged in the run's history.
 
-Without a key, everything runs on the phone. Developers can instead set `GEMINI_API_KEY=…` in `local.properties` before building.
+Without the relay or a key, everything runs on the phone. Developers set `GEMINI_RELAY_URL=…` (or `GEMINI_API_KEY=…`) in `local.properties` before building; neither is committed, and the release APK contains no key.
 
 ## Accessibility and ease of use
 - **Voice first, but never voice only.** Every question can be answered out loud, by tapping a choice, or by typing.

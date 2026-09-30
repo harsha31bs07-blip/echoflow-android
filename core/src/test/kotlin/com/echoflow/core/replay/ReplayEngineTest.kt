@@ -38,6 +38,8 @@ private class FakePhone(
     val guard = SafetyGuard(ScreenSafetyClassifier())
     private val gateway = ActionGateway(guard, this, this, postActionTimeoutMs = 10)
     private var clock = 0L
+    /** Labels whose first click the app ignores. */
+    val ignoreOnce = mutableSetOf<String>()
 
     /** Time passing outside the engine (a slow network reply). */
     fun advance(ms: Long) { clock += ms }
@@ -62,6 +64,7 @@ private class FakePhone(
                 val e = snapshot.elements[action.elementIndex]
                 val label = e.label ?: snapshot.descendants(e.index).firstNotNullOfOrNull { it.label } ?: "?"
                 clicked += label
+                if (ignoreOnce.remove(label)) return true // accepted, nothing happens (Zomato's ADD)
                 if (label == "ADD") addedRow = Descriptors.rowContext(snapshot, e.index).first()
                 transitions[name to label]?.let(::go)
             }
@@ -119,6 +122,15 @@ class ReplayEngineTest {
         assertEquals(listOf("paneer tikka"), p.typed)
         assertEquals(listOf("Search for restaurant and food", "ADD"), p.clicked)
         assertTrue(r.message.contains("₹199"), r.message)
+    }
+
+    @Test fun `an ADD tap the app ignores is tapped again`() = runTest {
+        val p = phone()
+        p.ignoreOnce += "ADD"
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "paneer tikka"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("Search for restaurant and food", "ADD", "ADD"), p.clicked)
+        assertTrue(r.events.any { it.startsWith("ADD didn't respond") }, r.events.toString())
     }
 
     @Test fun `picks the ADD button in the row of the requested item`() = runTest {

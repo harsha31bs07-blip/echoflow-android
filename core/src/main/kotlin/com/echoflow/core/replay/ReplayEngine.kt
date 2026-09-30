@@ -702,7 +702,9 @@ class ReplayEngine(
     private suspend fun perform(step: Step, snap: ScreenSnapshot, r: Resolution, slots: Map<String, String>): StepResult {
         val ctx = GateContext(explicitlyTaught = true, resolverConfidence = r.score)
         val outcome = when (step) {
-            is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex), ctx, snap)
+            is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex), ctx, snap).let { o ->
+                if (o is ActionOutcome.Performed && isAddTap(step)) retryIgnoredAdd(snap, r, ctx) ?: o else o
+            }
             is Step.TypeText -> {
                 val text = step.slot?.let { slots[it] } ?: step.literal.orEmpty()
                 act(PlannedAction.SetText(snap.id, r.index, text), ctx, snap).also {
@@ -740,6 +742,22 @@ class ReplayEngine(
                 else StepResult.Stop(RunStatus.HALTED, "I stopped: ${outcome.decision.detail}.")
             is ActionOutcome.Failed -> StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
         }
+    }
+
+    /**
+     * Zomato sometimes accepts a click on "ADD" and ignores it: the same ADD button is still there,
+     * with no options sheet and no "− 1 +". Tap it once more as a real touch. (Only a button that
+     * says exactly "ADD": "Add to Cart" can stay the same after adding, so it isn't retried.)
+     */
+    private suspend fun retryIgnoredAdd(before: ScreenSnapshot, r: Resolution, ctx: GateContext): ActionOutcome? {
+        fun label(s: ScreenSnapshot, e: UiElement) = TextNormalizer.normalize(e.label ?: s.descendants(e.index).firstNotNullOfOrNull { it.label })
+        val was = before.elements[r.actionIndex]
+        if (label(before, was) != "add") return null
+        val now = host.current() ?: return null
+        if (customisationSheet(now) != null) return null
+        val same = now.appElements().firstOrNull { it.visible && it.bounds == was.bounds && label(now, it) == "add" } ?: return null
+        events += "ADD didn't respond; tapped it again"
+        return act(PlannedAction.Click(now.id, same.index, gesture = true), ctx, now)
     }
 
     private suspend fun act(action: PlannedAction, ctx: GateContext, snap: ScreenSnapshot): ActionOutcome {

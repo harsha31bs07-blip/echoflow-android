@@ -124,7 +124,8 @@ class GeminiClient(
 
     private suspend fun generate(prompt: String, timeoutMs: Long = TIMEOUT_MS): String? {
         lastError = null
-        return generateOnce(prompt, timeoutMs)
+        // (Multi-line prompts can start with indentation; the relay checks how they begin.)
+        return generateOnce(prompt.trim(), timeoutMs)
     }
 
     private suspend fun generateOnce(prompt: String, timeoutMs: Long): String? {

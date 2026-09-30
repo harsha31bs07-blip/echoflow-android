@@ -143,6 +143,8 @@ Each of these was found on the device, fixed, and re-run:
 - **Skipping ahead past a needed step** (Amazon's cart tab is on every page). Skip-ahead now runs only after waiting and scrolling, and never skips typing or value steps.
 - **AI helper timed out and the run stopped** (Domino's, 30 Sept). The recovery prompt lists a whole screen and took longer than the 4.5 s allowed, so "asked the AI helper; no answer". Recovery now allows 10 s, the wait doesn't count against the step's 12 s, failures are logged (`EchoGemini`), and *Advanced → Test the key* checks the key, model and network.
 - **Restaurant "Outside delivery range"** (same run). Opening it only showed a loading page. The result card's status is now read before opening; EchoFlow says *"Domino's Pizza says 'Outside delivery range' right now. Which restaurant should I use instead?"* and continues with the answer (verified: switched to Brik Oven). The AI helper is also told that a quote or logo on a blank page means "wait", not "go back" (verified: "still loading").
+- **AI help with no key on the phone** (30 Sept). Relay deployed on Cloudflare; pinned to a US region because Google refused calls from the Chennai location ("User location is not supported"). With the pasted key removed: *Test AI help* answered in 1.5 s via the relay, and "order a farmhouse pizza from brik oven" got the AI helper's "still loading" mid-run through the relay and handed off at the cart, ₹343 (cart emptied afterwards). The relay first refused the stuck-screen prompt because it started with indentation; prompts are now trimmed.
+- **Zomato ignored a tap on ADD** (same day). If ADD still says ADD with no options sheet, EchoFlow taps it once more as a real touch.
 
 ## Manual checklist before recording the demo
 

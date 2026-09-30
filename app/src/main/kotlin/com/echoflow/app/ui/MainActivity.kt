@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     private lateinit var readyCard: LinearLayout
     private lateinit var accessStep: CheckStep
     private lateinit var micStep: CheckStep
+    private lateinit var keepStep: CheckStep
 
     // Ask EchoFlow
     private lateinit var statusBox: LinearLayout
@@ -141,7 +142,7 @@ class MainActivity : Activity() {
 
     private fun buildSetup(column: LinearLayout) {
         setupCard = kit.card {
-            addView(kit.text("Two quick steps", 20f, bold = true).apply { isAccessibilityHeading = true })
+            addView(kit.text("Quick setup", 20f, bold = true).apply { isAccessibilityHeading = true })
             addView(kit.caption("EchoFlow needs these once before it can help.").apply { setPadding(0, kit.dp(2), 0, kit.dp(4)) })
         }
         accessStep = checkStep(1, "Turn on EchoFlow in Accessibility", "Lets EchoFlow see the screen and tap for you.")
@@ -169,6 +170,18 @@ class MainActivity : Activity() {
         })
         micStep.actions.addView(kit.caption("You can also type every command and answer instead.").apply { setPadding(0, kit.dp(8), 0, 0) })
         setupCard.addView(micStep.row)
+        setupCard.addView(kit.divider())
+        // OnePlus, Xiaomi, Oppo, Vivo and others stop background apps to save battery; a stopped
+        // accessibility service stays off until it's switched off and on again.
+        keepStep = checkStep(3, "Keep EchoFlow running", "So your phone doesn't stop EchoFlow in the background.")
+        keepStep.actions.apply {
+            addView(kit.primaryButton("Allow in the background") { askToIgnoreBatteryOptimizations() })
+            addView(kit.caption("On OnePlus, Xiaomi, Oppo, Vivo or Realme, also open App info → Battery and allow background activity (and auto-launch, if listed).").apply {
+                setPadding(0, kit.dp(10), 0, 0)
+            })
+            addView(kit.secondaryButton("Open App info") { openAppInfo() })
+        }
+        setupCard.addView(keepStep.row)
         column.addView(setupCard)
 
         readyCard = kit.card(Palette.MINT_TINT) {
@@ -180,6 +193,22 @@ class MainActivity : Activity() {
             ))
         }
         column.addView(readyCard)
+    }
+
+    @android.annotation.SuppressLint("BatteryLife") // An always-on accessibility helper: the user is asked, once.
+    private fun askToIgnoreBatteryOptimizations() {
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+        runCatching { startActivity(direct) }.onFailure { runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+    }
+
+    private fun batteryUnrestricted(): Boolean =
+        (getSystemService(POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(packageName)
+
+    /** Switched on in Settings, but not running: the phone stopped it (swiped away, battery saver). */
+    private fun serviceEnabledButStopped(): Boolean {
+        if (EchoRuntime.service != null) return false
+        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        return enabled.split(':').any { it.startsWith("$packageName/") }
     }
 
     private fun openAppInfo() {
@@ -497,9 +526,24 @@ class MainActivity : Activity() {
     private fun refresh() {
         val connected = EchoRuntime.service != null
         val mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val keep = batteryUnrestricted()
         markStep(accessStep, 1, connected)
         markStep(micStep, 2, mic)
-        setupCard.visibility = if (connected && mic) View.GONE else View.VISIBLE
+        markStep(keepStep, 3, keep)
+        // Stopped by the phone: say so, since the switch in Settings still looks on.
+        val stopped = serviceEnabledButStopped()
+        val switchedOff = !connected && !stopped && EchoRuntime.prefs.everConnected
+        accessStep.title.text = when {
+            stopped -> "Your phone stopped EchoFlow"
+            switchedOff -> "Your phone switched EchoFlow off"
+            else -> "Turn on EchoFlow in Accessibility"
+        }
+        accessStep.note.text = when {
+            stopped -> "It's still switched on, but not running (some phones do this when an app is swiped away or the phone saves battery). Open Accessibility settings, turn EchoFlow automation off, then on again."
+            switchedOff -> "This happens when an app is force-closed or the phone saves battery. Turn EchoFlow automation back on, then allow it in the background (step 3) so it stays on."
+            else -> "Lets EchoFlow see the screen and tap for you."
+        }
+        setupCard.visibility = if (connected && mic && keep) View.GONE else View.VISIBLE
         readyCard.visibility = if (connected && mic) View.VISIBLE else View.GONE
 
         val guard = when (val state = EchoRuntime.guard.currentState) {

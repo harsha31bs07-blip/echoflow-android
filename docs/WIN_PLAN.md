@@ -35,6 +35,8 @@ Owners: **C** = Claude (code, tests, docs), **H** = Harsha (phone, decisions), *
 | B2 Similar apps | +4 | ✅ Myntra (29 Sept) | **Today's "first result" changes (skip ads, tabs, rating lines) haven't been re-run on Myntra** | **W8** re-verify B2 |
 | B3 Missing value | +3 | ✅ | — | — |
 
+**Update, 30 Sept evening (v1.1.6):** W4 done in code (15 a minute per network, 900 a day; deploy pending), B2 re-verified on Myntra, the "stop" lock-up fixed, teaching starts in about 3 s, AI-helper quality improved, and OnePlus background-kill handling added (see TEST_RUN.md).
+
 **Reading the table:** nothing is failing, but four things could still cost points live:
 - a judge-taught flow in an app that hides its taps (T1–T9: up to 37 points);
 - the intermittent cart-bar miss (T2, 5);

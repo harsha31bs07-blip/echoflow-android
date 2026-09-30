@@ -244,6 +244,32 @@ class ReplayEngineTest {
         assertEquals(1, asked, r.events.toString())
     }
 
+    @Test fun `a helper suggestion that changes nothing is not tapped again, and the helper is told`() = runTest {
+        // "Continue browsing" does nothing on this screen (no transition): the helper keeps suggesting it.
+        val p = FakePhone(screens + ("odd" to oddPopup), emptyMap(), "odd")
+        val asked = mutableListOf<RecoveryRequest>()
+        val advisor = RecoveryAdvisor { req ->
+            asked += req
+            RecoveryAdvice.Dismiss(req.screen.first { it.label == "Continue browsing" }.id, "close it")
+        }
+        val r = ReplayEngine(p, p.guard, stepBudgetMs = 12_000, advisor = advisor).run(flow().copy(steps = flow().steps.drop(1)), mapOf("item" to "garlic bread"))
+        assertEquals(1, p.clicked.count { it == "Continue browsing" }, p.clicked.toString())
+        assertTrue(r.events.any { it.contains("changed nothing before") }, r.events.toString())
+        // The second request marked it, and carried the step's taught look and the next step.
+        assertTrue(asked.size >= 2 && asked[1].noEffect.isNotEmpty(), asked.toString())
+        assertTrue(asked[0].target != null && asked[0].nextStep != null, asked[0].toString())
+    }
+
+    @Test fun `the helper's prompt lists where things are and what's in a pop-up`() {
+        val snap = oddPopup(1)
+        val items = RecoveryPrompt.screenItems(snap)
+        assertTrue(items.first { it.label == "Continue browsing" }.inPopup, items.toString())
+        val prompt = RecoveryPrompt.build(RecoveryRequest("order x", "Tap \"Search\"", 2, 4, "Swiggy", emptyList(), items, target = "\"Search\"", nextStep = "Type the item"))
+        assertTrue(prompt.startsWith("You help a phone automation"), prompt.take(40))
+        assertTrue(prompt.lines().none { it.startsWith(" ") }, "no stray indentation")
+        assertTrue(prompt.contains("pop-up") && prompt.contains("The step after it: Type the item"), prompt)
+    }
+
     @Test fun `the AI helper's answers are read strictly`() {
         val ids = setOf(3, 7)
         assertEquals(RecoveryAdvice.Dismiss(7, "close"), RecoveryPrompt.parse("""{"action":"dismiss","id":7,"reason":"close"}""", ids))

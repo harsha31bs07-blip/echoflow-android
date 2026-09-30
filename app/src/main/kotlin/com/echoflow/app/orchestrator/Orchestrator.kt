@@ -118,13 +118,15 @@ class Orchestrator(context: Context) {
 
     /** Typed command (main screen box) — same path as speech. */
     fun onTyped(text: String) {
-        typedAnswer?.let { if (!it.isCompleted) { it.complete(text); voice?.cancelListening(); return } }
+        typedAnswer?.let { if (!it.isCompleted) { it.complete(text); voice?.stopSpeaking(); voice?.cancelListening(); return } }
         scope.launch { handle(text) }
     }
 
     /** A choice button in the bubble. */
     fun onChoice(choice: String) {
         typedAnswer?.complete(choice)
+        // Answered before the question finished: stop reading it out and go on at once.
+        voice?.stopSpeaking()
         voice?.cancelListening()
     }
 
@@ -272,7 +274,39 @@ class Orchestrator(context: Context) {
             onCommitTap = { what -> scope.launch { finishTeaching("PAYMENT", "You reached the pay button ($what), so I stopped recording before it.") } },
         )
         _state.value = UiState(Mode.TEACHING, "Teaching “$utterance” — show me, then say done")
-        say("Okay, teach me: $utterance. Open the app and do it. Stop before paying, and say done.")
+        // The command names an installed app ("… on Zomato", "… on play store"): open it now,
+        // fresh, as replays will. Saves finding it, and the flow starts where replays start.
+        val named = appNamedIn(utterance)
+        if (named != null && openFresh(named.first)) {
+            say("Okay, show me in ${named.second}. Tap Done when you're finished. I never pay.")
+        } else {
+            say("Okay, open the app and show me. Tap Done when you're finished. I never pay.")
+        }
+    }
+
+    /** An installed app whose name the command mentions (longest match), as package to label. */
+    private fun appNamedIn(utterance: String): Pair<String, String>? {
+        val said = " ${TextNormalizer.normalize(utterance)} "
+        val pm = app.packageManager
+        val launcher = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        return runCatching { pm.queryIntentActivities(launcher, 0) }.getOrDefault(emptyList())
+            .asSequence()
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .filter { (pkg, _) -> pkg != app.packageName }
+            .mapNotNull { (pkg, label) ->
+                val full = TextNormalizer.normalize(label)
+                // "Google Play Store" is said "play store"; single short words ("Phone") are too common.
+                val names = listOf(full, full.removePrefix("google ")).filter { it.length >= 4 }.distinct()
+                names.filter { said.contains(" $it ") }.maxByOrNull { it.length }?.let { Triple(pkg, label, it.length) }
+            }
+            .maxByOrNull { it.third }
+            ?.let { it.first to it.second }
+    }
+
+    private fun openFresh(pkg: String): Boolean {
+        val intent = app.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        return runCatching { (EchoRuntime.service ?: app).startActivity(intent) }.isSuccess
     }
 
     private suspend fun finishTeaching(endedAt: String, note: String? = null) {
@@ -344,7 +378,11 @@ class Orchestrator(context: Context) {
                 Log.e(TAG, "replay crashed", e)
                 ReplayResult(RunStatus.HALTED, "Something went wrong: ${e.message}", 0, flow.steps.size, null, emptyList())
             }
-            finishRun(flow, utterance, slots, started, result, learnPhrase = c.targetApp == null, matchedBy = if (c.source == "llm") "understood with Gemini" else null)
+            // Saved and reported even when the run was stopped: this coroutine is cancelled then,
+            // and without NonCancellable the record, the reply and the IDLE state were all skipped.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                finishRun(flow, utterance, slots, started, result, learnPhrase = c.targetApp == null, matchedBy = if (c.source == "llm") "understood with Gemini" else null)
+            }
         }
     }
 
@@ -376,7 +414,8 @@ class Orchestrator(context: Context) {
         typedAnswer?.complete(null)
         if (runJob?.isActive == true) {
             runJob?.cancel()
-            status("Stopped")
+            // Ready for the next command at once (the run's own reply follows).
+            _state.value = UiState(Mode.IDLE, "Stopped")
         } else if (recorder != null) {
             cancelTeaching()
         } else {
@@ -425,7 +464,10 @@ class Orchestrator(context: Context) {
         val deferred = kotlinx.coroutines.CompletableDeferred<String?>()
         typedAnswer = deferred
         try {
-            voice?.speak(question)
+            // Spoken alongside: a tap or typed answer mid-question ends it (onChoice / onTyped).
+            val speaking = scope.launch(Dispatchers.Main) { voice?.speak(question) }
+            while (speaking.isActive && !deferred.isCompleted) kotlinx.coroutines.delay(40)
+            if (deferred.isCompleted) { speaking.cancel(); voice?.stopSpeaking() }
             for (attempt in 0 until 2) {
                 if (deferred.isCompleted) break
                 if (attempt > 0) voice?.speak("Sorry, I didn't catch that. $question")

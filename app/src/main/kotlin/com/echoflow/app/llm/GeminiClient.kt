@@ -7,6 +7,7 @@ import com.echoflow.core.replay.RecoveryAdvice
 import com.echoflow.core.replay.RecoveryPrompt
 import com.echoflow.core.replay.RecoveryRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -135,13 +136,27 @@ class GeminiClient(
         return generateVia(relay, prompt, limit)
     }
 
-    private suspend fun generateVia(relay: Boolean, prompt: String, timeoutMs: Long): String? = (withTimeoutOrNull(timeoutMs) {
-        withContext(Dispatchers.IO) {
+    private suspend fun generateVia(relay: Boolean, prompt: String, timeoutMs: Long): String? {
+        // The HTTP call blocks its thread and ignores coroutine cancellation, so it runs on its
+        // own and the caller stops waiting at the deadline (a late reply is simply dropped).
+        val call = calls.async { request(relay, prompt, timeoutMs) }
+        val text = withTimeoutOrNull(timeoutMs) { call.await() }
+        if (text == null && !call.isCompleted) {
+            lastError = "timeout"
+            call.cancel()
+        }
+        if (text == null) android.util.Log.w("EchoGemini", "no answer: $lastError")
+        return text
+    }
+
+    private val calls = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    private fun request(relay: Boolean, prompt: String, timeoutMs: Long): String? =
             runCatching {
                 val url = URL(if (relay) "$relayUrl/generate" else "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
-                    connectTimeout = 3_000
+                    connectTimeout = minOf(3_000L, timeoutMs).toInt()
                     readTimeout = timeoutMs.toInt()
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json")
@@ -175,16 +190,15 @@ class GeminiClient(
                 lastError = it.javaClass.simpleName
                 null
             }
-        }
-    } ?: run {
-        if (lastError == null) lastError = "timeout"
-        null
-    }).also { if (it == null) android.util.Log.w("EchoGemini", "no answer: $lastError") }
 
     companion object {
-        const val TIMEOUT_MS = 4_500L
+        /**
+         * Understanding a command: the reply waits for this, so keep it short. Without an answer
+         * the on-phone matcher decides alone (it still confirms looser wordings first).
+         */
+        const val TIMEOUT_MS = 2_500L
         /** Recovery prompts list a whole screen, so they take longer than matching a command. */
         const val RECOVERY_TIMEOUT_MS = 10_000L
-        const val RELAY_EXTRA_MS = 1_500L
+        const val RELAY_EXTRA_MS = 500L
     }
 }

@@ -59,6 +59,9 @@ class VoiceIO(context: Context) {
                 override fun onDone(id: String) { pending.remove(id)?.complete(Unit) }
                 @Deprecated("Deprecated in Java")
                 override fun onError(id: String) { pending.remove(id)?.complete(Unit) }
+                // Interrupted (stopSpeaking, or a newer utterance): done too. Without this, an
+                // interrupted speak() waited out its whole timeout (up to ~10 s).
+                override fun onStop(id: String, interrupted: Boolean) { pending.remove(id)?.complete(Unit) }
             })
         }
         ready.complete(status == TextToSpeech.SUCCESS)
@@ -78,7 +81,11 @@ class VoiceIO(context: Context) {
         if (ready.isCompleted) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "a${System.nanoTime()}")
     }
 
-    fun stopSpeaking() = tts.stop()
+    fun stopSpeaking() {
+        tts.stop()
+        pending.values.forEach { it.complete(Unit) }
+        pending.clear()
+    }
 
     val recognitionAvailable: Boolean get() = SpeechRecognizer.isRecognitionAvailable(app)
 

@@ -91,6 +91,8 @@ class ReplayEngine(
     private val notes = mutableListOf<String>()
     /** The AI helper suggested something unsafe once: it isn't asked again in this run. */
     private var advisorDistrusted = false
+    /** Labels of elements the AI helper suggested that changed nothing (not suggested again). */
+    private val noEffect = mutableSetOf<String>()
     /** The product opened as "the first result", and options the app had already chosen. */
     private var pickedName: String? = null
     private var variants: List<String> = emptyList()
@@ -585,6 +587,10 @@ class ReplayEngine(
             .firstOrNull()
     }
 
+    /** What's on screen, for "did that tap change anything?". */
+    private fun screenSignature(snap: ScreenSnapshot): Int =
+        snap.appElements().filter { it.visible }.map { "${it.label}|${it.bounds.top / 40}" }.hashCode() * 31 + (snap.activityName?.hashCode() ?: 0)
+
     /** A visible progress spinner or bar: the screen is still loading. */
     private fun loading(snap: ScreenSnapshot) = snap.appElements().any { it.visible && it.className.endsWith("ProgressBar") }
 
@@ -608,9 +614,18 @@ class ReplayEngine(
         if (items.isEmpty()) return AdviceOutcome.Nothing
         val step = steps[i]
         fun fill(s: String) = slots.entries.fold(s) { acc, (k, v) -> acc.replace("{$k}", v) }
+        fun name(index: Int) = snap.elements[index].let { it.label ?: it.viewId?.substringAfter(":id/") ?: it.simpleClassName }
+        // How the element looked when taught: its words and a little of the text around it.
+        val target = stepTarget(step)?.let { d ->
+            val words = (d.text ?: d.contentDescription)?.let { "\"${fill(it)}\"" }
+            val near = d.context.filter { it.isNotBlank() }.take(3).map(::fill).takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "near ")
+            listOfNotNull(words, near, d.viewId?.substringAfter(":id/")?.let { "view id $it" }).joinToString(", ").ifBlank { null }
+        }
         val request = RecoveryRequest(
             task = fill(flow.template), step = fill(step.description), stepNumber = i + 1, totalSteps = steps.size,
             app = flow.appLabel, tried = events.toList(), screen = items,
+            target = target, nextStep = steps.getOrNull(i + 1)?.description?.let(::fill),
+            noEffect = items.filter { name(it.id) in noEffect }.map { it.id }.toSet(),
         )
         val advice = a.advise(request)
         if (advice == null) {
@@ -618,7 +633,22 @@ class ReplayEngine(
             return AdviceOutcome.Nothing
         }
         val ids = items.map { it.id }.toSet()
-        fun name(index: Int) = snap.elements[index].let { it.label ?: it.viewId?.substringAfter(":id/") ?: it.simpleClassName }
+        // A suggestion that already changed nothing isn't tried twice.
+        val suggested = (advice as? RecoveryAdvice.Dismiss)?.id ?: (advice as? RecoveryAdvice.Target)?.id
+        if (suggested != null && suggested in ids && name(suggested) in noEffect) {
+            events += "AI helper suggested \"${name(suggested)}\" again, which changed nothing before; ignored"
+            return AdviceOutcome.Nothing
+        }
+        /** After the helper's tap: did anything on screen change? If not, remember that. */
+        suspend fun changed(index: Int): Boolean {
+            val after = host.awaitSettled(snap.id, 1_500) ?: host.current() ?: return true
+            val same = screenSignature(after) == screenSignature(snap)
+            if (same) {
+                noEffect += name(index)
+                events += "the screen didn't change after \"${name(index)}\""
+            }
+            return !same
+        }
         fun safeTap(index: Int): Int? {
             if (index !in ids) return null
             val target = Descriptors.clickableFor(snap, index)
@@ -638,7 +668,7 @@ class ReplayEngine(
                 } else {
                     events += "AI helper: closed \"${name(advice.id)}\" (${advice.reason})"
                     val o = act(PlannedAction.Click(snap.id, target), GateContext(isRecovery = true), snap)
-                    if (o is ActionOutcome.Performed) AdviceOutcome.Acted else AdviceOutcome.Nothing
+                    if (o is ActionOutcome.Performed && changed(advice.id)) AdviceOutcome.Acted else AdviceOutcome.Nothing
                 }
             }
             is RecoveryAdvice.Target -> {
@@ -672,6 +702,8 @@ class ReplayEngine(
                 events += "AI helper: \"${name(advice.id)}\" is this step (${advice.reason})"
                 when (val r = perform(step, snap, resolution, slots)) {
                     is StepResult.Retry -> AdviceOutcome.Acted
+                    // A tap that changed nothing didn't do the step: keep looking.
+                    StepResult.Done -> if (step is Step.Tap && !changed(advice.id)) AdviceOutcome.Nothing else AdviceOutcome.Finished(r)
                     else -> AdviceOutcome.Finished(r)
                 }
             }
@@ -790,7 +822,10 @@ class ReplayEngine(
                     (outcome.decision.reason == com.echoflow.core.gateway.BlockReason.SENSITIVE_SCREEN && outcome.decision.handOff == null)
                 ) StepResult.Retry
                 else StepResult.Stop(RunStatus.HALTED, "I stopped: ${outcome.decision.detail}.")
-            is ActionOutcome.Failed -> StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
+            // The element was redrawn between reading the screen and tapping (YouTube's search
+            // button): find it again, like a stale screen (the caller retries up to 3 times).
+            is ActionOutcome.Failed -> if (outcome.message.startsWith("platform refused")) StepResult.Retry
+                else StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
         }
     }
 
@@ -1245,7 +1280,8 @@ class ReplayEngine(
 
     /** "Go to detail page for "JETech Matte Case for iPhone…" Not eligible…" → "JETech Matte Case for iPhone…". */
     private fun productName(label: String): String {
-        var t = label.trim().removePrefix("Go to detail page for").trim()
+        // (Myntra puts brand and product on two lines.)
+        var t = label.replace(Regex("\\s+"), " ").trim().removePrefix("Go to detail page for").trim()
         t = t.replace(Regex("^Sponsored Ad\\s*-\\s*", RegexOption.IGNORE_CASE), "")
         if (t.startsWith("\"")) t = t.drop(1).substringBefore("\"")
         return if (t.length <= 60) t else t.take(57).substringBeforeLast(' ') + "…"
@@ -1456,8 +1492,8 @@ class ReplayEngine(
     companion object {
         const val STEP_BUDGET_MS = 12_000L
         /** AI help: at most this many suggestions per step, only after the step was stuck this long. */
-        const val MAX_ADVICE = 2
-        const val ADVISE_AFTER_MS = 7_000L
+        const val MAX_ADVICE = 3
+        const val ADVISE_AFTER_MS = 5_000L
         const val ADVICE_TARGET_CONFIDENCE = 0.75
         const val MAX_RESULT_OPENS = 3
         private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)

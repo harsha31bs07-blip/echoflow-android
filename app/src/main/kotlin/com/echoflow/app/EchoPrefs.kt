@@ -44,6 +44,11 @@ class EchoPrefs(context: Context) {
         get() = sp.getBoolean(KEY_MIC_ASKED, false)
         set(value) = sp.edit().putBoolean(KEY_MIC_ASKED, value).apply()
 
+    /** The accessibility service has run at least once (to tell "never set up" from "switched off"). */
+    var everConnected: Boolean
+        get() = sp.getBoolean(KEY_EVER_CONNECTED, false)
+        set(value) = sp.edit().putBoolean(KEY_EVER_CONNECTED, value).apply()
+
     fun register(listener: SharedPreferences.OnSharedPreferenceChangeListener) = sp.registerOnSharedPreferenceChangeListener(listener)
 
     fun unregister(listener: SharedPreferences.OnSharedPreferenceChangeListener) = sp.unregisterOnSharedPreferenceChangeListener(listener)
@@ -56,5 +61,6 @@ class EchoPrefs(context: Context) {
         const val KEY_MINIMAL = "minimal_bubble"
         const val KEY_HANDLE_RIGHT = "handle_right"
         const val KEY_HANDLE_Y = "handle_y"
+        const val KEY_EVER_CONNECTED = "ever_connected"
     }
 }

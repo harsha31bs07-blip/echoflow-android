@@ -57,8 +57,11 @@ class IntentMatcher {
         val merged = if (llm == null) local else local.map { c ->
             if (llm.flowId == c.flow.id) {
                 c.copy(score = maxOf(c.score, llm.confidence), slots = cleanSlots(c.flow, c.slots + llm.slots.filterValues { it.isNotBlank() }), source = if (llm.confidence > c.score) "llm" else c.source)
-            } else if (llm.flowId == null && llm.confidence >= 0.7 && c.source == "similar") {
-                c.copy(score = minOf(c.score, 1 - llm.confidence))
+            } else if (llm.flowId == null && c.source == "similar") {
+                // The model read the command and matched no flow (or wasn't sure): a mere
+                // similarity guess ("show my wishlist" vs "search … and add to cart") shouldn't
+                // turn into "Do you want me to …?". Below the confirm line, it offers to learn it.
+                c.copy(score = minOf(c.score, if (llm.confidence >= 0.7) 1 - llm.confidence else 0.4))
             } else c
         }
         // A flow for the app the command names beats trying another app's flow there.

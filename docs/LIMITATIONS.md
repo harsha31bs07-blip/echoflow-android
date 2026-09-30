@@ -117,7 +117,12 @@ This is an honest list of what EchoFlow can't do yet, or has only partly verifie
 ### L12. Installation friction
 - **Android 11 or newer** is required. EchoFlow presses a search box's Enter key through an accessibility action that Android 11 introduced.
 - **Android 13 and later** block accessibility services in sideloaded APKs until **Allow restricted settings** is turned on (App info → ⋮). The README walks through it.
-- **Some brands (Xiaomi, Oppo, Vivo, Realme)** may close background services. Allow auto-start and turn off battery optimisation for EchoFlow.
+- **Some brands (OnePlus, Xiaomi, Oppo, Vivo, Realme)** stop an app completely when it's swiped away from recent apps, and a stopped accessibility service stays off until it's switched off and on. EchoFlow now:
+  - stays out of the recent-apps list, so there's no card to swipe away;
+  - asks, in setup step 3 ("Keep EchoFlow running"), to be left out of battery optimisation, and points to App info → Battery for background activity and auto-launch;
+  - says *"Your phone switched EchoFlow off"* (or *"stopped EchoFlow"*) with the fix, instead of silently losing the edge handle.
+
+  Reported on a OnePlus phone; the fixes were checked on the Galaxy S24 FE (force-stop), not yet on a OnePlus.
 
 ### L13. Voice
 - **Push-to-talk only.** Android's `SpeechRecognizer` has no always-on mode, so there is no wake word.

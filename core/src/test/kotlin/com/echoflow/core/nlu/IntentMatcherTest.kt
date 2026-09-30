@@ -52,6 +52,17 @@ class IntentMatcherTest {
         assertEquals("brik oven", d.candidate.slots["restaurant"])
     }
 
+    @Test fun `when the AI finds no matching flow, a similarity guess offers to learn instead of asking to run it`() {
+        val addFirst = Flow(
+            "amz", "search for {item} on amazon and add the first result to cart", "in.amazon.mShop.android.shopping", "Amazon",
+            "search for {item} on amazon and add the first result to cart", listOf("search for wireless earbuds on amazon and add the first result to cart"),
+            listOf(SlotDef("item", SlotType.TEXT, "wireless earbuds")), emptyList(),
+        )
+        val u = "show my wishlist on amazon"
+        assertIs<Decision.Confirm>(decide(u, listOf(addFirst)))
+        assertIs<Decision.OfferTeach>(decide(u, listOf(addFirst), llm = LlmIntent(null, 0.0, emptyMap())))
+    }
+
     @Test fun `negated commands are recognised`() {
         assertTrue(Utterances.isNegated("Don't order the farmhouse pizza from brik oven"))
         assertTrue(Utterances.isNegated("please do not search on youtube"))

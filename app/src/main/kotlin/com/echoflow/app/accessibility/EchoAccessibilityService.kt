@@ -68,6 +68,7 @@ class EchoAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         EchoRuntime.init(applicationContext)
+        EchoRuntime.prefs.everConnected = true
         captureThread = HandlerThread("echo-capture").also { it.start() }
         captureHandler = Handler(captureThread.looper)
         capturer = SnapshotCapturer(this)

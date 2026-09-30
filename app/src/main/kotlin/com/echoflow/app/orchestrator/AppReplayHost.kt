@@ -32,6 +32,12 @@ class AppReplayHost(
 
     override fun say(text: String) = orchestrator.sayAsync(text)
 
+    override fun online(): Boolean = runCatching {
+        val cm = EchoRuntime.service?.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }.getOrDefault(true)
+
     override fun progress(step: Int, total: Int, description: String) {
         orchestrator.currentStep = step to description
         orchestrator.status("Step $step/$total: $description")

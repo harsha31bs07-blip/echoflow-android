@@ -47,6 +47,9 @@ interface ReplayHost {
     fun remember(key: String, value: String) {}
 
     fun nowMs(): Long = System.currentTimeMillis()
+
+    /** False when the phone has no working internet connection. */
+    fun online(): Boolean = true
 }
 
 data class ReplayResult(
@@ -334,6 +337,8 @@ class ReplayEngine(
                 // heading below it (e.g. when it's closed).
                 val matchShown = firstResult(snap, searched) != null
                 if (!matchShown && (noResults(snap) || (step.slot == null && triedIme && waited > QUICK_ASK_MS))) {
+                    // Nothing found because nothing could load: say so, don't blame the value.
+                    if (!host.online()) return StepResult.Stop(RunStatus.HALTED, offlineMessage(i))
                     askedAboutValue = true
                     val slotName = typedBefore.slot!!
                     val where = slots.entries.firstOrNull { it.key in SourceSlots.names && it.key != slotName }?.value?.let { " at $it" } ?: ""
@@ -516,6 +521,7 @@ class ReplayEngine(
         }
 
         val snap = host.current()
+        if (!host.online()) return StepResult.Stop(RunStatus.HALTED, offlineMessage(i))
         return StepResult.Stop(RunStatus.HALTED, stuckMessage(step, i, steps.size, snap, slots))
     }
 
@@ -703,7 +709,10 @@ class ReplayEngine(
         val ctx = GateContext(explicitlyTaught = true, resolverConfidence = r.score)
         val outcome = when (step) {
             is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex), ctx, snap).let { o ->
-                if (o is ActionOutcome.Performed && isAddTap(step)) retryIgnoredAdd(snap, r, ctx) ?: o else o
+                // (Unless the recovery that chose this tap already logged it.)
+                val logged = events.lastOrNull()?.let { it.startsWith("tapped") || it.startsWith("opened the first result") } == true
+                if (o is ActionOutcome.Performed && !logged) events += "tapped \"${shortName(snap, r.index)}\""
+                if (o is ActionOutcome.Performed && isAddTap(step)) retryIgnoredAdd(step, snap, r, slots, ctx) ?: o else o
             }
             is Step.TypeText -> {
                 val text = step.slot?.let { slots[it] } ?: step.literal.orEmpty()
@@ -749,15 +758,35 @@ class ReplayEngine(
      * with no options sheet and no "− 1 +". Tap it once more as a real touch. (Only a button that
      * says exactly "ADD": "Add to Cart" can stay the same after adding, so it isn't retried.)
      */
-    private suspend fun retryIgnoredAdd(before: ScreenSnapshot, r: Resolution, ctx: GateContext): ActionOutcome? {
-        fun label(s: ScreenSnapshot, e: UiElement) = TextNormalizer.normalize(e.label ?: s.descendants(e.index).firstNotNullOfOrNull { it.label })
-        val was = before.elements[r.actionIndex]
-        if (label(before, was) != "add") return null
-        val now = host.current() ?: return null
-        if (customisationSheet(now) != null) return null
-        val same = now.appElements().firstOrNull { it.visible && it.bounds == was.bounds && label(now, it) == "add" } ?: return null
-        events += "ADD didn't respond; tapped it again"
-        return act(PlannedAction.Click(now.id, same.index, gesture = true), ctx, now)
+    private suspend fun retryIgnoredAdd(step: Step.Tap, before: ScreenSnapshot, r: Resolution, slots: Map<String, String>, ctx: GateContext): ActionOutcome? {
+        fun says(s: ScreenSnapshot, i: Int) = s.elements[i].let { e -> TextNormalizer.normalize(e.label ?: s.descendants(e.index).firstNotNullOfOrNull { it.label }) } == "add"
+        if (!says(before, r.index) && !says(before, r.actionIndex)) return null
+        // It worked once an options sheet or the cart bar ("1 item added", "View cart") shows, or
+        // the button changes. Sheets can take a couple of seconds to slide up.
+        var now = host.current() ?: return null
+        val waitStart = host.nowMs()
+        while (true) {
+            if (customisationSheet(now) != null || cartBarShown(now)) return null
+            // The same ADD button still there? (Found again: the list may have moved.)
+            val again = resolve(step, now, slots)
+            if (again == null || (!says(now, again.index) && !says(now, again.actionIndex))) return null
+            if (host.nowMs() - waitStart >= ADD_EFFECT_WAIT_MS) {
+                events += "ADD didn't respond; tapped it again"
+                val o = act(PlannedAction.Click(now.id, again.actionIndex, gesture = true), ctx, now)
+                // A retry that can't be sent changes nothing: carry on as after the first tap.
+                return o.takeIf { it is ActionOutcome.Performed }
+            }
+            now = host.awaitSettled(now.id, 700) ?: host.current() ?: return null
+        }
+    }
+
+    private fun cartBarShown(snap: ScreenSnapshot) = snap.appElements().any { e ->
+        e.visible && TextNormalizer.normalize(e.label).let { l -> CART_BAR.containsMatchIn(l) || l.startsWith("view cart") }
+    }
+
+    private fun shortName(snap: ScreenSnapshot, index: Int): String = snap.elements[index].let { e ->
+        (e.label?.takeIf { it.isNotBlank() } ?: snap.descendants(e.index).firstNotNullOfOrNull { it.label?.takeIf(String::isNotBlank) }
+            ?: e.viewId?.substringAfter(":id/") ?: e.simpleClassName).take(40)
     }
 
     private suspend fun act(action: PlannedAction, ctx: GateContext, snap: ScreenSnapshot): ActionOutcome {
@@ -1287,6 +1316,9 @@ class ReplayEngine(
             .take(5)
     }
 
+    private fun offlineMessage(i: Int) =
+        "The phone isn't connected to the internet, so the app couldn't load. I stopped at step ${i + 1} without adding anything. Connect and ask me again."
+
     private fun stuckMessage(step: Step, i: Int, total: Int, snap: ScreenSnapshot?, slots: Map<String, String>): String {
         val shown = stepTarget(step)?.fill(slots)?.display
         // A label goes in quotes; a phrase ("the button near …", "the next button") doesn't.
@@ -1336,6 +1368,8 @@ class ReplayEngine(
         private val DISTANCE = Regex("^\\d+(\\.\\d+)?\\s*(m|km|mi)$", RegexOption.IGNORE_CASE)
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
+        const val ADD_EFFECT_WAIT_MS = 3_000L
+        private val CART_BAR = Regex("^\\d+ items? added")
         private val UNAVAILABLE = listOf(
             "outside delivery range", "not delivering", "doesn t deliver", "does not deliver", "not serviceable",
             "currently closed", "temporarily closed", "closed now", "closed for", "currently unavailable",

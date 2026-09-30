@@ -13,7 +13,7 @@ $adb = "C:\Android\Sdk\platform-tools\adb.exe"
 if (-not $KeepApp) { & $adb shell input keyevent KEYCODE_HOME | Out-Null; Start-Sleep 2 }
 & $adb shell run-as com.echoflow rm -r files/runs 2>$null | Out-Null
 & $adb logcat -c
-& $adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "'$Command'" | Out-Null
+& $adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "'$($Command -replace "'", "'\''")'" | Out-Null
 $answered = 0
 $seenAsks = 0
 $start = Get-Date
@@ -27,7 +27,7 @@ while (((Get-Date) - $start).TotalSeconds -lt $TimeoutSec) {
         if ($answered -lt $Answers.Count) {
             Start-Sleep 4
             "A: " + $Answers[$answered]
-            & $adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "'$($Answers[$answered])'" | Out-Null
+            & $adb shell am broadcast -a com.echoflow.DEBUG_COMMAND --es text "'$($Answers[$answered] -replace "'", "'\''")'" | Out-Null
             $answered++
         }
     }

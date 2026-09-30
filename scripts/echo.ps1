@@ -13,7 +13,7 @@ switch ($cmd) {
         Start-Sleep -Milliseconds 900
         & $adb shell run-as com.echoflow cat files/debug_snap.txt
     }
-    "say"  { & $adb shell am broadcast -a $act --es text "'$a1'" | Out-Null }
+    "say"  { & $adb shell am broadcast -a $act --es text "'$($a1 -replace "'", "'\''")'" | Out-Null }
     "done" { & $adb shell am broadcast -a $act --ez done true | Out-Null }
     "stop" { & $adb shell am broadcast -a $act --ez stop true | Out-Null }
     "tap"  { & $adb shell input tap $a1 $a2 }

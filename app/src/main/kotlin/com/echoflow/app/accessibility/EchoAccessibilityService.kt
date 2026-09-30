@@ -101,6 +101,8 @@ class EchoAccessibilityService : AccessibilityService() {
                         "${e.index}^${e.parent}\t${(b.left + b.right) / 2},${(b.top + b.bottom) / 2}\t${e.simpleClassName}\t${if (e.clickable) "C" else ""}${if (e.editable) "E" else ""}${if (e.scrollable) "S" else ""}\t${e.viewId?.substringAfter(":id/") ?: ""}\t${(e.text ?: e.contentDescription ?: "").replace('\n', ' ').take(90)}"
                     }
                     java.io.File(filesDir, "debug_snap.txt").writeText("${s.packageName} ${s.activityName} ${EchoRuntime.guard.classify(s).label}\n$lines")
+                    // The whole screen, to replay it in a unit test.
+                    java.io.File(filesDir, "debug_snap.json").writeText(com.echoflow.core.model.SnapshotJson.encode(s))
                 }
                 intent.hasExtra("popup_rules") -> EchoRuntime.debugPopupRulesOff = !intent.getBooleanExtra("popup_rules", true)
                 intent.getBooleanExtra("done", false) -> o.onDonePressed()

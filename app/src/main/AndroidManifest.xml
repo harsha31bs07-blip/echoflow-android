@@ -4,6 +4,7 @@
     <!-- Voice commands (push-to-talk) and the optional Gemini call for paraphrases. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <queries>
         <intent>

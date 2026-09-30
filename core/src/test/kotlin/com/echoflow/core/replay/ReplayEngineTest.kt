@@ -38,6 +38,9 @@ private class FakePhone(
     val guard = SafetyGuard(ScreenSafetyClassifier())
     private val gateway = ActionGateway(guard, this, this, postActionTimeoutMs = 10)
     private var clock = 0L
+    var isOnline = true
+    override fun online() = isOnline
+
     /** Labels whose first click the app ignores. */
     val ignoreOnce = mutableSetOf<String>()
 
@@ -423,6 +426,15 @@ class ReplayEngineTest {
         assertTrue("Garlic Bread" !in p.clicked, p.clicked.toString())
         assertEquals(listOf("garlic bread", "paneer tikka"), p.typed)
         assertTrue(r.events.any { it.contains("opened the first result matching \"paneer tikka\"") }, r.events.toString())
+    }
+
+    @Test fun `offline, an empty search says the phone is offline instead of blaming the value`() = runTest {
+        val none: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { edit(hint = "Search for restaurants and food"); text("No results found for your search") } }
+        val p = FakePhone(screens + ("results" to none), mapOf(("home" to "Search for restaurant and food") to "search"), "home")
+        p.isOnline = false
+        val r = ReplayEngine(p, p.guard).run(flow(), mapOf("item" to "paneer tikka"))
+        assertTrue(p.questions.isEmpty(), p.questions.toString())
+        assertTrue(r.message.contains("internet"), r.message)
     }
 
     @Test fun `a search that finds nothing asks for something else at once and continues (T10)`() = runTest {

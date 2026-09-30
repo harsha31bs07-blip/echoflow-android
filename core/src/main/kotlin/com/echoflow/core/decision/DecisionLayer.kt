@@ -80,7 +80,9 @@ object DecisionLayer {
             if (own != null && other != null) s = s.split(' ').joinToString(" ") { if (it == own) other else it }
         }
         val app = c.targetApp?.let(::appLabel) ?: c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
-        return if (s.contains(app, ignoreCase = true)) s else "$s on $app"
+        // "…on play store" already names "Google Play Store".
+        val short = app.lowercase().removePrefix("google ").trim()
+        return if (s.contains(app, ignoreCase = true) || s.contains(short, ignoreCase = true)) s else "$s on $app"
     }
 
     /** "com.myntra.android" -> "Myntra". */

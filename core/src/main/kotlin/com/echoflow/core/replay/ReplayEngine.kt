@@ -239,7 +239,8 @@ class ReplayEngine(
         var askedAboutValue = false
         var staleRetries = 0
         var blankSince: Long? = null
-        var triedOpenSearch = false
+        // Twice at most: a bottom "Search" tab, then the box at the top of that page (Play Store).
+        var openSearchTries = 0
         var closedEmptySheet = false
         var openedResults = 0
         var lastOpen: String? = null
@@ -416,10 +417,10 @@ class ReplayEngine(
             // (Only once no result for the text just typed is left to open: that comes first.)
             val searchTap = isSearchTap(step) &&
                 (openedResults >= MAX_RESULT_OPENS || lastTypedValue?.let { firstResult(snap, it) } == null)
-            if ((step is Step.TypeText || searchTap) && !triedOpenSearch) {
+            if ((step is Step.TypeText && openSearchTries < 2) || (searchTap && openSearchTries < 1)) {
                 val opener = searchOpener(snap)
                 if (opener != null) {
-                    triedOpenSearch = true
+                    openSearchTries++
                     events += "opened search via \"${opener.label ?: opener.viewId}\""
                     val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, opener.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.8), snap)
                     if (searchTap && o is ActionOutcome.Performed) return tripped() ?: StepResult.Done
@@ -652,6 +653,14 @@ class ReplayEngine(
                     step is Step.Tap -> safeTap(advice.id)?.let { Resolution(advice.id, it, advice.confidence, 0.0) }
                     step is Step.TypeText && e.editable && !e.password -> Resolution(advice.id, advice.id, advice.confidence, 0.0)
                     else -> null
+                }
+                // Typing, and the AI points at a search button (not a box): open search with it.
+                if (resolution == null && step is Step.TypeText && !e.editable &&
+                    TextNormalizer.tokens(e.label).firstOrNull() == "search" && safeTap(advice.id) != null
+                ) {
+                    events += "AI helper: opened search via \"${name(advice.id)}\" (${advice.reason})"
+                    val o = act(PlannedAction.Click(snap.id, safeTap(advice.id)!!), GateContext(isRecovery = true), snap)
+                    return if (o is ActionOutcome.Performed) AdviceOutcome.Acted else AdviceOutcome.Nothing
                 }
                 if (resolution == null) {
                     // A suggestion that fails the safety check (screen text can mislead a model):
@@ -1097,12 +1106,21 @@ class ReplayEngine(
             .filter { e ->
                 val l = TextNormalizer.normalize(e.label)
                 l == "search" || l.startsWith("search for") || l.startsWith("search or") || l.contains("open search") ||
+                    // "Search Apps & Games" (Play Store): a short "search …" box label.
+                    (l.startsWith("search ") && l.split(' ').size <= 5 && snap.elements[Descriptors.clickableFor(snap, e.index)].clickable) ||
                     (e.clickable && TextNormalizer.viewIdTokens(e.viewId).let { "search" in it && ("box" in it || "bar" in it || "edit" in it) }) ||
                     // Myntra names the bar itself ("HPSearchBar"); its tappable part is a child
                     // showing rotating hints ("Pants", "Dresses", …).
                     l.replace(" ", "").let { it.endsWith("searchbar") || it.endsWith("searchbox") }
             }
-            .minByOrNull { if (it.clickable) 0 else 1 } ?: return null
+            .minByOrNull { if (it.clickable) 0 else 1 }
+            // No search box up top: a "Search" tab in the bottom navigation bar (Play Store).
+            ?: snap.appElements().firstOrNull { e ->
+                e.visible && !e.editable && e.bounds.top > snap.screenHeight * 3 / 4 &&
+                    TextNormalizer.normalize(e.label).let { it == "search" || it.startsWith("search tab") } &&
+                    snap.elements[Descriptors.clickableFor(snap, e.index)].clickable
+            }
+            ?: return null
         if (snap.elements[Descriptors.clickableFor(snap, hit.index)].clickable) return hit
         return snap.descendants(hit.index).filter { it.visible && it.clickable }.maxByOrNull { it.bounds.area } ?: hit
     }
@@ -1397,6 +1415,7 @@ class ReplayEngine(
         val shown = stepTarget(step)?.fill(slots)?.display
         // A label goes in quotes; a phrase ("the button near …", "the next button") doesn't.
         val what = when {
+            step is Step.TypeText -> "the box to type in"
             shown == null -> "the next button"
             shown.startsWith("the button near") -> shown
             else -> "\"$shown\""

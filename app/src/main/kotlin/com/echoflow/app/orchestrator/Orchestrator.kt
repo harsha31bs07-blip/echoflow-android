@@ -149,7 +149,8 @@ class Orchestrator(context: Context) {
         // One task at a time: a second command mid-run would fight the first over the screen.
         // Stop, "what happened" and the like still work.
         // (RUNNING is set before "Okay, …" is spoken; the job only starts after it.)
-        val busy = runJob?.isActive == true || _state.value.mode == Mode.RUNNING
+        // (Not runJob: it stays active while the result is spoken, after the run has ended.)
+        val busy = _state.value.mode == Mode.RUNNING
         if (busy && (meta == null || meta is MetaIntent.Teach)) {
             say("I'm still working on ${runningWhat ?: "the last task"}. Say stop to cancel it, or ask me again when I'm done.")
             return

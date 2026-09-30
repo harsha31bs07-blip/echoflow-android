@@ -60,6 +60,8 @@ data class ReplayResult(
     val totalSteps: Int,
     val stepDescription: String?,
     val events: List<String>,
+    /** When the run stopped short: what was on screen (see [ReplayEngine.whatISaw]). */
+    val sawOnScreen: List<String> = emptyList(),
 )
 
 /**
@@ -1520,7 +1522,21 @@ class ReplayEngine(
         totalSteps = steps.size,
         stepDescription = steps.getOrNull(i)?.description,
         events = events.toList(),
+        sawOnScreen = if (status == RunStatus.HALTED || status == RunStatus.NO_ANSWER) whatISaw() else emptyList(),
     )
+
+    /**
+     * The screen a stuck run ended on, as short labels: redacted (typed text, numbers and emails
+     * masked), and nothing at all from payment, OTP, password, login or unreadable screens.
+     */
+    private fun whatISaw(): List<String> {
+        val snap = host.current() ?: return emptyList()
+        if (guard.classify(snap).kinds.isNotEmpty()) return emptyList()
+        return RecoveryPrompt.screenItems(snap)
+            .mapNotNull { item -> item.label?.takeIf { it.length in 2..60 && it.any(Char::isLetter) }?.let { if (item.inPopup) "$it (pop-up)" else it } }
+            .distinct()
+            .take(14)
+    }
 
     companion object {
         const val STEP_BUDGET_MS = 12_000L

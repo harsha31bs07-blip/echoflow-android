@@ -399,7 +399,7 @@ class Orchestrator(context: Context) {
                 id = flow.id, utterance = utterance, flowId = flow.id, flowName = flow.template, slots = slots,
                 startedAtMs = started, endedAtMs = System.currentTimeMillis(), status = r.status,
                 stoppedAtStep = r.stoppedAtStep, totalSteps = r.totalSteps, stepDescription = r.stepDescription,
-                message = r.message, events = listOfNotNull(matchedBy) + r.events,
+                message = r.message, events = listOfNotNull(matchedBy) + r.events, sawOnScreen = r.sawOnScreen,
             ),
         )
         // Learn successful paraphrases so they match exactly next time (T3).

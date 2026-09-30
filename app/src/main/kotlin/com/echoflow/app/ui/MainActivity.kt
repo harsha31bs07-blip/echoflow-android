@@ -697,7 +697,22 @@ class MainActivity : Activity() {
             kit.caption(time),
         ))
         addView(kit.body(run.spokenSummary()).apply { setPadding(0, kit.dp(10), 0, 0) })
-        addView(kit.secondaryButton("🔊  Say it") { send("what happened last time") }.apply {
+        // Stopped short: what was on the screen (redacted), and one tap to try again.
+        if (run.sawOnScreen.isNotEmpty()) {
+            addView(kit.caption("What I saw: " + run.sawOnScreen.joinToString(" · ")).apply { setPadding(0, kit.dp(8), 0, 0) })
+        }
+        if (!run.succeeded && run.status != com.echoflow.core.runlog.RunStatus.CANCELLED) {
+            addView(buttonRow(
+                kit.secondaryButton("🔊  Say it") { send("what happened last time") }.apply {
+                    contentDescription = "Say what happened last time"
+                    layoutParams = halfWidth(end = 4)
+                },
+                kit.primaryButton("Try again", Palette.MINT) { send(run.utterance) }.apply {
+                    contentDescription = "Try the last command again"
+                    layoutParams = halfWidth(start = 4)
+                },
+            ))
+        } else addView(kit.secondaryButton("🔊  Say it") { send("what happened last time") }.apply {
             contentDescription = "Say what happened last time"
         })
         if (run.events.isNotEmpty()) {

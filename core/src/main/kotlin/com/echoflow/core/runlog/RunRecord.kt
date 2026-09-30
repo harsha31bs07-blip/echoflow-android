@@ -37,6 +37,8 @@ data class RunRecord(
     val message: String,
     /** Decisions and notable events, in order ("skipped step 4", "closed popup 'Get Gold'"). */
     val events: List<String> = emptyList(),
+    /** When a run stopped: what was on screen, redacted (never from payment or login screens). */
+    val sawOnScreen: List<String> = emptyList(),
 ) {
     val succeeded: Boolean get() = status == RunStatus.HANDED_OFF || status == RunStatus.COMPLETED
 

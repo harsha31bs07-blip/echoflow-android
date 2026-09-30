@@ -44,6 +44,11 @@ class EchoPrefs(context: Context) {
         get() = sp.getBoolean(KEY_MIC_ASKED, false)
         set(value) = sp.edit().putBoolean(KEY_MIC_ASKED, value).apply()
 
+    /** Speech recognition in Hindi (hi-IN) instead of Indian English (en-IN). */
+    var hindiSpeech: Boolean
+        get() = sp.getBoolean(KEY_HINDI, false)
+        set(value) = sp.edit().putBoolean(KEY_HINDI, value).apply()
+
     /** The accessibility service has run at least once (to tell "never set up" from "switched off"). */
     var everConnected: Boolean
         get() = sp.getBoolean(KEY_EVER_CONNECTED, false)
@@ -62,5 +67,6 @@ class EchoPrefs(context: Context) {
         const val KEY_HANDLE_RIGHT = "handle_right"
         const val KEY_HANDLE_Y = "handle_y"
         const val KEY_EVER_CONNECTED = "ever_connected"
+        const val KEY_HINDI = "hindi_speech"
     }
 }

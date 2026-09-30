@@ -396,6 +396,11 @@ class MainActivity : Activity() {
             }.apply { contentDescription = "Test AI help" })
             addView(keyTest)
             addView(kit.divider())
+            addView(kit.text("Language", 15f, Palette.TEXT, bold = true))
+            addView(switchRow("Understand Hindi speech (Hinglish works either way). Replies stay in English.", EchoRuntime.prefs.hindiSpeech) {
+                EchoRuntime.prefs.hindiSpeech = it
+            })
+            addView(kit.divider())
             addView(kit.text("Bubble", 15f, Palette.TEXT, bold = true))
             addView(switchRow("Tuck the bubble into the screen edge when idle, and glow the edges while working", EchoRuntime.prefs.minimalBubble) {
                 EchoRuntime.prefs.minimalBubble = it

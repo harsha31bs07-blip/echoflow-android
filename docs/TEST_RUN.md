@@ -154,6 +154,7 @@ Each of these was found on the device, fixed, and re-run:
 - **Cart bar with different text (W2):** a taught tap on "1 item added · Continue" now finds the bar that's there ("2 items added", "View cart") when the usual match fails. Unit-tested; Zomato orders passed.
 - **Size and colour on separate labels (W6):** "Size:" then "XL" is read and said back.
 - **"ghar" / "office" for Home / Work (E3):** verified on the phone. "deliver to office" picked Work (Brik Oven doesn't deliver there, so it said so and stopped); "deliver to ghar" picked Home and reached payment, ₹285 (cart emptied).
+- **Plan items finished the same evening (branch):** E2 accessibility button/shortcut starts listening; E5 live teaching captions ("Got it: tapped Search · 1 step so far") and "undo" (verified on YouTube); W3 "What I saw" + Try again on a stopped run (verified offline); E8 mint outline around Zomato's Place Order at hand-off (verified; nothing tapped); E6 "forget the … one" (verified); W1 tap relay (verified on Play Store: taught "search for maps" by tapping, detour dropped, replayed "search for chess"); E4 Hindi speech option (a Devanagari command mapped to the Zomato flow with Latin names).
 - **B2 re-checked on Myntra** after the "first result" changes: first sunglasses into the bag (bag emptied).
 
 ## Manual checklist before recording the demo

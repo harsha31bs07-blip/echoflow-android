@@ -39,6 +39,8 @@ Owners: **C** = Claude (code, tests, docs), **H** = Harsha (phone, decisions), *
 
 **Update, 30 Sept night (v1.1.7, branch):** W2 cart-bar recovery, W6 split size/colour labels and the E3 address words (ghar, office) are done; the listening panel's ✕ keeps the controls open. Relay limits deployed.
 
+**Update, 30 Sept ~17:30 (branch):** also done: W1 tap relay, W3 "What I saw", E2 accessibility shortcut, E4 Hindi speech, E5 captions and undo, E6 "forget", E8 Pay-button outline (E9, E10 already existed). Still open: W5, W7, W9, E7 (TalkBack, needs a person), E1 polish.
+
 **Reading the table:** nothing is failing, but four things could still cost points live:
 - a judge-taught flow in an app that hides its taps (T1–T9: up to 37 points);
 - the intermittent cart-bar miss (T2, 5);

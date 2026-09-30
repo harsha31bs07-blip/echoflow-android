@@ -68,7 +68,7 @@ class GeminiClient(
             Automations: $catalog
             Command: "${utterance.replace("\"", "'")}"
             Rules: pick an automation only if the command asks for the same kind of task (paraphrases count; a different item/quantity/address is fine).
-            If the command is a different task, or you are unsure, use null. Copy slot values from the command exactly (quantities as digits).
+            If the command is a different task, or you are unsure, use null. Copy slot values from the command (quantities as digits); if the command is in Hindi or another script, write names in the Latin letters the app would show (e.g. "margherita", "brik oven").
             Reply with JSON only: {"flowId": string or null, "confidence": number 0..1, "slots": {slotName: value}}
         """.trimIndent()
         val text = generate(prompt) ?: return null

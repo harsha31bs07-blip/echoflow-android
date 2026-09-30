@@ -97,7 +97,7 @@ Without the relay or a key, everything runs on the phone. Developers set `GEMINI
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md): speech-to-intent, UI-tree capture, generalisation, slot extraction, replay and safety, with diagrams
 - [TEST_MATRIX.md](docs/TEST_MATRIX.md): rubric → modules
 - [TEST_RUN.md](docs/TEST_RUN.md): device results for T1–T14
-- [STRESS_TESTS.md](docs/STRESS_TESTS.md): 20 ways it could fail (from GUI-agent research), run on the phone: 9 failed at first, all fixed
+- [STRESS_TESTS.md](docs/STRESS_TESTS.md): 20 ways it could fail (from GUI-agent research), run on the phone: 8 failed and 4 were clumsy at first; all fixed and re-run
 - [LIMITATIONS.md](docs/LIMITATIONS.md): known limitations (honest list)
 - [RESEARCH.md](docs/RESEARCH.md): prior art (SUGILITE, SkillDroid, …) and Android constraints
 - [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md): the 5-minute demo, phrase by phrase

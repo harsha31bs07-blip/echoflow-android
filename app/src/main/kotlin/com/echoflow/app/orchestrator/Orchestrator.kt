@@ -281,6 +281,15 @@ class Orchestrator(context: Context) {
             onCommitTap = { what -> scope.launch { finishTeaching("PAYMENT", "You reached the pay button ($what), so I stopped recording before it.") } },
             // Live caption: what was just learned, so a wrong tap is noticed (and "undo" fixes it).
             onRecorded = { what -> teachingCaption("Got it: $what") },
+            // No taps reported while the screen changes (W1): record them ourselves from now on.
+            onTapsHidden = {
+                scope.launch(Dispatchers.Main) {
+                    val r = recorder ?: return@launch
+                    EchoRuntime.service?.startTapRelay(r)
+                    teachingCaption("This app hides its taps; I'm recording them myself now")
+                    sayAsync("This app hides its taps from me, so I'll record them myself from now on. If I missed your last tap, go back and tap it again.")
+                }
+            },
         )
         _state.value = UiState(Mode.TEACHING, "Teaching “$utterance” — show me, then say done")
         // The command names an installed app ("… on Zomato", "… on play store"): open it now,
@@ -321,6 +330,7 @@ class Orchestrator(context: Context) {
     private suspend fun finishTeaching(endedAt: String, note: String? = null) {
         val rec = recorder ?: return
         recorder = null
+        EchoRuntime.service?.stopTapRelay()
         // Pressing Done on a cart/checkout screen means "the flow ends at checkout".
         val endedAt = if (endedAt == "user" && EchoRuntime.snapshots.current()?.let { EchoRuntime.guard.classify(it).isCheckout } == true) "CHECKOUT" else endedAt
         _state.value = UiState(Mode.IDLE, "Saving…")
@@ -350,6 +360,7 @@ class Orchestrator(context: Context) {
 
     private suspend fun cancelTeaching() {
         recorder = null
+        EchoRuntime.service?.stopTapRelay()
         _state.value = UiState()
         say("Okay, I discarded that.")
     }

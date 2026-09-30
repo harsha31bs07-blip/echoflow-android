@@ -133,6 +133,12 @@ class EchoBubble(
         if (e is com.echoflow.app.voice.SpeechUi.Ended) main.postDelayed(endListening, 1_000)
     }
 
+    /** Puts the bubble above overlays added after it (the teaching tap relay). */
+    fun raise() {
+        val r = root ?: return
+        runCatching { wm.removeView(r); wm.addView(r, params()) }
+    }
+
     fun show() {
         if (root != null) return
 

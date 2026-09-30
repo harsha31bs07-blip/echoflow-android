@@ -25,7 +25,17 @@ class TeachingRecorder(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Each recorded step, in words ("tapped \"Search\"", "typed \"margherita\""), for the live caption. */
     private val onRecorded: (String) -> Unit = {},
+    /** The screen changed to another page with no tap reported: the app hides its taps (W1). */
+    private val onTapsHidden: () -> Unit = {},
 ) {
+    private val startedAt = clock()
+    @Volatile private var lastInputAt = 0L
+    private var lastLabels: Set<String>? = null
+    private var lastPkg: String? = null
+    @Volatile private var hiddenReported = false
+
+    /** Taps come from EchoFlow's own tap relay; the app's click reports are ignored (no doubles). */
+    @Volatile var relayMode = false
     private val actions = mutableListOf<RawAction>()
     private val risk = ActionRiskClassifier()
     private var typingBounds: Rect? = null
@@ -41,13 +51,14 @@ class TeachingRecorder(
         val pkg = event.packageName?.toString() ?: return
         if (pkg == ownPackage || pkg.startsWith("com.android.systemui")) return
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> onClick(event, pkg)
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> onText(event)
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> { lastInputAt = clock(); if (!relayMode) onClick(event, pkg) }
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> { lastInputAt = clock(); onText(event) }
         }
     }
 
     /** Fills in the "after" fingerprint of the last action once the screen has moved on. */
     fun onSnapshot(snapshot: ScreenSnapshot) {
+        noticeHiddenTap(snapshot)
         synchronized(actions) {
             val i = actions.indexOfLast { it.postFingerprint == null }
             if (i >= 0 && snapshot.timestampMs > actions[i].atMs + 150) {
@@ -80,6 +91,56 @@ class TeachingRecorder(
         synchronized(actions) { actions += a }
         lastLabel = a.target.display
         onRecorded("tapped ${a.target.display}")
+    }
+
+    /**
+     * A different page (most of its labels changed, same app) with no tap or typing reported
+     * just before it: the app doesn't report taps (Compose apps such as Play Store). Ignored in
+     * the first seconds, while the app opens and loads.
+     */
+    private fun noticeHiddenTap(snapshot: ScreenSnapshot) {
+        val pkg = snapshot.packageName ?: return
+        if (pkg == ownPackage || pkg.startsWith("com.android.systemui")) return
+        val labels = snapshot.appElements().asSequence().filter { it.visible && !it.editable }.mapNotNull { it.label }
+            .map { it.trim().lowercase() }.filter { it.length in 2..40 }.toSet()
+        val before = lastLabels
+        val samePkg = pkg == lastPkg
+        lastLabels = labels
+        lastPkg = pkg
+        if (hiddenReported || relayMode || before == null || !samePkg || before.size < 5 || labels.size < 5) return
+        val now = clock()
+        if (now - startedAt < 4_000 || now - lastInputAt < 2_500) return
+        val shared = before.intersect(labels).size.toDouble() / before.union(labels).size
+        if (shared < 0.35) {
+            hiddenReported = true
+            onTapsHidden()
+        }
+    }
+
+    /** A tap caught by EchoFlow's relay at ([x], [y]) on [snap]: records the element under it. */
+    enum class RelayTap { RECORDED, NOTHING_THERE, PAY }
+
+    /**
+     * A tap caught by EchoFlow's relay at ([x], [y]) on [snap]: records the element under it.
+     * [RelayTap.PAY] means it's a pay / place-order button: the relay must NOT pass it on (EchoFlow
+     * would be the one paying); teaching ends so the user can tap it themselves.
+     */
+    fun recordRelayTap(snap: ScreenSnapshot, x: Int, y: Int): RelayTap {
+        lastInputAt = clock()
+        val under = snap.appElements()
+            .filter { it.visible && it.bounds.area > 0 && x in it.bounds.left..it.bounds.right && y in it.bounds.top..it.bounds.bottom }
+            .minByOrNull { it.bounds.area } ?: return RelayTap.NOTHING_THERE
+        val target = snap.elements[com.echoflow.core.flow.Descriptors.clickableFor(snap, under.index)]
+        if (risk.assess(snap, under).risk == ActionRisk.COMMIT || risk.assess(snap, target).risk == ActionRisk.COMMIT) {
+            onCommitTap(risk.assess(snap, under).evidence ?: risk.assess(snap, target).evidence ?: "pay")
+            return RelayTap.PAY
+        }
+        val a = Fingerprints.tap(snap, under.index, clock())
+        synchronized(actions) { actions += a }
+        typingBounds = null
+        lastLabel = a.target.display
+        onRecorded("tapped ${a.target.display}")
+        return RelayTap.RECORDED
     }
 
     /** Drops the last recorded step; returns it in words, or null if there was none. */

@@ -140,6 +140,34 @@ class EchoAccessibilityService : AccessibilityService() {
 
     private val payHighlight by lazy { com.echoflow.app.ui.PayHighlight(this) }
 
+    private var tapRelay: com.echoflow.app.ui.TapRelay? = null
+
+    /**
+     * Teaching in an app that hides its taps (W1): catch and pass on touches, recording each tap.
+     * The EchoFlow panel is raised above the layer so Done and Stop stay tappable.
+     */
+    fun startTapRelay(recorder: com.echoflow.app.teach.TeachingRecorder) {
+        if (tapRelay != null) return
+        recorder.relayMode = true
+        tapRelay = com.echoflow.app.ui.TapRelay(this) { x, y ->
+            val snap = captureNow() ?: EchoRuntime.snapshots.current() ?: return@TapRelay true
+            when (recorder.recordRelayTap(snap, x, y)) {
+                com.echoflow.app.teach.TeachingRecorder.RelayTap.PAY -> { stopTapRelay(); false } // never passed on
+                else -> true
+            }
+        }.also { it.start() }
+        mainHandler.postDelayed({ bubble?.raise(); tapRelay?.setKeyboardUp(keyboardShowing()) }, 150)
+    }
+
+    fun stopTapRelay() {
+        tapRelay?.stop()
+        tapRelay = null
+    }
+
+    private fun keyboardShowing(): Boolean = runCatching {
+        windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+    }.getOrDefault(false)
+
     /** At "Your turn": outline the screen's Pay / Place order button (display only; never tapped). */
     fun highlightPayButton() {
         val snap = EchoRuntime.snapshots.current() ?: return
@@ -158,6 +186,7 @@ class EchoAccessibilityService : AccessibilityService() {
             (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg?.startsWith("com.android.systemui") == true)
         ) {
             bubble?.setShadeOpen(systemCoversScreen())
+            if (tapRelay?.active == true) tapRelay?.setKeyboardUp(keyboardShowing())
         }
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && !pkg.startsWith("com.android.systemui")) {
             // The bubble is for other apps; EchoFlow's own screens have their own controls. (Events

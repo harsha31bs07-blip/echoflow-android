@@ -30,6 +30,15 @@ class EchoPrefs(context: Context) {
         get() = sp.getBoolean(KEY_MINIMAL, true)
         set(value) = sp.edit().putBoolean(KEY_MINIMAL, value).apply()
 
+    /** Where the edge handle sits: right or left edge, and its centre as a fraction of screen height. */
+    var handleOnRight: Boolean
+        get() = sp.getBoolean(KEY_HANDLE_RIGHT, true)
+        set(value) = sp.edit().putBoolean(KEY_HANDLE_RIGHT, value).apply()
+
+    var handleY: Float
+        get() = sp.getFloat(KEY_HANDLE_Y, 0.77f)
+        set(value) = sp.edit().putFloat(KEY_HANDLE_Y, value.coerceIn(0.08f, 0.92f)).apply()
+
     /** The microphone permission was requested at least once (to spot "denied for good"). */
     var micAsked: Boolean
         get() = sp.getBoolean(KEY_MIC_ASKED, false)
@@ -45,5 +54,7 @@ class EchoPrefs(context: Context) {
         const val KEY_GEMINI = "gemini_key"
         const val KEY_MIC_ASKED = "mic_asked"
         const val KEY_MINIMAL = "minimal_bubble"
+        const val KEY_HANDLE_RIGHT = "handle_right"
+        const val KEY_HANDLE_Y = "handle_y"
     }
 }

@@ -56,7 +56,10 @@ class EchoBubble(
     private lateinit var choices: LinearLayout
     private lateinit var choiceScroll: HorizontalScrollView
     private var pulse: ObjectAnimator? = null
-    private var atBottom = true
+    /** Where the handle (and the panel next to it) sits: remembered between runs. */
+    private var onRight = EchoRuntime.prefs.handleOnRight
+    private var handleY = EchoRuntime.prefs.handleY
+    private lateinit var pill: View
 
     // Siri-style minimal mode: a small handle at the edge when idle, a glow while busy.
     private lateinit var panel: LinearLayout
@@ -185,8 +188,9 @@ class EchoBubble(
         val home = iconButton(Glyph.Kind.HOME, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 36, iconDp = 20, label = "Open EchoFlow") {
             service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        move = iconButton(Glyph.Kind.MOVE, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 36, iconDp = 20, label = "Move to the other corner") {
-            atBottom = !atBottom
+        move = iconButton(Glyph.Kind.MOVE, plainDisc(CONTROL_BG), UTILITY_TEXT, sizeDp = 48, visualDp = 36, iconDp = 20, label = "Move up or down") {
+            handleY = if (handleY > 0.5f) 0.22f else 0.77f
+            EchoRuntime.prefs.handleY = handleY
             root?.let { wm.updateViewLayout(it, params()) }
         }
         // Main actions on the left, the two small helpers pushed to the right edge.
@@ -356,8 +360,8 @@ class EchoBubble(
             handle.alpha = 0f
             handle.animate().alpha(1f).setDuration(220).start()
         } else {
-            panel.pivotX = panel.width.takeIf { it > 0 }?.toFloat() ?: kit.dp(280).toFloat()
-            panel.pivotY = if (atBottom) (panel.height.takeIf { it > 0 }?.toFloat() ?: kit.dp(160).toFloat()) else 0f
+            panel.pivotX = if (onRight) (panel.width.takeIf { it > 0 }?.toFloat() ?: kit.dp(280).toFloat()) else 0f
+            panel.pivotY = (panel.height.takeIf { it > 0 }?.toFloat() ?: kit.dp(160).toFloat()) / 2
             panel.alpha = 0f
             panel.scaleX = 0.92f
             panel.scaleY = 0.92f
@@ -399,16 +403,20 @@ class EchoBubble(
      * way) inside a full 48dp touch target. Tap: open and listen. Long-press: just open.
      */
     private fun buildHandle() = FrameLayout(service).apply {
-        val pill = View(service).apply {
+        pill = View(service).apply {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             background = kit.rounded(HANDLE_FILL, 4f, HANDLE_EDGE, 1f)
-            layoutParams = FrameLayout.LayoutParams(kit.dp(7), kit.dp(56), Gravity.CENTER_VERTICAL or Gravity.END).apply {
-                marginEnd = kit.dp(3)
-            }
         }
         addView(pill)
+        placePill()
         layoutParams = FrameLayout.LayoutParams(kit.dp(48), kit.dp(72))
-        contentDescription = "EchoFlow. Tap to speak, or long-press to open the controls."
+        contentDescription = "EchoFlow. Tap to speak, long-press to open the controls, or drag to move it."
+        setOnTouchListener(DragToMove())
+        // The handle sits where the system "back" swipe starts; without this, a sideways drag is
+        // taken as "go back" and EchoFlow's touch is cancelled. (Just this small strip.)
+        addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
+            v.systemGestureExclusionRects = listOf(android.graphics.Rect(0, 0, r - l, b - t))
+        }
         isClickable = true
         isLongClickable = true
         setOnClickListener {
@@ -421,6 +429,61 @@ class EchoBubble(
             main.removeCallbacks(collapse)
             main.postDelayed(collapse, IDLE_COLLAPSE_MS)
             true
+        }
+    }
+
+    /** The pill hugs whichever edge the handle is on. */
+    private fun placePill() {
+        pill.layoutParams = FrameLayout.LayoutParams(kit.dp(7), kit.dp(56), Gravity.CENTER_VERTICAL or (if (onRight) Gravity.END else Gravity.START)).apply {
+            if (onRight) marginEnd = kit.dp(3) else marginStart = kit.dp(3)
+        }
+    }
+
+    /**
+     * Drag the handle up and down either edge; let go and it snaps to the nearer side and is
+     * remembered. A short touch without moving is still a tap (speak) or a long-press (controls).
+     */
+    private inner class DragToMove : View.OnTouchListener {
+        private var downX = 0f
+        private var downY = 0f
+        private var dragging = false
+        private val slop = android.view.ViewConfiguration.get(service).scaledTouchSlop
+
+        override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
+            val screenH = service.resources.displayMetrics.heightPixels.toFloat()
+            val screenW = service.resources.displayMetrics.widthPixels.toFloat()
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = e.rawX; downY = e.rawY; dragging = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (!dragging && (kotlin.math.abs(e.rawY - downY) > slop || kotlin.math.abs(e.rawX - downX) > slop)) {
+                        dragging = true
+                        v.cancelLongPress()
+                        v.isPressed = false
+                        v.alpha = 0.85f
+                    }
+                    if (dragging) {
+                        handleY = (e.rawY / screenH).coerceIn(0.08f, 0.92f)
+                        // Follow the finger across while dragging; the side is settled on release.
+                        val right = e.rawX > screenW / 2
+                        if (right != onRight) { onRight = right; placePill() }
+                        root?.let { runCatching { wm.updateViewLayout(it, params()) } }
+                        return true
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) {
+                        dragging = false
+                        v.alpha = 1f
+                        EchoRuntime.prefs.handleY = handleY
+                        EchoRuntime.prefs.handleOnRight = onRight
+                        tick(v)
+                        return true // a drag is not a tap
+                    }
+                }
+            }
+            return false
         }
     }
 
@@ -541,10 +604,12 @@ class EchoBubble(
             (if (passThrough) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0),
         PixelFormat.TRANSLUCENT,
     ).apply {
-        // Compact panel in a corner, clear of most apps' main buttons; ⇅ flips top/bottom.
-        // Offsets subtract the shadow margin so the visible card sits where it always has.
-        gravity = (if (atBottom) Gravity.BOTTOM else Gravity.TOP) or Gravity.END
-        y = kit.dp((if (atBottom) 150 else 40) - SHADOW_ROOM_DP)
+        // At the handle's remembered edge and height; the panel opens centred on the handle,
+        // kept fully on screen.
+        gravity = Gravity.TOP or (if (onRight) Gravity.END else Gravity.START)
+        val screenH = service.resources.displayMetrics.heightPixels
+        val h = if (collapsed) kit.dp(72) else (root?.height?.takeIf { it > kit.dp(100) } ?: kit.dp(240))
+        y = ((handleY * screenH) - h / 2f).toInt().coerceIn(kit.dp(32), (screenH - h - kit.dp(24)).coerceAtLeast(kit.dp(32)))
         x = 0
     }
 

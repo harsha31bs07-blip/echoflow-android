@@ -67,6 +67,7 @@ Run on a Galaxy S24 FE with real apps (details for every row: [docs/TEST_RUN.md]
    - **tap the handle** to speak a command: a listening panel rises with coral dots that move with your voice, and your words appear as you speak;
    - **✕** on the bubble or the listening panel stops whatever is going on (a task, a question, a lesson being taught) and folds EchoFlow back into the handle, any time;
    - **long-press it** to open the controls;
+   - **drag it** up or down either edge to wherever suits your thumb: it snaps to the nearer side, remembers the spot, and the controls open next to it;
    - while EchoFlow is listening, teaching, working or asking, **the screen's edges glow** (coral: listening or recording; mint: working; gold: asking you) and the controls stay open;
    - the controls are the coral **sound-wave** button (speak), **✓ Done** (finish teaching), **■** (stop), **⌂** (open EchoFlow), **⇅** (move to the other corner) and **✕** (stop and hide);
    - EchoFlow's own home screen has the same sound-wave button next to the text box;

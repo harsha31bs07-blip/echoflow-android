@@ -89,6 +89,11 @@ class ReplayEngine(
 
     /** Things the user should hear at the end ("I kept the size that was already selected."). */
     private val notes = mutableListOf<String>()
+    /** The AI helper suggested something unsafe once: it isn't asked again in this run. */
+    private var advisorDistrusted = false
+    /** The product opened as "the first result", and options the app had already chosen. */
+    private var pickedName: String? = null
+    private var variants: List<String> = emptyList()
 
     private val risk = com.echoflow.core.safety.ActionRiskClassifier()
 
@@ -184,7 +189,17 @@ class ReplayEngine(
                 (guard.currentState as? GuardState.Tripped)?.let { return result(statusFor(it.trip), it.trip.handOffMessage, steps.size - 1, steps) }
             }
         }
-        return result(RunStatus.COMPLETED, "Done. I finished all ${steps.size} steps.", steps.size - 1, steps)
+        return result(RunStatus.COMPLETED, doneMessage(steps), steps.size - 1, steps)
+    }
+
+    /** "Done." plus what was added and any option the app chose by itself (Amazon's size). */
+    private fun doneMessage(steps: List<Step>): String {
+        val name = pickedName
+        val last = steps.last()
+        val adds = isAddTap(last) || (last is Step.Tap && last.pick == "add_to_cart") || (last is Step.Tap && TextNormalizer.viewIdTokens(last.target.viewId).let { "add" in it && ("cart" in it || "bag" in it) })
+        if (name == null || !adds) return "Done. I finished all ${steps.size} steps."
+        val chosen = if (variants.isEmpty()) "" else " The app chose ${variants.joinToString(" and ")}; change it in the cart if you want something else."
+        return "Done. I added \"$name\" to the cart.$chosen"
     }
 
     private sealed interface StepResult {
@@ -297,6 +312,7 @@ class ReplayEngine(
                 val add = addToCartButton(snap)
                 if (add != null) {
                     events += "tapped \"${add.label ?: "Add to cart"}\" (${add.viewId?.substringAfter(":id/") ?: add.className})"
+                    variants = variantsOn(snap)
                     val r = perform(step, snap, Resolution(add.index, Descriptors.clickableFor(snap, add.index), 0.9, 0.0), slots)
                     if (r is StepResult.Retry && staleRetries++ < 3) continue
                     // Myntra asks for a size before the item goes in the bag.
@@ -315,6 +331,7 @@ class ReplayEngine(
                     else topResult(snap, slots["item"], allowNonProducts = !keyboardUp && host.nowMs() - started > NON_PRODUCT_WAIT_MS)
                 if (first != null) {
                     events += "opened the first result: \"${first.label}\""
+                    pickedName = productName(first.label.orEmpty())
                     val r = perform(step, snap, Resolution(first.index, Descriptors.clickableFor(snap, first.index), 0.8, 0.0), slots)
                     if (r is StepResult.Retry && staleRetries++ < 3) continue
                     return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
@@ -508,7 +525,7 @@ class ReplayEngine(
             // Last resort, only when every recovery above has run out: an AI model looks at the
             // redacted screen and suggests one thing to try. Checked here, gated as usual.
             // (Not while a loading spinner is up: that screen is still arriving.)
-            if (advisor != null && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS && !loading(snap)) {
+            if (advisor != null && !advisorDistrusted && advised < MAX_ADVICE && host.nowMs() - started > ADVISE_AFTER_MS && !loading(snap)) {
                 advised++
                 val asked = host.nowMs()
                 val o = consultAdvisor(flow, steps, i, snap, slots)
@@ -614,7 +631,8 @@ class ReplayEngine(
             is RecoveryAdvice.Dismiss -> {
                 val target = safeTap(advice.id)
                 if (target == null) {
-                    events += "AI helper suggested \"${if (advice.id in ids) name(advice.id) else "?"}\"; not safe to tap, ignored"
+                    events += "AI helper suggested \"${if (advice.id in ids) name(advice.id) else "?"}\"; not safe to tap, ignored (no more AI help this run)"
+                    advisorDistrusted = true
                     AdviceOutcome.Nothing
                 } else {
                     events += "AI helper: closed \"${name(advice.id)}\" (${advice.reason})"
@@ -629,11 +647,16 @@ class ReplayEngine(
                 }
                 val e = snap.elements[advice.id]
                 val resolution = when {
+                    // An "ADD" / "Add to cart" step can only be something that says add.
+                    step is Step.Tap && isAddTap(step) && !saysAdd(snap, Resolution(advice.id, Descriptors.clickableFor(snap, advice.id), 0.0, 0.0)) -> null
                     step is Step.Tap -> safeTap(advice.id)?.let { Resolution(advice.id, it, advice.confidence, 0.0) }
                     step is Step.TypeText && e.editable && !e.password -> Resolution(advice.id, advice.id, advice.confidence, 0.0)
                     else -> null
                 }
                 if (resolution == null) {
+                    // A suggestion that fails the safety check (screen text can mislead a model):
+                    // don't ask again in this run.
+                    if (step is Step.Tap && e.clickable && safeTap(advice.id) == null) advisorDistrusted = true
                     events += "AI helper suggested \"${name(advice.id)}\"; not usable for this step, ignored"
                     return AdviceOutcome.Nothing
                 }
@@ -717,7 +740,7 @@ class ReplayEngine(
     private suspend fun perform(step: Step, snap: ScreenSnapshot, r: Resolution, slots: Map<String, String>): StepResult {
         val ctx = GateContext(explicitlyTaught = true, resolverConfidence = r.score)
         val outcome = when (step) {
-            is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex), ctx, snap).let { o ->
+            is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex).also { if (isAddTap(step)) variants = variantsOn(snap) }, ctx, snap).let { o ->
                 // (Unless the recovery that chose this tap already logged it.)
                 val logged = events.lastOrNull()?.let { it.startsWith("tapped") || it.startsWith("opened the first result") } == true
                 if (o is ActionOutcome.Performed && !logged) events += "tapped \"${shortName(snap, r.index)}\""
@@ -958,9 +981,23 @@ class ReplayEngine(
                 return null
             }
             val button = if (count < want) plus else minus.takeIf { count > 1 } ?: return null
-            val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+            var o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, button.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+            if (o is ActionOutcome.Failed) {
+                // The row was redrawn under us (Zomato redraws it after every change): read it again, once.
+                snap = host.awaitSettled(snap.id, 1_500) ?: host.current() ?: return null
+                val again = cartRow(snap, item) ?: return StepResult.Stop(RunStatus.HALTED, "I couldn't find the quantity buttons again.")
+                if (again.first == want) return null.also { if (want > 1) events += "set quantity to $want" }
+                val b = if (again.first < want) again.second else again.third.takeIf { again.first > 1 } ?: return null
+                o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, b.index)), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), snap)
+            }
             if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't change the quantity (${describe(o)}).")
+            // Wait for the new count before the next tap, so a late redraw isn't tapped twice.
+            val before = count
+            val waitStart = host.nowMs()
             snap = host.current() ?: return null
+            while (cartRow(snap, item)?.first == before && host.nowMs() - waitStart < 3_000) {
+                snap = host.awaitSettled(snap.id, 700) ?: host.current() ?: return null
+            }
         }
         return StepResult.Stop(RunStatus.HALTED, "I couldn't get the quantity to $want.")
     }
@@ -1157,6 +1194,8 @@ class ReplayEngine(
                     !l.startsWith("view sponsored") && !l.startsWith("sponsored ad from") && !l.startsWith("results for") && !l.startsWith("showing results") &&
                         !l.startsWith("ref ") && !l.contains("http") && !l.contains("location") &&
                         !l.contains("filter") && !l.endsWith(" icon") &&
+                        // Bottom navigation ("Home Tab 1 of 6") and a card's rating line aren't titles.
+                        !NAV_TAB.containsMatchIn(l) && !l.contains("out of 5 stars") &&
                         // A delivery address line ("…, Bengaluru, Karnataka 560001, India") isn't a result.
                         !PINCODE.containsMatchIn(e.label.orEmpty()) && !l.endsWith(" india")
                 }
@@ -1169,10 +1208,36 @@ class ReplayEngine(
                 TextNormalizer.tokens(o.label).let { t -> t.size in 1..6 && (TextNormalizer.containsPhrase(t, OUT_OF_5) || SafetyLexicon.amountOf(t) != null) }
         }
         val products = rows.filter(::productLike)
-        val pool = products.ifEmpty { if (allowNonProducts) rows else emptyList() }
+        // "The first result" means the first real product, not an ad; an ad product only if no
+        // real one is on screen, and other rows only when there are no products at all.
+        val pool = products.filterNot { sponsored(snap, it) }
+            .ifEmpty { products }
+            .ifEmpty { if (allowNonProducts) rows.filterNot { sponsored(snap, it) }.ifEmpty { rows } else emptyList() }
         if (item != null) pool.take(4).firstOrNull { ElementResolver.valueMatch(item, it.label, emptyList()) > 0 }?.let { return it }
         return pool.firstOrNull()
     }
+
+    private fun sponsored(snap: ScreenSnapshot, e: UiElement): Boolean {
+        if (TextNormalizer.normalize(e.label).startsWith("sponsored")) return true
+        // Only a card-sized container counts: a list-wide one holds other cards' "Sponsored" labels too.
+        val card = Descriptors.clickableFor(snap, e.index)
+        if (card == e.index || snap.elements[card].bounds.height > snap.screenHeight / 2) return false
+        return snap.descendants(card, maxDepth = 6).any { TextNormalizer.normalize(it.label).let { l -> l == "sponsored" || l.startsWith("sponsored ad") } }
+    }
+
+    /** "Go to detail page for "JETech Matte Case for iPhone…" Not eligible…" → "JETech Matte Case for iPhone…". */
+    private fun productName(label: String): String {
+        var t = label.trim().removePrefix("Go to detail page for").trim()
+        t = t.replace(Regex("^Sponsored Ad\\s*-\\s*", RegexOption.IGNORE_CASE), "")
+        if (t.startsWith("\"")) t = t.drop(1).substringBefore("\"")
+        return if (t.length <= 60) t else t.take(57).substringBeforeLast(' ') + "…"
+    }
+
+    /** Options already set on a product page: "Size: XL", "Colour: Fog Teal". */
+    private fun variantsOn(snap: ScreenSnapshot): List<String> = snap.appElements()
+        .mapNotNull { e -> e.label?.trim()?.let { VARIANT.find(it) }?.let { m -> "${m.groupValues[1].lowercase()} ${m.groupValues[2].trim()}" } }
+        .distinctBy { it.substringBefore(' ') }
+        .take(2)
 
     private fun firstResult(snap: ScreenSnapshot, item: String): UiElement? = snap.appElements()
         .filter { it.visible && !it.editable && it.bounds.top > snap.screenHeight / 8 && (it.label?.length ?: 0) >= item.length }
@@ -1380,6 +1445,8 @@ class ReplayEngine(
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
         const val ADD_EFFECT_WAIT_MS = 3_000L
+        private val NAV_TAB = Regex("\\btab \\d+ of \\d+\\b")
+        private val VARIANT = Regex("^(size|colour|color)\\s*:\\s*(.{1,24})$", RegexOption.IGNORE_CASE)
         /** Home-screen apps (Samsung One UI, Pixel, MIUI, Lawnchair and others). */
         private val LAUNCHER = Regex("launcher|\\.home$|\\.homescreen|lawnchair|trebuchet", RegexOption.IGNORE_CASE)
         private val CART_BAR = Regex("^\\d+ items? added")

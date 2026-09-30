@@ -122,6 +122,8 @@ This is an honest list of what EchoFlow can't do yet, or has only partly verifie
   - asks, in setup step 3 ("Keep EchoFlow running"), to be left out of battery optimisation, and points to App info → Battery for background activity and auto-launch;
   - says *"Your phone switched EchoFlow off"* (or *"stopped EchoFlow"*) with the fix, instead of silently losing the edge handle.
 
+  Setup now takes fewer trips: **Turn on EchoFlow** opens Accessibility settings with EchoFlow highlighted where the phone allows it, and says where the switch is on this brand; once it's on, EchoFlow comes back by itself and asks for the microphone and background running one after the other. (Linking straight to an app's own switch is reserved for system apps, and "Allow restricted settings" for sideloaded apps can't be skipped by any app.)
+
   Reported on a OnePlus phone; the fixes were checked on the Galaxy S24 FE (force-stop), not yet on a OnePlus.
 
 ### L13. Voice

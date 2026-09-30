@@ -44,6 +44,16 @@ class EchoPrefs(context: Context) {
         get() = sp.getBoolean(KEY_MIC_ASKED, false)
         set(value) = sp.edit().putBoolean(KEY_MIC_ASKED, value).apply()
 
+    /** Setup sent the user to Settings: bring EchoFlow back when the service turns on. */
+    var returnAfterSetup: Boolean
+        get() = sp.getBoolean("return_after_setup", false)
+        set(value) = sp.edit().putBoolean("return_after_setup", value).apply()
+
+    /** "Keep EchoFlow running" was asked for once automatically during setup. */
+    var batteryAsked: Boolean
+        get() = sp.getBoolean("battery_asked", false)
+        set(value) = sp.edit().putBoolean("battery_asked", value).apply()
+
     /** Speech recognition in Hindi (hi-IN) instead of Indian English (en-IN). */
     var hindiSpeech: Boolean
         get() = sp.getBoolean(KEY_HINDI, false)

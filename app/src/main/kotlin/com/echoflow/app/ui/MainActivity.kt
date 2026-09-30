@@ -111,6 +111,7 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         refresh()
+        continueSetup()
         jobs += scope.launch {
             EchoRuntime.bus.events.collect { e -> if (e is EchoEvent.SafetyTripped || e is EchoEvent.SafetyRearmed) refresh() }
         }
@@ -136,6 +137,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         refresh()
+        continueSetup() // microphone answered: straight on to "Keep EchoFlow running"
     }
 
     // ---------------------------------------------------------------- building
@@ -147,7 +149,8 @@ class MainActivity : Activity() {
         }
         accessStep = checkStep(1, "Turn on EchoFlow in Accessibility", "Lets EchoFlow see the screen and tap for you.")
         accessStep.actions.apply {
-            addView(kit.primaryButton("Open Accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
+            addView(kit.primaryButton("Turn on EchoFlow") { openOwnAccessibilitySwitch() })
+            addView(kit.caption(whereIsTheSwitch()).apply { setPadding(0, kit.dp(8), 0, 0) })
             // Android 13+ greys out the toggle for apps installed from a file until this is allowed.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 addView(kit.caption("Greyed out? Open App info → ⋮ (top right) → \"Allow restricted settings\", then turn EchoFlow on again.").apply {
@@ -212,6 +215,43 @@ class MainActivity : Activity() {
         if (EchoRuntime.service != null) return false
         val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
         return enabled.split(':').any { it.startsWith("$packageName/") }
+    }
+
+    /**
+     * Straight to EchoFlow's own switch (Android 12+), not the long list where it has to be found.
+     * When it's on, the service brings this screen back by itself (see EchoAccessibilityService).
+     */
+    private fun openOwnAccessibilitySwitch() {
+        EchoRuntime.prefs.returnAfterSetup = true
+        val component = android.content.ComponentName(this, com.echoflow.app.accessibility.EchoAccessibilityService::class.java).flattenToString()
+        // Linking straight to an app's own switch is reserved for system apps on most phones, so
+        // open the list with EchoFlow highlighted (stock Android and OxygenOS scroll to it).
+        val args = Bundle().apply { putString(":settings:fragment_args_key", component) }
+        val list = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            .putExtra(":settings:fragment_args_key", component)
+            .putExtra(":settings:show_fragment_args", args)
+        startActivity(list)
+    }
+
+    /** Where EchoFlow's switch sits in this brand's Accessibility settings. */
+    private fun whereIsTheSwitch(): String = when (Build.MANUFACTURER.lowercase()) {
+        "samsung" -> "Then tap Installed apps → EchoFlow automation → turn it on. You'll come straight back here."
+        "oneplus", "oppo", "realme" -> "Then tap Downloaded apps (or Installed services) → EchoFlow automation → turn it on. You'll come straight back here."
+        "xiaomi", "redmi", "poco" -> "Then tap Downloaded apps → EchoFlow automation → turn it on. You'll come straight back here."
+        "vivo", "iqoo" -> "Then tap Installed services → EchoFlow automation → turn it on. You'll come straight back here."
+        else -> "Then tap Downloaded apps → EchoFlow automation → turn it on. You'll come straight back here."
+    }
+
+    /** The next setup step at once, instead of waiting for the user to find its button. */
+    private fun continueSetup() {
+        if (EchoRuntime.service == null) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED && !EchoRuntime.prefs.micAsked) {
+            EchoRuntime.prefs.micAsked = true
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        } else if (!batteryUnrestricted() && !EchoRuntime.prefs.batteryAsked) {
+            EchoRuntime.prefs.batteryAsked = true
+            askToIgnoreBatteryOptimizations()
+        }
     }
 
     private fun openAppInfo() {

@@ -69,6 +69,13 @@ class EchoAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         EchoRuntime.init(applicationContext)
         EchoRuntime.prefs.everConnected = true
+        // Turned on from EchoFlow's setup: go back there for the next step, no navigating.
+        if (EchoRuntime.prefs.returnAfterSetup) {
+            EchoRuntime.prefs.returnAfterSetup = false
+            runCatching {
+                startActivity(Intent(this, com.echoflow.app.ui.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            }
+        }
         captureThread = HandlerThread("echo-capture").also { it.start() }
         captureHandler = Handler(captureThread.looper)
         capturer = SnapshotCapturer(this)

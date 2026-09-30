@@ -5,7 +5,7 @@ putting a Gemini key in the app. The key lives only in Cloudflare as a secret.
 
 - Forwards only EchoFlow's own prompts (command matching, stuck-screen help, key test), with a
   fixed model and settings: it can't be used as a general chatbot.
-- Caps requests per day: 300 in total and 60 per network (see `src/worker.js`).
+- Caps requests: 15 a minute per network and 900 a day in total (see `src/worker.js`).
 - Stores nothing but those counters, keyed by a hash of the IP, for two days.
 - A key pasted in the app (Advanced → AI help) still takes priority over the relay.
 

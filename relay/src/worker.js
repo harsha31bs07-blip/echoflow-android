@@ -1,12 +1,13 @@
 // EchoFlow AI relay: lets every EchoFlow install use AI help without a key in the app.
 // The Gemini key is a Cloudflare secret (GEMINI_API_KEY), never in the APK or this repo.
 // It only forwards EchoFlow's own two prompts, with a fixed model and settings, and caps
-// requests per day (in total and per phone network) so the free quota can't be drained.
-// Stores nothing but those counters (keyed by a hash of the IP, kept two days).
+// requests per minute per network (Cloudflare's rate limiter, keyed by a hash of the IP) and per
+// day in total (one KV counter, kept two days), so the free quota can't be drained.
+// Stores nothing else. (One KV write per request keeps the total inside KV's free 1,000 writes a
+// day; a venue full of judges on one Wi-Fi shares the per-minute limit.)
 
 const MODEL = "gemini-flash-lite-latest";
-const PER_DAY = 300;
-const PER_IP_PER_DAY = 60;
+const PER_DAY = 900; // under the Gemini free tier's daily requests, and KV's free daily writes
 const MAX_PROMPT_CHARS = 30_000;
 // The beginnings of the prompts EchoFlow sends (command matching, stuck-screen help, key test).
 const PROMPTS = ["You route a spoken command", "You help a phone automation", "Reply with JSON only: {\"ok\": true}"];
@@ -28,16 +29,19 @@ export default {
       return error(400, "Not an EchoFlow request.");
     }
 
-    const day = new Date().toISOString().slice(0, 10);
     const who = await hash(request.headers.get("cf-connecting-ip") || "unknown");
+    // Per network: a burst limit (see wrangler.toml), no storage.
+    if (env.PER_NETWORK) {
+      const { success } = await env.PER_NETWORK.limit({ key: who });
+      if (!success) return error(429, "Too many AI requests from this network right now. Try again in a minute.");
+    }
+    const day = new Date().toISOString().slice(0, 10);
     const totalKey = `day:${day}`;
-    const mineKey = `ip:${day}:${who}`;
-    const [total, mine] = await Promise.all([count(env, totalKey), count(env, mineKey)]);
-    if (total >= PER_DAY || mine >= PER_IP_PER_DAY) {
+    const total = await count(env, totalKey);
+    if (total >= PER_DAY) {
       return error(429, "EchoFlow's shared AI help has reached today's limit. It resets tomorrow, or paste your own free key under Advanced.");
     }
-    const ttl = { expirationTtl: 2 * 24 * 3600 };
-    await Promise.all([env.COUNTS.put(totalKey, String(total + 1), ttl), env.COUNTS.put(mineKey, String(mine + 1), ttl)]);
+    await env.COUNTS.put(totalKey, String(total + 1), { expirationTtl: 2 * 24 * 3600 });
 
     const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${env.MODEL || MODEL}:generateContent`, {
       method: "POST",

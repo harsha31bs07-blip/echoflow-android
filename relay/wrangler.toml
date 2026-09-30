@@ -2,7 +2,7 @@ name = "echoflow-relay"
 main = "src/worker.js"
 compatibility_date = "2025-09-01"
 
-# Daily request counters (created on first deploy).
+# Daily request total (created on first deploy).
 [[kv_namespaces]]
 binding = "COUNTS"
 
@@ -10,3 +10,12 @@ binding = "COUNTS"
 # refused with "User location is not supported".
 [placement]
 region = "gcp:us-central1"
+
+# Per-network burst limit: 15 AI requests a minute from one IP (no storage used).
+[[ratelimits]]
+name = "PER_NETWORK"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 15
+  period = 60

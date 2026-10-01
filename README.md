@@ -8,9 +8,9 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 
 | | |
 |---|---|
-| **Team** | *(add team name and members here)* |
-| **Demo video** | *(add link here)* |
-| **Presentation** | *(add link or file here)* |
+| **Team** | *Cryzen* |
+| **Demo video** | *Still Creating* |
+| **Presentation** | *[EchoFlow_Hackathon_Submission.pptx](https://github.com/user-attachments/files/32884004/EchoFlow_Hackathon_Submission.pptx)* |
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
 
 ## Judges' quick start (3 minutes)

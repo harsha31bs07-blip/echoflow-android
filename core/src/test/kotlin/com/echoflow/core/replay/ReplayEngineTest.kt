@@ -32,12 +32,14 @@ private class FakePhone(
     private var nextId = 100L
     var snap: ScreenSnapshot = screens.getValue(start)(nextId)
     val clicked = mutableListOf<String>()
+    val actions = mutableListOf<PlannedAction>()
     var addedRow: String? = null
     val typed = mutableListOf<String>()
     val questions = mutableListOf<String>()
     val guard = SafetyGuard(ScreenSafetyClassifier())
     private val gateway = ActionGateway(guard, this, this, postActionTimeoutMs = 10)
     private var clock = 0L
+    var settleCalls = 0
     var isOnline = true
     override fun online() = isOnline
 
@@ -54,13 +56,14 @@ private class FakePhone(
 
     override fun current() = snap
     override suspend fun awaitNewerThan(snapshotId: Long, timeoutMs: Long) = snap.takeIf { it.id > snapshotId }
-    override suspend fun awaitSettled(afterId: Long, timeoutMs: Long): ScreenSnapshot { clock += 500; return snap }
+    override suspend fun awaitSettled(afterId: Long, timeoutMs: Long): ScreenSnapshot { settleCalls++; clock += 500; return snap }
     override suspend fun perform(action: PlannedAction, context: GateContext) = gateway.perform(action, context)
     override suspend fun ask(question: String, choices: List<String>): String? { questions += question; return answers.removeFirstOrNull() }
     override fun say(text: String) = Unit
     override fun nowMs() = clock.also { clock += 100 }
 
     override suspend fun execute(action: PlannedAction, snapshot: ScreenSnapshot): Boolean {
+        actions += action
         when (action) {
             is PlannedAction.LaunchApp -> go("home")
             is PlannedAction.Click -> {
@@ -461,6 +464,160 @@ class ReplayEngineTest {
         assertTrue("+" !in p.clicked && "ADD" !in p.clicked, p.clicked.toString())
     }
 
+    private fun existingItemWithCart(options: Boolean = false, itemName: String = "Margherita Pizza"): (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            val row = node("android.view.ViewGroup", label = itemName, clickable = true,
+                bounds = com.echoflow.core.model.Bounds(0, 400, 1080, 1000))
+            add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg, className = "android.view.View",
+                contentDescription = itemName, bounds = com.echoflow.core.model.Bounds(36, 500, 430, 580)) }
+            for ((label, left) in listOf("-" to 800, "1" to 880, "+" to 960)) add {
+                com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg, className = "android.view.View",
+                    contentDescription = label, clickable = label != "1",
+                    bounds = com.echoflow.core.model.Bounds(left, 900, left + 70, 960))
+            }
+            val cart = node("android.view.ViewGroup", clickable = true,
+                bounds = com.echoflow.core.model.Bounds(0, 2080, 1080, 2230))
+            add { com.echoflow.core.model.UiElement(it, cart, 1, packageName = pkg, className = "android.view.View",
+                contentDescription = "1 item added", bounds = com.echoflow.core.model.Bounds(36, 2138, 400, 2200)) }
+            add { com.echoflow.core.model.UiElement(it, cart, 1, packageName = pkg, className = "android.view.View",
+                contentDescription = "Continue", bounds = com.echoflow.core.model.Bounds(755, 2138, 960, 2200)) }
+            if (options) {
+                val dialog = container(className = "android.app.Dialog")
+                text("Choose customization for Margherita Pizza", dialog)
+                button("Add item ₹225", dialog)
+            }
+        }
+    }
+
+    private fun existingItemConfirmationFlow(): Flow {
+        val options = existingItemWithCart(options = true)(1)
+        val menu = existingItemWithCart()(1)
+        return flow().copy(steps = listOf(
+            Step.Tap(com.echoflow.core.flow.ElementDescriptor(contentDescription = "ADD", className = "android.view.View")),
+            Step.Tap(Descriptors.describe(options, options.elements.first { it.label == "Add item ₹225" }.index)),
+            Step.Tap(Descriptors.describe(menu, menu.elements.first { it.label == "Continue" }.index)),
+        ))
+    }
+
+    @Test fun `duplicate ADD prevention skips its absent native options confirmation and opens the cart directly`() = runTest {
+        val p = FakePhone(screens + ("existing" to existingItemWithCart()),
+            mapOf(("existing" to "Continue") to "cart"), "existing")
+        val r = ReplayEngine(p, p.guard).run(existingItemConfirmationFlow(), mapOf("item" to "margherita"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("Continue"), p.clicked)
+        assertTrue(r.events.any { it == "options confirmation not needed for margherita already in the cart" }, r.events.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+    }
+
+    @Test fun `duplicate ADD evidence never skips a real open options confirmation`() = runTest {
+        val p = FakePhone(screens + mapOf("existing" to existingItemWithCart(), "options" to existingItemWithCart(options = true)),
+            mapOf(("options" to "Add item ₹225") to "existing", ("existing" to "Continue") to "cart"), "existing")
+        val host = object : ReplayHost by p {
+            override fun progress(step: Int, total: Int, description: String) {
+                if (step == 2) p.go("options")
+            }
+        }
+        val r = ReplayEngine(host, p.guard).run(existingItemConfirmationFlow(), mapOf("item" to "margherita"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("Add item ₹225", "Continue"), p.clicked)
+        assertTrue(r.events.none { it.startsWith("options confirmation not needed") }, r.events.toString())
+    }
+
+    private val farmhouseResults: (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            edit(hint = "Search in Brik Oven", typed = "farmhouse")
+            val row = node("android.view.View", label = "Briks Farmhouse Pizza", clickable = true,
+                bounds = com.echoflow.core.model.Bounds(0, 400, 1080, 1100))
+            add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg, className = "android.view.View",
+                contentDescription = "Briks Farmhouse Pizza", bounds = com.echoflow.core.model.Bounds(36, 500, 552, 620)) }
+            add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg, className = "android.view.View",
+                contentDescription = "ADD", clickable = true, viewId = "$pkg:id/text_view_title",
+                bounds = com.echoflow.core.model.Bounds(700, 840, 1000, 960)) }
+        }
+    }
+
+    private val farmhouseOptions: (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            val dialog = container(className = "android.app.Dialog")
+            text("Briks Farmhouse Pizza", dialog)
+            text("Choose From Variant", dialog)
+            text("Mini 6 inches selected", dialog)
+            add { com.echoflow.core.model.UiElement(it, dialog, 1, packageName = pkg, className = "android.widget.Button",
+                text = "Add item ₹260", clickable = true, viewId = "$pkg:id/button",
+                bounds = com.echoflow.core.model.Bounds(384, 2103, 1044, 2259)) }
+        }
+    }
+
+    private fun farmhouseCheckout(count: Int): (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            val row = node("android.view.ViewGroup", label = "Briks Farmhouse Pizza",
+                bounds = com.echoflow.core.model.Bounds(0, 400, 1080, 1100))
+            for ((label, left) in listOf("-" to 800, count.toString() to 880, "+" to 960)) add {
+                com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg, className = "android.view.View",
+                    contentDescription = label, clickable = label in setOf("-", "+"),
+                    bounds = com.echoflow.core.model.Bounds(left, 900, left + 70, 960))
+            }
+            icon("Pay ₹${260 * count} using UPI")
+        }
+    }
+
+    private fun farmhouseOptionsPhone(): FakePhone = FakePhone(screens + mapOf("results" to farmhouseResults,
+        "options" to farmhouseOptions, "added" to existingItemWithCart(itemName = "Briks Farmhouse Pizza"),
+        "cart" to farmhouseCheckout(1), "cart2" to farmhouseCheckout(2)), mapOf(
+        ("results" to "ADD") to "options", ("options" to "Add item ₹260") to "added",
+        ("added" to "Briks Farmhouse Pizza") to "options", ("added" to "Continue") to "cart", ("cart" to "+") to "cart2"), "search")
+
+    private fun farmhouseOptionsFlow(): Flow {
+        val results = farmhouseResults(1)
+        val added = existingItemWithCart(itemName = "Briks Farmhouse Pizza")(1)
+        return flow().copy(endedAt = "CHECKOUT", steps = listOf(
+            Step.TypeText(Descriptors.describe(screens.getValue("search")(1), 0), slot = "item"),
+            Step.Tap(Descriptors.describe(results, results.elements.first { it.label == "ADD" }.index)),
+            Step.Tap(com.echoflow.core.flow.ElementDescriptor(viewId = "$pkg:id/button", text = "Add item ₹225",
+                className = "android.widget.Button", parentSignature = "ViewGroup", context = listOf("1"),
+                centerX = 0.66f, centerY = 0.93f, packageName = pkg)),
+            Step.Tap(Descriptors.describe(added, added.elements.first { it.label == "Continue" }.index)),
+        ))
+    }
+
+    @Test fun `changed item options price confirms once and reaches the requested quantity two without reopening the dish`() = runTest {
+        val p = farmhouseOptionsPhone()
+        val r = ReplayEngine(p, p.guard).run(farmhouseOptionsFlow(), mapOf("item" to "farmhouse", "qty" to "2"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("ADD", "Add item ₹260", "Continue", "+"), p.clicked)
+        assertEquals("cart2", p.name)
+        assertTrue(r.events.any { it == "set quantity to 2" }, r.events.toString())
+        assertTrue(r.events.none { it.startsWith("opened the first result") }, r.events.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+    }
+
+    @Test fun `options recovery on ADD consumes only its associated taught confirmation after the real item reaches the cart`() = runTest {
+        val p = farmhouseOptionsPhone()
+        val host = object : ReplayHost by p {
+            override fun progress(step: Int, total: Int, description: String) {
+                if (step == 2) p.go("options")
+            }
+        }
+        val r = ReplayEngine(host, p.guard).run(farmhouseOptionsFlow(), mapOf("item" to "farmhouse", "qty" to "2"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("Add item ₹260", "Continue", "+"), p.clicked)
+        assertEquals("cart2", p.name)
+        assertTrue(r.events.any { it == "taught options confirmation already completed for farmhouse" }, r.events.toString())
+        assertTrue(r.events.none { it.startsWith("opened the first result") }, r.events.toString())
+    }
+
+    @Test fun `an ignored changed price options confirmation halts once instead of reopening or adding again`() = runTest {
+        val p = farmhouseOptionsPhone()
+        p.ignoreOnce += "Add item ₹260"
+        val r = ReplayEngine(p, p.guard).run(farmhouseOptionsFlow(), mapOf("item" to "farmhouse", "qty" to "2"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(3, r.stoppedAtStep)
+        assertEquals(listOf("ADD", "Add item ₹260"), p.clicked)
+        assertEquals("options", p.name)
+        assertTrue(p.settleCalls in 2..12, "bounded waits: ${p.settleCalls}")
+        assertTrue(r.events.none { it.startsWith("opened the first result") }, r.events.toString())
+    }
+
     @Test fun `first result skips an AI summary and a video ad and takes the first product card (T9)`() = runTest {
         val amz = "in.amazon.mShop.android.shopping"
         fun t(label: String, top: Int, parent: Int, clickable: Boolean = false) = { b: com.echoflow.core.testing.ScreenBuilder ->
@@ -666,5 +823,420 @@ class ReplayEngineTest {
         assertEquals(hints, p.clicked.first(), p.clicked.toString())
         assertEquals(listOf("ADD TO BAG", "size_select-item-Onesize", "buy_done_button"), p.clicked.takeLast(3))
         assertTrue("Add To Bag" !in p.clicked, p.clicked.toString())
+    }
+
+    @Test fun `a taught search field focus opens the home search directly without scrolling or visiting tabs`() = runTest {
+        val fieldId = "$pkg:id/edittext"
+        val search: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { edit(viewId = fieldId) } }
+        val opener = "Double tap to open search page"
+        val home: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                button("Dining"); button("Healthy mode")
+                add { com.echoflow.core.model.UiElement(it, -1, 1,
+                    className = "android.widget.LinearLayout", packageName = pkg,
+                    viewId = "$pkg:id/search_edit_text", contentDescription = opener,
+                    clickable = true, bounds = com.echoflow.core.model.Bounds(18, 273, 900, 453)) }
+                add { com.echoflow.core.model.UiElement(it, -1, 1,
+                    className = "android.widget.RecyclerView", packageName = pkg, scrollable = true,
+                    bounds = com.echoflow.core.model.Bounds(0, 500, 1080, 2200)) }
+            }
+        }
+        val target = Descriptors.describe(search(1), 0)
+        val taught = flow().copy(
+            slots = flow().slots + SlotDef("restaurant", SlotType.TEXT, "brik oven"),
+            steps = listOf(Step.LaunchApp(pkg), Step.Tap(target), Step.TypeText(target, slot = "restaurant")),
+        )
+        val p = FakePhone(screens + mapOf("home" to home, "search" to search), mapOf(("home" to opener) to "search"), "home")
+        var adviceCalls = 0
+        val advisor = RecoveryAdvisor { req ->
+            adviceCalls++
+            RecoveryAdvice.Target(req.screen.first { it.label == "Dining" }.id, 1.0, "try a different tab")
+        }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(taught, mapOf("restaurant" to "brik oven", "item" to "margherita"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf(opener), p.clicked)
+        assertEquals(listOf("brik oven"), p.typed)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertEquals(0, adviceCalls)
+    }
+
+    @Test fun `search recovery skips a location opener in favor of the restaurant search`() = runTest {
+        val search: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { edit(viewId = "$pkg:id/edittext") } }
+        val home: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) { button("Search for area, street name"); button("Search for restaurants and food") }
+        }
+        val target = Descriptors.describe(search(1), 0)
+        val taught = flow().copy(steps = listOf(Step.Tap(target), Step.TypeText(target, slot = "item")))
+        val p = FakePhone(screens + mapOf("home" to home, "search" to search),
+            mapOf(("home" to "Search for restaurants and food") to "search"), "home")
+        val r = ReplayEngine(p, p.guard).run(taught, mapOf("item" to "margherita"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Search for restaurants and food"), p.clicked)
+        assertEquals(listOf("margherita"), p.typed)
+    }
+
+    @Test fun `delivery recovery refuses dining and healthy mode suggested by the advisor`() = runTest {
+        for (destination in listOf("Dining", "Healthy mode")) {
+            val home: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { button(destination); text("Restaurants") } }
+            val taught = flow().copy(
+                slots = flow().slots + SlotDef("restaurant", SlotType.TEXT, "brik oven"),
+                steps = listOf(Step.Tap(com.echoflow.core.flow.ElementDescriptor(text = "Search for restaurants", className = "android.widget.Button"))),
+            )
+            val p = FakePhone(screens + ("home" to home), emptyMap(), "home")
+            val advisor = RecoveryAdvisor { req ->
+                RecoveryAdvice.Target(req.screen.first { it.label == destination }.id, 1.0, "switch modes")
+            }
+            val r = ReplayEngine(p, p.guard, advisor = advisor).run(taught, mapOf("restaurant" to "brik oven", "item" to "margherita"))
+            assertEquals(RunStatus.HALTED, r.status, r.toString())
+            assertTrue(p.clicked.isEmpty(), "$destination: ${p.clicked}")
+            assertTrue(r.events.any { it.contains("not usable for this step") }, r.events.toString())
+        }
+    }
+
+    @Test fun `a missing ordinary form field focus does not open a product search instead`() = runTest {
+        val target = com.echoflow.core.flow.ElementDescriptor(viewId = "$pkg:id/display_name", className = "android.widget.EditText")
+        val taught = flow().copy(steps = listOf(Step.Tap(target), Step.TypeText(target, literal = "Harsha")))
+        val p = phone()
+        val r = ReplayEngine(p, p.guard).run(taught, emptyMap())
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+        assertTrue(p.typed.isEmpty(), p.typed.toString())
+    }
+
+    @Test fun `an explicitly taught healthy mode visit is still allowed`() = runTest {
+        val home: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { button("Healthy mode"); text("Restaurants") } }
+        val taught = flow().copy(
+            slots = flow().slots + SlotDef("restaurant", SlotType.TEXT, "brik oven"),
+            steps = listOf(Step.Tap(com.echoflow.core.flow.ElementDescriptor(
+                viewId = "$pkg:id/previous_healthy_mode_button", contentDescription = "Healthy mode", className = "android.widget.Button"))),
+        )
+        val p = FakePhone(screens + ("home" to home), emptyMap(), "home")
+        val advisor = RecoveryAdvisor { req ->
+            RecoveryAdvice.Target(req.screen.first { it.label == "Healthy mode" }.id, 1.0, "the taught control has a new id")
+        }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(taught, mapOf("restaurant" to "brik oven", "item" to "margherita"))
+        // This fake has no next screen: the accepted tap is genuine, but must not count as
+        // completing the step when its visible screen has not changed.
+        assertEquals(listOf("Healthy mode"), p.clicked)
+        assertTrue(r.events.none { it.contains("not usable for this step") }, r.events.toString())
+    }
+
+    private val savedHomeAddress: (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            text("Select a saved address")
+            val row = node("android.widget.LinearLayout", label = "Home", clickable = true,
+                bounds = com.echoflow.core.model.Bounds(0, 120, 1080, 600))
+            text("Home", row)
+            text("12 Sample Street, Example Layout, Bengaluru 560001", row)
+        }
+    }
+
+    private fun deliveryPage(address: String? = "Home", search: Boolean = true, staleSearch: Boolean = false): (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            if (address != null) {
+                val bar = add { com.echoflow.core.model.UiElement(it, -1, 1, packageName = pkg,
+                    className = "android.view.ViewGroup", viewId = "$pkg:id/location_container", clickable = true,
+                    bounds = com.echoflow.core.model.Bounds(36, 128, 900, 249)) }
+                add { com.echoflow.core.model.UiElement(it, bar, 1, packageName = pkg,
+                    className = "android.widget.TextView", viewId = "$pkg:id/location_title", text = address,
+                    bounds = com.echoflow.core.model.Bounds(114, 128, 316, 198)) }
+            }
+            if (search || staleSearch) add { com.echoflow.core.model.UiElement(it, -1, 1, packageName = pkg,
+                className = "android.widget.LinearLayout", viewId = "$pkg:id/search_edit_text",
+                contentDescription = "Double tap to open search page", clickable = true,
+                bounds = if (search) com.echoflow.core.model.Bounds(18, 273, 900, 453)
+                    else com.echoflow.core.model.Bounds(0, 273, -180, 453)) }
+            val nav = add { com.echoflow.core.model.UiElement(it, -1, 1, packageName = pkg,
+                className = "android.widget.LinearLayout", viewId = "$pkg:id/bottom_navigation_bar",
+                bounds = com.echoflow.core.model.Bounds(24, 2080, 788, 2247)) }
+            for ((label, left) in listOf("Home" to 24, "Under 250" to 217, "Dining" to 430, "Healthy mode" to 640)) {
+                val row = add { com.echoflow.core.model.UiElement(it, nav, 1, packageName = pkg,
+                    className = "android.view.ViewGroup", clickable = true,
+                    bounds = com.echoflow.core.model.Bounds(left, 2080, left + 183, 2247)) }
+                add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg,
+                    className = "android.view.View", contentDescription = label,
+                    bounds = com.echoflow.core.model.Bounds(left + 25, 2170, left + 140, 2211)) }
+            }
+            add { com.echoflow.core.model.UiElement(it, -1, 1, packageName = pkg,
+                className = "androidx.recyclerview.widget.RecyclerView", scrollable = true,
+                bounds = com.echoflow.core.model.Bounds(0, 0, 1080, 2295)) }
+        }
+    }
+
+    private fun restaurantSearchFlow(address: Boolean = false, slot: String = "restaurant"): Flow {
+        val target = Descriptors.describe(screens.getValue("search")(1), 0)
+        return flow().copy(slots = flow().slots + SlotDef("restaurant", SlotType.TEXT, "brik oven"),
+            steps = (if (address) listOf(Step.Tap(Descriptors.describe(savedHomeAddress(1), 2))) else emptyList()) +
+                listOf(Step.Tap(target), Step.TypeText(target, slot = slot)))
+    }
+
+    @Test fun `an already selected delivery header completes the taught address row without scrolling the pager`() = runTest {
+        val p = FakePhone(screens + ("home" to deliveryPage()),
+            mapOf(("home" to "Double tap to open search page") to "search"), "home")
+        var adviceCalls = 0
+        val r = ReplayEngine(p, p.guard, advisor = RecoveryAdvisor { adviceCalls++; null }).run(
+            restaurantSearchFlow(address = true), mapOf("restaurant" to "brik oven", "item" to "margherita"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Double tap to open search page"), p.clicked)
+        assertEquals(listOf("brik oven"), p.typed)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertEquals(0, adviceCalls)
+        assertTrue(r.events.any { it.contains("already selected in the delivery header") }, r.events.toString())
+    }
+
+    @Test fun `a Home navigation label cannot establish the taught delivery address`() = runTest {
+        val p = FakePhone(screens + ("home" to deliveryPage(address = null)), emptyMap(), "home")
+        val r = ReplayEngine(p, p.guard).run(restaurantSearchFlow(address = true), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(1, r.stoppedAtStep)
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertTrue(r.events.none { it.contains("already selected") }, r.events.toString())
+    }
+
+    @Test fun `a different delivery header opens the real address sheet rather than resolving the Home tab`() = runTest {
+        val p = FakePhone(screens + mapOf("home" to deliveryPage(address = "Work"), "addresses" to savedHomeAddress,
+            "delivery" to deliveryPage()), mapOf(("home" to "Work") to "addresses", ("addresses" to "Home") to "delivery",
+            ("delivery" to "Double tap to open search page") to "search"), "home")
+        val r = ReplayEngine(p, p.guard).run(restaurantSearchFlow(address = true), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Work", "Home", "Double tap to open search page"), p.clicked)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertEquals(listOf("brik oven"), p.typed)
+    }
+
+    @Test fun `initial restaurant search returns only to Home and ignores an offscreen previous search bar`() = runTest {
+        val p = FakePhone(screens + mapOf("home" to deliveryPage(search = false, staleSearch = true), "delivery" to deliveryPage()),
+            mapOf(("home" to "Home") to "delivery", ("delivery" to "Double tap to open search page") to "search"), "home")
+        val r = ReplayEngine(p, p.guard).run(restaurantSearchFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Home", "Double tap to open search page"), p.clicked)
+        assertEquals(listOf("brik oven"), p.typed)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertEquals(1, p.actions.filterIsInstance<PlannedAction.Click>().count { it.gesture })
+    }
+
+    @Test fun `an ignored Home tab tap halts once without cycling modes or typing`() = runTest {
+        val p = FakePhone(screens + ("home" to deliveryPage(search = false)), emptyMap(), "home")
+        val r = ReplayEngine(p, p.guard).run(restaurantSearchFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(r.message.contains("single Home tap"), r.message)
+        assertEquals(listOf("Home"), p.clicked)
+        assertTrue(p.typed.isEmpty(), p.typed.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertTrue(p.settleCalls in 2..12, "bounded waits: ${p.settleCalls}")
+    }
+
+    @Test fun `a missing menu item search never returns to the delivery Home tab`() = runTest {
+        val p = FakePhone(screens + ("home" to deliveryPage(search = false)), emptyMap(), "home")
+        val r = ReplayEngine(p, p.guard).run(restaurantSearchFlow(slot = "item"), mapOf("item" to "margherita"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertTrue(p.clicked.isEmpty(), p.clicked.toString())
+        assertTrue(p.typed.isEmpty(), p.typed.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+    }
+
+    @Test fun `the taught address tap already performed by address recovery continues directly without scrolling`() = runTest {
+        val home: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                button("Search for restaurant and food")
+                add { com.echoflow.core.model.UiElement(it, -1, 1,
+                    className = "android.widget.RecyclerView", packageName = pkg, scrollable = true,
+                    bounds = com.echoflow.core.model.Bounds(0, 500, 1080, 2200)) }
+            }
+        }
+        val taught = flow().copy(steps = listOf(
+            Step.LaunchApp(pkg), Step.Tap(Descriptors.describe(savedHomeAddress(1), 2)),
+        ) + flow().steps.drop(1))
+        val p = FakePhone(screens + mapOf("home" to savedHomeAddress, "delivery" to home),
+            mapOf(("home" to "Home") to "delivery", ("delivery" to "Search for restaurant and food") to "search", ("results" to "ADD") to "cart"), "home")
+        var adviceCalls = 0
+        val advisor = RecoveryAdvisor { adviceCalls++; null }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(taught, mapOf("item" to "paneer tikka"))
+        assertEquals(RunStatus.HANDED_OFF, r.status, r.toString())
+        assertEquals(listOf("Home", "Search for restaurant and food", "ADD"), p.clicked)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+        assertEquals(0, adviceCalls)
+        assertTrue(r.events.any { it == "taught delivery address Home already selected" }, r.events.toString())
+    }
+
+    @Test fun `handling an address does not skip an unrelated Home navigation tap with different row context`() = runTest {
+        val home: (Long) -> ScreenSnapshot = { id ->
+            screen(pkg, id) {
+                val navigation = node("android.widget.LinearLayout", label = "Home", clickable = true,
+                    bounds = com.echoflow.core.model.Bounds(0, 0, 1080, 300))
+                text("Home", navigation); text("Browse", navigation)
+            }
+        }
+        val navigationTarget = Descriptors.describe(home(1), 1)
+        val taught = flow().copy(steps = listOf(Step.LaunchApp(pkg), Step.Tap(navigationTarget)))
+        val p = FakePhone(screens + mapOf("home" to savedHomeAddress, "delivery" to home),
+            mapOf(("home" to "Home") to "delivery"), "home")
+        val engine = ReplayEngine(p, p.guard)
+        val r = engine.run(taught, emptyMap())
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Home", "Home"), p.clicked)
+        assertTrue(r.events.none { it.startsWith("taught delivery address") }, r.events.toString())
+
+        // A successful address selection from the preceding run must not be reused.
+        val addressTarget = Descriptors.describe(savedHomeAddress(1), 2)
+        val next = engine.run(taught.copy(steps = listOf(Step.Tap(addressTarget))), emptyMap())
+        assertEquals(RunStatus.HALTED, next.status, next.toString())
+        assertTrue(next.events.none { it.startsWith("taught delivery address") }, next.events.toString())
+        assertEquals(listOf("Home", "Home"), p.clicked)
+    }
+
+    @Test fun `an ignored address selection must not skip the taught address tap while the sheet remains open`() = runTest {
+        val taught = flow().copy(steps = listOf(Step.LaunchApp(pkg), Step.Tap(Descriptors.describe(savedHomeAddress(1), 2))))
+        val p = FakePhone(screens + ("home" to savedHomeAddress), mapOf(("home" to "Home") to "search"), "home")
+        p.ignoreOnce += "Home"
+        val r = ReplayEngine(p, p.guard).run(taught, emptyMap())
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(listOf("Home"), p.clicked)
+        assertTrue(r.message.contains("address list stayed open"), r.message)
+        assertTrue(p.settleCalls in 2..12, "bounded waits: ${p.settleCalls}")
+        assertTrue(r.events.none { it.startsWith("taught delivery address") }, r.events.toString())
+    }
+
+    @Test fun `successive stale address snapshots settle before consuming the taught address step`() = runTest {
+        val taught = flow().copy(steps = listOf(Step.LaunchApp(pkg), Step.Tap(Descriptors.describe(savedHomeAddress(1), 2))))
+        val p = FakePhone(screens + ("home" to savedHomeAddress), mapOf(("home" to "Home") to "search"), "home")
+        val old = p.current()
+        var staleCaptures = 3
+        var addressWaits = 0
+        val delayed = object : ReplayHost by p {
+            override fun current(): ScreenSnapshot = if (p.name == "search" && staleCaptures > 0) old else p.current()
+            override suspend fun awaitSettled(afterId: Long, timeoutMs: Long): ScreenSnapshot {
+                if (p.name == "search" && staleCaptures > 0) {
+                    addressWaits++
+                    staleCaptures--
+                    p.advance(500)
+                    return old
+                }
+                return p.awaitSettled(afterId, timeoutMs)
+            }
+        }
+        val r = ReplayEngine(delayed, p.guard).run(taught, emptyMap())
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Home"), p.clicked)
+        assertEquals(3, addressWaits)
+        assertTrue(r.events.any { it == "taught delivery address Home already selected" }, r.events.toString())
+        assertTrue(p.actions.none { it is PlannedAction.Scroll }, p.actions.toString())
+    }
+
+    private val sourceResults: (Long) -> ScreenSnapshot = { id ->
+        screen(pkg, id) {
+            edit(hint = "Search restaurants", typed = "Brik Oven")
+            val row = node("android.view.View", label = "Brik Oven", clickable = true,
+                bounds = com.echoflow.core.model.Bounds(36, 413, 1044, 638))
+            add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg,
+                className = "android.widget.TextView", text = "Brik Oven",
+                bounds = com.echoflow.core.model.Bounds(297, 413, 525, 475)) }
+            add { com.echoflow.core.model.UiElement(it, row, 1, packageName = pkg,
+                className = "android.widget.TextView", text = "35-40 mins",
+                bounds = com.echoflow.core.model.Bounds(297, 480, 650, 535)) }
+        }
+    }
+
+    private fun sourceSelectionFlow(): Flow = flow().copy(
+        slots = flow().slots + SlotDef("restaurant", SlotType.TEXT, "brik oven"),
+        steps = listOf(Step.Tap(Descriptors.describe(sourceResults(1), 2).copy(text = "{restaurant}"), slot = "restaurant")),
+    )
+
+    @Test fun `an accepted but ignored source result click retries the same native row as a gesture once`() = runTest {
+        val menu: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { text("Brik Oven menu"); button("Search") } }
+        val p = FakePhone(screens + mapOf("results" to sourceResults, "menu" to menu), mapOf(("results" to "Brik Oven") to "menu"), "results")
+        p.ignoreOnce += "Brik Oven"
+        val r = ReplayEngine(p, p.guard).run(sourceSelectionFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Brik Oven", "Brik Oven"), p.clicked)
+        assertEquals(listOf(false, true), p.actions.filterIsInstance<PlannedAction.Click>().map { it.gesture })
+        assertTrue(r.events.any { it.startsWith("source result didn't open") }, r.events.toString())
+    }
+
+    @Test fun `an ordinary source result transition is not tapped again`() = runTest {
+        val menu: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { text("Brik Oven menu"); button("Search") } }
+        val p = FakePhone(screens + mapOf("results" to sourceResults, "menu" to menu), mapOf(("results" to "Brik Oven") to "menu"), "results")
+        val r = ReplayEngine(p, p.guard).run(sourceSelectionFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Brik Oven"), p.clicked)
+        assertTrue(p.actions.filterIsInstance<PlannedAction.Click>().none { it.gesture })
+    }
+
+    @Test fun `a source row that ignores both clicks halts after one retry without scrolling or AI`() = runTest {
+        val p = FakePhone(screens + ("results" to sourceResults), emptyMap(), "results")
+        var adviceCalls = 0
+        val advisor = RecoveryAdvisor { adviceCalls++; null }
+        val r = ReplayEngine(p, p.guard, advisor = advisor).run(sourceSelectionFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(listOf("Brik Oven", "Brik Oven"), p.clicked)
+        assertTrue(r.message.contains("single retry"), r.message)
+        assertTrue(p.actions.none { it is PlannedAction.Scroll })
+        assertEquals(0, adviceCalls)
+        assertTrue(p.settleCalls < 16, "bounded waits: ${p.settleCalls}")
+    }
+
+    @Test fun `a risky control overlapping the source row forbids the gesture retry`() = runTest {
+        val risky: (Long) -> ScreenSnapshot = { id ->
+            val s = sourceResults(id)
+            s.copy(elements = s.elements + com.echoflow.core.model.UiElement(s.elements.size, -1, 1,
+                packageName = pkg, className = "android.widget.Button", text = "Delete address", clickable = true,
+                bounds = com.echoflow.core.model.Bounds(350, 420, 550, 470)))
+        }
+        val p = FakePhone(screens + ("results" to risky), emptyMap(), "results")
+        val r = ReplayEngine(p, p.guard).run(sourceSelectionFlow(), mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(listOf("Brik Oven"), p.clicked)
+        assertTrue(p.actions.filterIsInstance<PlannedAction.Click>().none { it.gesture })
+        assertTrue(r.message.contains("safely tapped"), r.message)
+    }
+
+    @Test fun `a changed source results layout cannot count as opening the taught next control`() = runTest {
+        val submitted: (Long) -> ScreenSnapshot = { id ->
+            val s = sourceResults(id)
+            s.copy(elements = s.elements + com.echoflow.core.model.UiElement(s.elements.size, -1, 1,
+                packageName = pkg, className = "android.widget.TextView", text = "BASED ON YOUR SEARCH",
+                bounds = com.echoflow.core.model.Bounds(0, 290, 1080, 360)))
+        }
+        val menu: (Long) -> ScreenSnapshot = { id -> screen(pkg, id) { text("Brik Oven menu"); button("Search") } }
+        val taught = sourceSelectionFlow().copy(steps = sourceSelectionFlow().steps + Step.Tap(Descriptors.describe(menu(1), 1)))
+        val p = FakePhone(screens + mapOf("results" to sourceResults, "submitted" to submitted, "menu" to menu),
+            mapOf(("submitted" to "Brik Oven") to "menu"), "results")
+        val host = object : ReplayHost by p {
+            override suspend fun perform(action: PlannedAction, context: GateContext): ActionOutcome {
+                val result = p.perform(action, context)
+                if (action is PlannedAction.Click && !action.gesture && p.name == "results") p.go("submitted")
+                return result
+            }
+        }
+        val r = ReplayEngine(host, p.guard).run(taught, mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.COMPLETED, r.status, r.toString())
+        assertEquals(listOf("Brik Oven", "Brik Oven", "Search"), p.clicked)
+        val retry = p.actions.filterIsInstance<PlannedAction.Click>().single { it.gesture }
+        assertEquals(2, retry.elementIndex) // the freshly resolved name, not its larger ancestor
+    }
+
+    @Test fun `an altered result screen after the retry still halts when the taught next control is absent`() = runTest {
+        val submitted: (Long) -> ScreenSnapshot = { id ->
+            val s = sourceResults(id)
+            s.copy(elements = s.elements + com.echoflow.core.model.UiElement(s.elements.size, -1, 1,
+                packageName = pkg, className = "android.widget.TextView", text = "SIMILAR RESTAURANTS",
+                bounds = com.echoflow.core.model.Bounds(0, 700, 1080, 800)))
+        }
+        val taught = sourceSelectionFlow().copy(steps = sourceSelectionFlow().steps + Step.Tap(
+            com.echoflow.core.flow.ElementDescriptor(text = "Search", className = "android.widget.Button")))
+        val p = FakePhone(screens + mapOf("results" to sourceResults, "submitted" to submitted), emptyMap(), "results")
+        val host = object : ReplayHost by p {
+            override suspend fun perform(action: PlannedAction, context: GateContext): ActionOutcome {
+                val result = p.perform(action, context)
+                if (action is PlannedAction.Click && action.gesture) p.go("submitted")
+                return result
+            }
+        }
+        val r = ReplayEngine(host, p.guard).run(taught, mapOf("restaurant" to "brik oven"))
+        assertEquals(RunStatus.HALTED, r.status, r.toString())
+        assertEquals(1, r.stoppedAtStep)
+        assertEquals(listOf("Brik Oven", "Brik Oven"), p.clicked)
+        assertTrue(r.message.contains("single retry"), r.message)
     }
 }

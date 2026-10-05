@@ -256,7 +256,15 @@ class IntentMatcher {
         var words = TextNormalizer.tokens(v)
         while (words.size > 1 && words.first() in ARTICLES) words = words.drop(1)
         val q = def?.qualifiers.orEmpty().map(::singular).toSet()
-        if (q.isNotEmpty()) words = words.filter { singular(it) !in q }
+        if (q.isNotEmpty()) words = words.filterIndexed { i, word ->
+            val base = singular(word)
+            val exact = base in q
+            // ASR can duplicate a letter in a plural qualifier ("pizzaas"). Only a trailing
+            // plural can use this tolerance, and only against a qualifier this flow learned.
+            val closePlural = i == words.lastIndex && word.endsWith("s") && base.length >= 5 &&
+                q.any { qualifier -> qualifier.length >= 5 && editDistance(base, qualifier) == 1 }
+            !exact && !closePlural
+        }
         if (words.isEmpty() || words.all { it in ARTICLES }) null else k to soundsLikeTaught(words.joinToString(" "), def?.taughtValue)
     }.toMap()
 

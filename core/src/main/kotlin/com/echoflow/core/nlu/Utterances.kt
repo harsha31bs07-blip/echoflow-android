@@ -169,6 +169,9 @@ object Utterances {
                 qty = n
                 qtyToken = t
                 take(i)
+                // "a couple of pizzas": "of" belongs to this quantity phrase, not the item.
+                // Consume only the adjacent connector; an "of" in a product/source name stays.
+                if (t == "couple" && tokens.getOrNull(i + 1) == "of" && !used[i + 1]) take(i + 1)
             }
         }
         val item = tokens.filterIndexed { i, t -> !used[i] && t !in fillers }.joinToString(" ").ifBlank { null }

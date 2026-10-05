@@ -91,6 +91,48 @@ class IntentMatcherTest {
         assertEquals(mapOf("qty" to "3", "item" to "paneer tikka"), d.candidate.slots)
     }
 
+    @Test fun `actual couple of ASR phrase uses taught qualifiers without replacing new item`() {
+        // The saved device lesson's template, example and canonical slots (complete01).
+        val recorded = pizza.copy(
+            template = "order {item} pizza from {restaurant} on zomato",
+            examples = listOf("order amargeria pizza from brick oven on zomato"),
+            slots = listOf(SlotDef("item", SlotType.TEXT, "margherita", listOf("pizza")),
+                SlotDef("restaurant", SlotType.TEXT, "brik oven")),
+        )
+        val recognized = "order a couple of farmhouse pizzaas from brick oven on Zomato"
+        val parsed = Utterances.parse(recognized)
+        assertEquals(2, parsed.quantity)
+        assertTrue("of" in parsed.tokens) // Recognition evidence is preserved.
+        val d = assertIs<Decision.Proceed>(decide(recognized, listOf(recorded)))
+        assertEquals(mapOf("item" to "farmhouse", "restaurant" to "brik oven", "qty" to "2"), d.candidate.slots)
+        val normal = assertIs<Decision.Proceed>(decide("order a couple of pesto pizzas from brik oven on zomato", listOf(recorded)))
+        assertEquals("pesto", normal.candidate.slots["item"])
+        assertEquals("2", normal.candidate.slots["qty"])
+    }
+
+    @Test fun `quantity connector consumption leaves ordinary item and source of intact`() {
+        val flow = pizza.copy(template = "order {item} from {restaurant}")
+        val parsed = Utterances.parse("order a basket of apples from house of beans")
+        assertEquals(null, parsed.quantity)
+        assertEquals(2, parsed.core.count { it == "of" })
+        val candidate = m.match("order a basket of apples from house of beans", listOf(flow)).first()
+        assertEquals("basket of apples", candidate.slots["item"])
+        assertEquals("house of beans", candidate.slots["restaurant"])
+        val quantified = Utterances.parse("order a couple of bowls from house of beans")
+        assertEquals(2, quantified.quantity)
+        assertEquals(1, quantified.core.count { it == "of" })
+        assertEquals("house of beans", quantified.source)
+    }
+
+    @Test fun `qualifier tolerance only strips a trailing learned plural`() {
+        val flow = pizza.copy(slots = listOf(SlotDef("item", SlotType.TEXT, "margherita", listOf("pizza"))))
+        assertEquals("pizzaas stone", m.cleanSlots(flow, mapOf("item" to "pizzaas stone"))["item"])
+        assertEquals("garden pizzazz", m.cleanSlots(flow, mapOf("item" to "garden pizzazz"))["item"])
+        assertEquals("garden pizzaa", m.cleanSlots(flow, mapOf("item" to "garden pizzaa"))["item"])
+        val noQualifier = flow.copy(slots = listOf(SlotDef("item", SlotType.TEXT, "margherita")))
+        assertEquals("garden pizzaas", m.cleanSlots(noQualifier, mapOf("item" to "garden pizzaas"))["item"])
+    }
+
     @Test fun `address is split out of a greedy item slot (T6)`() {
         val itemOnly = food.copy(template = "order {item}", slots = listOf(SlotDef("item", SlotType.TEXT, "garlic bread")), examples = listOf("order garlic bread"))
         val d = assertIs<Decision.Proceed>(DecisionLayer.decide("x", m.match("order paneer tikka to hostel", listOf(itemOnly))))

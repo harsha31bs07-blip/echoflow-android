@@ -1,6 +1,7 @@
 package com.echoflow.core.teach
 
 import com.echoflow.core.flow.Step
+import com.echoflow.core.nlu.IntentMatcher
 import com.echoflow.core.nlu.Utterances
 import com.echoflow.core.testing.screen
 import kotlin.test.Test
@@ -73,5 +74,67 @@ class FlowCompilerTest {
         val r = FlowCompiler().compile("f2", "open search", actions)
         assertEquals(2, r.flow.steps.size, r.flow.steps.toString()) // launch + search tap
         assertEquals(2, r.dropped.count { it.startsWith("detour") })
+    }
+
+    private fun pizzaDemonstration(item: String = "margherita", extraSearches: List<String> = emptyList()): List<RawAction> {
+        val app = "com.application.zomato"
+        val restaurantSearch = screen(app, id = 10) { edit(hint = "Search restaurants") }
+        val restaurantResult = screen(app, id = 11) { text("Brik Oven") }
+        val menuSearch = screen(app, id = 12) { edit(hint = "Search menu") }
+        val menuResult = screen(app, id = 13) { text("Margherita"); button("ADD") }
+        val actions = mutableListOf<RawAction>()
+        extraSearches.forEachIndexed { i, value ->
+            actions += Fingerprints.type(restaurantSearch, 0, value, i * 1_000L)
+            actions += tap(restaurantResult, "Brik Oven", i * 1_000L + 500, null)
+        }
+        actions += Fingerprints.type(restaurantSearch, 0, "Brik Oven", 10_000)
+        actions += tap(restaurantResult, "Brik Oven", 11_000, menuSearch)
+        actions += Fingerprints.type(menuSearch, 0, item, 12_000)
+        actions += tap(menuResult, "Margherita", 13_000, null)
+        actions += tap(menuResult, "ADD", 14_000, null)
+        return actions
+    }
+
+    @Test fun `observed native spelling reconciles recognized names and keeps replay parameterized`() {
+        val recognized = listOf(
+            "teach order a mergerita pizza from brick oven on Zomato" to "order a {item} pizza from {restaurant} on zomato",
+            "teach order amargeria pizza from brick oven on Zomato" to "order {item} pizza from {restaurant} on zomato",
+        )
+        for ((utterance, expectedTemplate) in recognized) {
+            val flow = FlowCompiler().compile("speech", utterance, pizzaDemonstration()).flow
+            assertEquals(expectedTemplate, flow.template, utterance)
+            assertEquals("margherita", flow.slot("item")!!.taughtValue, utterance)
+            assertEquals(listOf("pizza"), flow.slot("item")!!.qualifiers, utterance)
+            assertEquals("brik oven", flow.slot("restaurant")!!.taughtValue, utterance)
+            // Keep the recognizer's words as the example; only the demonstrated values are canonical.
+            assertEquals(listOf(Utterances.stripTeachPrefix(utterance)), flow.examples)
+            assertEquals(listOf("restaurant", "item"), flow.steps.filterIsInstance<Step.TypeText>().map { it.slot })
+            assertEquals("{restaurant}", flow.steps.filterIsInstance<Step.Tap>().first().target.text)
+            assertEquals("{item}", flow.steps.filterIsInstance<Step.Tap>()[1].target.text)
+
+            val changed = IntentMatcher().match("Order two Farmhouse pizzas from brick oven on Zomato", listOf(flow)).single()
+            assertTrue(changed.score >= IntentMatcher.RELAXED_SCORE, "$utterance: $changed")
+            assertEquals("farmhouse", changed.slots["item"], utterance)
+            assertEquals("brik oven", changed.slots["restaurant"], utterance)
+            assertEquals("2", changed.slots["qty"], utterance)
+        }
+    }
+
+    @Test fun `unrelated demonstrated searches remain literal instead of acquiring a spoken slot`() {
+        val flow = FlowCompiler().compile("speech", "teach order a mergerita pizza from brick oven on zomato",
+            pizzaDemonstration(extraSearches = listOf("summer offers", "discount code"))).flow
+        val searches = flow.steps.filterIsInstance<Step.TypeText>()
+        assertEquals(listOf("summer offers", "discount code"), searches.take(2).map { it.literal })
+        assertTrue(searches.take(2).all { it.slot == null })
+        assertEquals(listOf("restaurant", "item"), searches.drop(2).map { it.slot })
+    }
+
+    @Test fun `ambiguous near spellings are not selected as the canonical teaching value`() {
+        val flow = FlowCompiler().compile("speech", "teach order a mergerita pizza from brick oven on zomato",
+            pizzaDemonstration(extraSearches = listOf("mergerito"))).flow
+        assertEquals("mergerita pizza", flow.slot("item")!!.taughtValue)
+        assertTrue(flow.steps.filterIsInstance<Step.TypeText>().filter { it.literal in listOf("mergerito", "margherita") }
+            .all { it.slot == null })
+        assertEquals("order a {item} from {restaurant} on zomato", flow.template)
     }
 }

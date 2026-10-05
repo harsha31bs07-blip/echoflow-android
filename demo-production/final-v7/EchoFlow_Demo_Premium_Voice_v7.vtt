@@ -1,0 +1,193 @@
+WEBVTT
+
+00:00:00.486 --> 00:00:01.673
+Narration: Teach one phone task.
+
+00:00:02.221 --> 00:00:04.241
+Narration: Reuse it with new words and values.
+
+00:00:09.246 --> 00:00:13.117
+Request: Teach. Order a Margherita pizza, from Brik Oven, on Zomato.
+
+00:00:16.245 --> 00:00:17.398
+EchoFlow: Okay, show me in Zomato.
+
+00:00:17.398 --> 00:00:18.749
+EchoFlow: Tap Done when you're finished.
+
+00:00:18.749 --> 00:00:19.375
+EchoFlow: I never pay.
+
+00:00:23.502 --> 00:00:24.542
+Request: Record my taps.
+
+00:00:25.971 --> 00:00:27.879
+EchoFlow: Okay, I'll record your taps myself from now on.
+
+00:00:27.879 --> 00:00:29.701
+EchoFlow: If I missed one, go back and tap it again.
+
+00:00:30.926 --> 00:00:32.638
+Narration: The lesson starts inside Zomato.
+
+00:00:33.177 --> 00:00:34.853
+Narration: We demonstrate the restaurant search,
+
+00:00:34.997 --> 00:00:36.374
+Narration: pizza selection, and cart.
+
+00:00:37.372 --> 00:00:40.325
+Narration: EchoFlow turns those screen actions into a reusable task,
+
+00:00:40.479 --> 00:00:42.907
+Narration: without a custom integration for this ordering app.
+
+00:00:59.936 --> 00:01:02.283
+EchoFlow: Learned: order amargeria pizza from brick oven on zomato.
+
+00:01:02.283 --> 00:01:03.086
+EchoFlow: I saved 10 steps.
+
+00:01:03.086 --> 00:01:04.600
+EchoFlow: You can change the item, restaurant.
+
+00:01:04.600 --> 00:01:06.206
+EchoFlow: You can see it in the EchoFlow app.
+
+00:01:07.393 --> 00:01:09.975
+Narration: The saved lesson is the starting point for each replay.
+
+00:01:10.504 --> 00:01:11.872
+Narration: We do not teach it again.
+
+00:01:16.428 --> 00:01:19.389
+Request: Order a Margherita pizza, from Brik Oven, on Zomato.
+
+00:01:20.605 --> 00:01:22.795
+EchoFlow: Okay, order margherita pizza from brik oven on zomato.
+
+00:01:23.976 --> 00:01:25.969
+Narration: First, we repeat the original request.
+
+00:01:26.498 --> 00:01:29.252
+Narration: The learned flow works through the restaurant's live interface.
+
+00:01:41.879 --> 00:01:42.443
+EchoFlow: Your turn.
+
+00:01:42.443 --> 00:01:44.659
+EchoFlow: Everything is ready for payment, total ₹285.
+
+00:01:44.659 --> 00:01:45.373
+EchoFlow: I won't pay.
+
+00:01:45.373 --> 00:01:47.439
+EchoFlow: Please check the order and pay yourself.
+
+00:01:55.093 --> 00:01:57.238
+Request: Get me a Margherita, from Brik Oven.
+
+00:01:58.385 --> 00:02:00.575
+EchoFlow: Okay, order margherita pizza from brik oven on zomato.
+
+00:02:01.755 --> 00:02:04.364
+Narration: Now the words change, while the task stays the same.
+
+00:02:04.857 --> 00:02:06.270
+Narration: The same lesson is reused.
+
+00:02:15.501 --> 00:02:18.738
+EchoFlow: Margherita was already in your cart, so I didn't add another one.
+
+00:02:18.738 --> 00:02:19.278
+EchoFlow: Your turn.
+
+00:02:19.278 --> 00:02:21.400
+EchoFlow: Everything is ready for payment, total ₹285.
+
+00:02:21.400 --> 00:02:22.083
+EchoFlow: I won't pay.
+
+00:02:22.083 --> 00:02:24.061
+EchoFlow: Please check the order and pay yourself.
+
+00:02:30.842 --> 00:02:34.355
+Request: Order a couple of Farmhouse pizzas, from Brik Oven, on Zomato.
+
+00:02:36.348 --> 00:02:38.668
+EchoFlow: Okay, order 2 farmhouse pizza from brik oven on zomato.
+
+00:02:39.879 --> 00:02:41.936
+Narration: Next, we change the dish and quantity.
+
+00:02:42.456 --> 00:02:45.128
+Narration: Two Farmhouse pizzas were not part of the demonstration.
+
+00:02:46.133 --> 00:02:48.597
+Narration: A new item means finding its current menu entry.
+
+00:02:49.127 --> 00:02:51.092
+Narration: The replay still has to reach the right cart.
+
+00:03:04.968 --> 00:03:08.475
+EchoFlow: I added farmhouse with the options that were already selected, ₹260.
+
+00:03:08.475 --> 00:03:09.053
+EchoFlow: Your turn.
+
+00:03:09.053 --> 00:03:11.326
+EchoFlow: Everything is ready for payment, total ₹936.
+
+00:03:11.326 --> 00:03:12.058
+EchoFlow: I won't pay.
+
+00:03:12.058 --> 00:03:14.178
+EchoFlow: Please check the order and pay yourself.
+
+00:03:21.037 --> 00:03:23.953
+Request: Order a unicorn pizza, from Brik Oven, on Zomato.
+
+00:03:25.170 --> 00:03:27.330
+EchoFlow: Okay, order unicorn pizza from brik oven on zomato.
+
+00:03:35.748 --> 00:03:38.256
+EchoFlow: I searched for "unicorn" at brik oven but couldn't find it.
+
+00:03:38.256 --> 00:03:39.388
+EchoFlow: What should I get instead?
+
+00:03:41.780 --> 00:03:42.340
+Request: Nothing.
+
+00:03:44.300 --> 00:03:46.799
+EchoFlow: I searched for "unicorn" at brik oven but couldn't find it.
+
+00:03:46.799 --> 00:03:48.810
+EchoFlow: So I stopped at step 8 without adding anything.
+
+00:03:54.556 --> 00:03:55.923
+Request: Did the last run succeed?
+
+00:03:57.140 --> 00:03:58.604
+EchoFlow: No, the last run didn't succeed.
+
+00:03:58.604 --> 00:04:00.589
+EchoFlow: Order unicorn pizza from brik oven on zomato
+
+00:04:00.589 --> 00:04:02.314
+EchoFlow: stopped at step 8 of 10 (Tap "ADD").
+
+00:04:02.314 --> 00:04:04.982
+EchoFlow: I searched for "unicorn" at brik oven but couldn't find it.
+
+00:04:04.982 --> 00:04:07.130
+EchoFlow: So I stopped at step 8 without adding anything.
+
+00:04:09.286 --> 00:04:09.948
+Narration: One lesson.
+
+00:04:10.477 --> 00:04:11.202
+Narration: New requests.
+
+00:04:11.718 --> 00:04:13.621
+Narration: A real cart, with payment left to you.

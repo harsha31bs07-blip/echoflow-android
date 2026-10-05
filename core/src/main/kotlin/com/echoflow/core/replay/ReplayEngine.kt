@@ -19,6 +19,7 @@ import com.echoflow.core.model.WindowType
 import com.echoflow.core.runlog.RunStatus
 import com.echoflow.core.safety.EmptySheet
 import com.echoflow.core.safety.GuardState
+import com.echoflow.core.safety.GestureSafety
 import com.echoflow.core.safety.SafetyGuard
 import com.echoflow.core.safety.SafetyLexicon
 import com.echoflow.core.safety.SensitiveKind
@@ -103,12 +104,21 @@ class ReplayEngine(
 
     /** "Already in your cart" is decided at most once per run. */
     private var alreadyInCartNoted = false
+    /** The ADD step skipped for a visible existing item, valid only for its next confirmation. */
+    private var skippedExistingItemAdd: Pair<Int, String>? = null
 
     /** The address sheet is answered at most once per run. */
     private var addressHandled = false
 
+    /** Evidence of a saved-address tap actually performed during this run, consumed once. */
+    private data class SelectedAddressTap(val name: String, val packageName: String?, val descriptors: List<ElementDescriptor>)
+    private var selectedAddressTap: SelectedAddressTap? = null
+
     /** The options sheet is asked about at most once per run. */
     private var customisationHandled = false
+    /** A real options confirmation completed by recovery, for its associated taught step. */
+    private data class CompletedItemOptions(val stepIndex: Int, val item: String, val packageName: String?)
+    private var completedItemOptions: CompletedItemOptions? = null
 
     suspend fun run(flow: Flow, slotValues: Map<String, String>): ReplayResult {
         events.clear()
@@ -116,8 +126,11 @@ class ReplayEngine(
         lastTyped = null
         lastTypedValue = null
         addressHandled = false
+        selectedAddressTap = null
         alreadyInCartNoted = false
+        skippedExistingItemAdd = null
         customisationHandled = false
+        completedItemOptions = null
         val slots = slotValues.toMutableMap()
         val steps = flow.steps
         var i = 0
@@ -250,6 +263,16 @@ class ReplayEngine(
         var lastOpen: String? = null
         var triedRetry = false
         var advised = 0
+        var triedDeliveryHome = false
+        // A recorded tap on the editable field can survive while the preceding home-page
+        // search-bar tap was missed. Treat that paired tap as search, not as a missing row.
+        val taughtSearchFieldTap = isTaughtSearchFieldTap(step, steps.getOrNull(i + 1))
+        val searchStep = isSearchTap(step) || taughtSearchFieldTap
+        val taughtAddress = taughtSavedAddressName(step, slots)
+        val initialRestaurantSearch = flow.slots.any { it.name == "restaurant" } &&
+            flow.slots.any { it.name == "item" } && steps.take(i).none { it is Step.TypeText } &&
+            ((searchStep && (steps.getOrNull(i + 1) as? Step.TypeText)?.slot == "restaurant") ||
+                step is Step.TypeText && step.slot == "restaurant")
         while (host.nowMs() - started < stepBudgetMs) {
             val snap = host.current() ?: return StepResult.Stop(RunStatus.HALTED, "I can't see the screen.")
             tripped()?.let { return it }
@@ -290,6 +313,14 @@ class ReplayEngine(
                 return StepResult.Stop(RunStatus.HALTED, "Another app opened on top of $app at step ${i + 1}, so I stopped without tapping anything in it.")
             }
 
+            // Address recovery may have just performed this exact taught row tap. The
+            // address sheet has closed, so searching or scrolling for it again is wrong.
+            completedAddressTap(step, snap, slots)?.let { selected ->
+                selectedAddressTap = null
+                events += "taught delivery address ${selected.name} already selected"
+                return StepResult.Done
+            }
+
             // Dialogs that need the user's decision (T7): never auto-confirmed.
             val dialog = decisionDialog(snap)
             if (dialog != null) {
@@ -300,8 +331,30 @@ class ReplayEngine(
             // An options sheet this item has but the taught one didn't (L3): ask, then continue.
             // When the taught step is on the sheet itself ("Add item", a size), just do that.
             val sheet = customisationSheet(snap)
+            val completedOptions = completedItemOptions
+            val currentItem = slots["item"]
+            if (isItemOptionsConfirmation(step) && sheet == null && completedOptions != null &&
+                completedOptions.stepIndex == i - 1 && completedOptions.packageName == snap.packageName &&
+                currentItem != null && completedOptions.item == TextNormalizer.normalize(currentItem) &&
+                cartRow(snap, currentItem)?.first?.let { it > 0 } == true &&
+                snap.appElements().any { it.visible && !it.editable && onScreen(snap, it) &&
+                    ElementResolver.valueMatch(currentItem, it.label, emptyList()) >= 0.8 } &&
+                steps.getOrNull(i + 1)?.let { cartBarFor(it, snap) } != null) {
+                completedItemOptions = null
+                events += "taught options confirmation already completed for $currentItem"
+                return StepResult.Done
+            }
+            if (sheet != null && isItemOptionsConfirmation(step) && sheet.className.endsWith("Button") &&
+                TextNormalizer.normalize(sheet.label).let { it == "add item" || it.startsWith("add item ") }) {
+                // The price and row context change with the item. This live options
+                // button is the taught confirmation, not a missing search result.
+                handleCustomisation(snap, slots, i)?.let { return it }
+                completedItemOptions = null
+                return StepResult.Done
+            }
             if (sheet != null && resolve(step, snap, slots)?.let { r -> snap.elements[r.index].windowId == sheet.windowId } != true) {
-                handleCustomisation(snap, slots)?.let { return it }
+                handleCustomisation(snap, slots, i.takeIf { isAddTap(step) })?.let { return it }
+                if (isAddTap(step)) return StepResult.Done
                 started = host.nowMs()
                 continue
             }
@@ -311,6 +364,56 @@ class ReplayEngine(
                 handleAddressSheet(snap, flow, slots)?.let { return it }
                 started = host.nowMs()
                 continue
+            }
+            // Skipping ADD for an existing item also makes its immediately following
+            // options confirmation unnecessary. Require current item/count and cart
+            // navigation evidence; a visible options sheet must still be handled.
+            val existingAdd = skippedExistingItemAdd
+            val existingItem = slots["item"]
+            if (existingAdd?.first == i - 1 && existingItem != null &&
+                existingAdd.second == TextNormalizer.normalize(existingItem) && sheet == null &&
+                isItemOptionsConfirmation(step) &&
+                resolve(step, snap, slots) == null && cartRow(snap, existingItem)?.first == 1 &&
+                snap.appElements().any { it.visible && !it.editable && onScreen(snap, it) &&
+                    ElementResolver.valueMatch(existingItem, it.label, emptyList()) >= 0.8 } &&
+                steps.getOrNull(i + 1)?.let { cartBarFor(it, snap) } != null) {
+                skippedExistingItemAdd = null
+                events += "options confirmation not needed for $existingItem already in the cart"
+                return StepResult.Done
+            }
+
+            // A saved-address row is absent when the delivery address is already set.
+            // Never resolve its Home/Work name against navigation or scroll a ViewPager
+            // looking for the sheet. Only the actual delivery-address bar is evidence.
+            if (taughtAddress != null && addressOptions(snap).isEmpty()) {
+                val bar = deliveryAddressBar(snap)
+                if (bar == null) {
+                    host.awaitSettled(snap.id, 1_000)
+                    continue
+                }
+                if (addressBarNames(snap, bar, taughtAddress)) {
+                    slots["address"] = taughtAddress
+                    events += "taught delivery address $taughtAddress already selected in the delivery header"
+                    return StepResult.Done
+                }
+                slots["address"] = taughtAddress
+                openAddressBar(snap, bar, flow, slots)?.let { return it }
+                selectedAddressTap = null
+                events += "taught delivery address $taughtAddress selected via the delivery header"
+                return StepResult.Done
+            }
+
+            // Some apps retain a different delivery subpage after launch. For the
+            // first restaurant search only, return directly to the native Home tab
+            // once, and verify that its search control really appears before typing.
+            if (initialRestaurantSearch && searchOpener(snap) == null &&
+                snap.appElements().none { it.visible && it.editable && !it.password && !isLocationBox(it) && onScreen(snap, it) }) {
+                val home = deliveryHomeTab(snap)
+                if (home != null && !triedDeliveryHome) {
+                    triedDeliveryHome = true
+                    returnToDeliveryHome(snap, home)?.let { return it }
+                    continue
+                }
             }
 
             // A taught "Add to cart" tap is found the same sturdy way (its place differs per product page).
@@ -371,12 +474,15 @@ class ReplayEngine(
                 }
             }
 
-            val resolution = resolve(step, snap, slots)
+            val resolution = resolve(step, snap, slots)?.takeIf { r ->
+                (!searchStep || onScreen(snap, snap.elements[r.index])) &&
+                    (!taughtSearchFieldTap || snap.elements[r.index].let { it.editable && !isLocationBox(it) })
+            }
                 // The taught tap was the cart bar ("1 item added · Continue"), whose text changes
                 // with the count and whose layout shifts after an options sheet: take the bar that's there.
                 ?: cartBarFor(step, snap)?.also { events += "opened the cart via \"${shortName(snap, it.index)}\"" }
             if (resolution != null) {
-                val r = perform(step, snap, resolution, slots)
+                val r = perform(step, snap, resolution, slots, steps.getOrNull(i + 1))
                 // The screen changed between finding the element and tapping it: find it again.
                 if (r is StepResult.Retry && staleRetries++ < 3) continue
                 return if (r is StepResult.Retry) StepResult.Stop(RunStatus.HALTED, "The screen kept changing, so I stopped at step ${i + 1}.") else r
@@ -450,7 +556,7 @@ class ReplayEngine(
             // while teaching): open search first. A taught tap on a search button that looks
             // different now (Zomato swaps it for a search bar once the menu scrolls) is the same.
             // (Only once no result for the text just typed is left to open: that comes first.)
-            val searchTap = isSearchTap(step) &&
+            val searchTap = searchStep &&
                 (openedResults >= MAX_RESULT_OPENS || lastTypedValue?.let { firstResult(snap, it) } == null)
             if ((step is Step.TypeText && openSearchTries < 2) || (searchTap && openSearchTries < 1)) {
                 val opener = searchOpener(snap)
@@ -468,6 +574,7 @@ class ReplayEngine(
                 val item = slots["item"]
                 if (item != null && cartRow(snap, item) != null) {
                     alreadyInCartNoted = true
+                    skippedExistingItemAdd = i to TextNormalizer.normalize(item)
                     lastTypedValue = null
                     events += "$item was already in the cart; didn't add another"
                     notes += "$item was already in your cart, so I didn't add another one."
@@ -530,7 +637,7 @@ class ReplayEngine(
             // Add to Cart sits a few screens down a product page: allow more scrolling there.
             val addToCartStep = step is Step.Tap && (step.pick == "add_to_cart" || isCartButtonTap(step))
             // (Never for typing: text fields sit at the top, and the list there is suggestions.)
-            if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !isSearchTap(step) && step !is Step.TypeText) {
+            if (scrolls < (if (addToCartStep) MAX_PRODUCT_SCROLLS else MAX_SCROLLS) && !searchStep && step !is Step.TypeText) {
                 val list = scrollableList(snap)
                 if (list != null) {
                     scrolls++
@@ -687,6 +794,7 @@ class ReplayEngine(
             val target = Descriptors.clickableFor(snap, index)
             val t = snap.elements[target]
             val ok = t.clickable && !t.editable && !t.password &&
+                !isUnrelatedDeliveryMode(flow, snap, index) &&
                 risk.assess(snap, t).risk == com.echoflow.core.safety.ActionRisk.SAFE &&
                 risk.assess(snap, snap.elements[index]).risk == com.echoflow.core.safety.ActionRisk.SAFE
             return target.takeIf { ok }
@@ -733,7 +841,7 @@ class ReplayEngine(
                     return AdviceOutcome.Nothing
                 }
                 events += "AI helper: \"${name(advice.id)}\" is this step (${advice.reason})"
-                when (val r = perform(step, snap, resolution, slots)) {
+                when (val r = perform(step, snap, resolution, slots, steps.getOrNull(i + 1))) {
                     is StepResult.Retry -> AdviceOutcome.Acted
                     // A tap that changed nothing didn't do the step: keep looking.
                     StepResult.Done -> if (step is Step.Tap && !changed(advice.id)) AdviceOutcome.Nothing else AdviceOutcome.Finished(r)
@@ -811,14 +919,18 @@ class ReplayEngine(
         is Step.LaunchApp -> null
     }
 
-    private suspend fun perform(step: Step, snap: ScreenSnapshot, r: Resolution, slots: Map<String, String>): StepResult {
+    private suspend fun perform(step: Step, snap: ScreenSnapshot, r: Resolution, slots: Map<String, String>, nextStep: Step? = null): StepResult {
         val ctx = GateContext(explicitlyTaught = true, resolverConfidence = r.score)
         val outcome = when (step) {
             is Step.Tap -> act(PlannedAction.Click(snap.id, r.actionIndex).also { if (isAddTap(step)) variants = variantsOn(snap) }, ctx, snap).let { o ->
                 // (Unless the recovery that chose this tap already logged it.)
                 val logged = events.lastOrNull()?.let { it.startsWith("tapped") || it.startsWith("opened the first result") || it.startsWith("opened the cart") } == true
                 if (o is ActionOutcome.Performed && !logged) events += "tapped \"${shortName(snap, r.index)}\""
-                if (o is ActionOutcome.Performed && isAddTap(step)) retryIgnoredAdd(step, snap, r, slots, ctx) ?: o else o
+                when {
+                    o is ActionOutcome.Performed && isAddTap(step) -> retryIgnoredAdd(step, snap, r, slots, ctx) ?: o
+                    o is ActionOutcome.Performed && step.slot in SourceSlots.names -> retryIgnoredSource(step, snap, slots, ctx, nextStep) ?: o
+                    else -> o
+                }
             }
             is Step.TypeText -> {
                 val text = step.slot?.let { slots[it] } ?: step.literal.orEmpty()
@@ -860,6 +972,54 @@ class ReplayEngine(
             is ActionOutcome.Failed -> if (outcome.message.startsWith("platform refused")) StepResult.Retry
                 else StepResult.Stop(RunStatus.HALTED, "The tap on \"${stepTarget(step)?.display}\" didn't work (${outcome.message}).")
         }
+    }
+
+    /**
+     * Some native result cards accept ACTION_CLICK without opening. Only a taught source
+     * selection may retry the same, freshly resolved safe row, once, as a real gesture.
+     */
+    private suspend fun retryIgnoredSource(step: Step.Tap, before: ScreenSnapshot, slots: Map<String, String>, ctx: GateContext, nextStep: Step?): ActionOutcome? {
+        if (step.pick != null || step.slot !in SourceSlots.names) return null
+        fun sourceRow(s: ScreenSnapshot): Resolution? = resolve(step, s, slots)?.takeIf { r ->
+            !s.elements[r.index].editable && s.elements[r.actionIndex].let { it.clickable && !it.editable && !it.password }
+        }
+        fun opened(s: ScreenSnapshot): Boolean {
+            if (s.packageName != before.packageName) return true // normal app-boundary checks follow
+            val verdict = guard.classify(s)
+            if (verdict.isSensitive || verdict.isCheckout) return true // never retry onto a handoff screen
+            if (verdict.kinds == setOf(SensitiveKind.OPAQUE_UNKNOWN)) return false
+            // Autocomplete becoming submitted results also changes the entire screen. Only
+            // the taught next control, or the source row disappearing, proves navigation.
+            return if (nextStep != null) resolve(nextStep, s, slots) != null &&
+                (nextStep !is Step.TypeText || sourceRow(s) == null)
+            else sourceRow(s) == null
+        }
+        var now = host.current() ?: return ActionOutcome.Failed("The screen disappeared after opening the result.")
+        val started = host.nowMs()
+        while (!opened(now) && host.nowMs() - started < SOURCE_EFFECT_WAIT_MS) {
+            now = host.awaitSettled(now.id, 700) ?: host.current()
+                ?: return ActionOutcome.Failed("The screen disappeared after opening the result.")
+        }
+        if (opened(now)) return null
+        val again = sourceRow(now) ?: return ActionOutcome.Failed("The source result could not be found again.")
+        val target = now.elements[again.actionIndex]
+        if (now.elements[again.index].editable || target.editable || target.password || !target.clickable ||
+            risk.assess(now, target).risk != com.echoflow.core.safety.ActionRisk.SAFE ||
+            risk.assess(now, now.elements[again.index]).risk != com.echoflow.core.safety.ActionRisk.SAFE ||
+            GestureSafety.blocker(now, again.index) != null) {
+            return ActionOutcome.Failed("The source result could not be safely tapped again.")
+        }
+        events += "source result didn't open; tapped the same result again"
+        // Touch the resolved name itself: an ancestor can cover an entire results page.
+        val outcome = act(PlannedAction.Click(now.id, again.index, gesture = true), ctx.copy(resolverConfidence = again.score), now)
+        if (outcome !is ActionOutcome.Performed) return outcome
+        var after = host.current() ?: return ActionOutcome.Failed("The screen disappeared after opening the result.")
+        val retryStarted = host.nowMs()
+        while (!opened(after) && host.nowMs() - retryStarted < SOURCE_EFFECT_WAIT_MS) {
+            after = host.awaitSettled(after.id, 700) ?: host.current()
+                ?: return ActionOutcome.Failed("The screen disappeared after opening the result.")
+        }
+        return if (!opened(after)) ActionOutcome.Failed("The source result didn't open after the single retry.") else outcome
     }
 
     /**
@@ -981,35 +1141,65 @@ class ReplayEngine(
         } ?: return null
         if (flow.steps.any { it is Step.Tap && it.slot == "address" }) return null // taught explicitly
         val snap = readable(host.current()) ?: return null
-        val bar = snap.appElements().firstOrNull { e ->
-            e.visible && TextNormalizer.normalize(e.label).let { l -> ADDRESS_BARS.any { l.startsWith(it) } }
-        }
-            // Zomato: an unlabelled "location_container" at the top holding "Home" + the address.
-            ?: snap.appElements().firstOrNull { e ->
-                e.visible && e.clickable && e.bounds.top < snap.screenHeight / 5 &&
-                    TextNormalizer.viewIdTokens(e.viewId).any { it == "location" || it == "address" }
-            }
-            ?: return null // no address bar on this app's start screen; nothing to do
+        val bar = deliveryAddressBar(snap) ?: return null
         // Already there: the bar's own text names it ("Delivering to Work"), or its short name
         // child is exactly it (Zomato's "Home" / "Work" title).
-        val alreadySet = ElementResolver.valueMatch(want, bar.label, emptyList()) > 0 ||
-            snap.descendants(bar.index, maxDepth = 4).any { d -> TextNormalizer.normalize(d.label) == TextNormalizer.normalize(want) }
-        if (alreadySet) {
+        if (addressBarNames(snap, bar, want)) {
             events += "delivery address already $want"
             return null
         }
+        return openAddressBar(snap, bar, flow, slots)
+    }
+
+    /** The recorded context must describe a saved-address row, not just a button named Home. */
+    private fun taughtSavedAddressName(step: Step, slots: Map<String, String>): String? {
+        if (step !is Step.Tap || step.pick != null || step.slot !in setOf(null, "address")) return null
+        val target = step.target.fill(slots)
+        val name = target.text?.takeIf { it.isNotBlank() } ?: target.contentDescription ?: return null
+        val words = TextNormalizer.tokens(name)
+        if (words.isEmpty() || words.size > 3 || NOT_ADDRESS.any { TextNormalizer.normalize(name).contains(it) }) return null
+        // Saved rows carry the street/locality line. Menus, navigation and rotating
+        // search hints don't. Keep this independent of an app's particular view IDs.
+        if (target.context.none { it.length > 20 && it.contains(',') && TextNormalizer.tokens(it).size >= 5 &&
+                SafetyLexicon.amountOf(TextNormalizer.tokens(it)) == null }) return null
+        val want = slots["address"] ?: name
+        return ADDRESS_ALIASES.entries.firstOrNull { TextNormalizer.normalize(want) in it.key }?.value ?: want
+    }
+
+    private fun onScreen(snap: ScreenSnapshot, e: UiElement): Boolean = e.bounds.let { b ->
+        b.area > 0 && b.left >= 0 && b.top >= 0 && b.right <= snap.screenWidth && b.bottom <= snap.screenHeight
+    }
+
+    /** Only a top delivery/location control can establish the selected address. */
+    private fun deliveryAddressBar(snap: ScreenSnapshot): UiElement? {
+        val top = snap.appElements().filter { it.visible && it.enabled && onScreen(snap, it) &&
+            it.bounds.bottom <= snap.screenHeight / 4 }
+        return top.firstOrNull { e -> TextNormalizer.normalize(e.label).let { l -> ADDRESS_BARS.any { l.startsWith(it) } } }
+            ?: top.filter { e -> e.clickable && TextNormalizer.viewIdTokens(e.viewId).any { it == "location" || it == "address" } }
+                .minByOrNull { it.bounds.area }
+    }
+
+    private fun addressBarNames(snap: ScreenSnapshot, bar: UiElement, want: String): Boolean =
+        ElementResolver.valueMatch(want, bar.label, emptyList()) > 0 ||
+            snap.descendants(bar.index, maxDepth = 4).any { d -> d.visible && onScreen(snap, d) &&
+                TextNormalizer.normalize(d.label) == TextNormalizer.normalize(want) }
+
+    private suspend fun openAddressBar(snap: ScreenSnapshot, bar: UiElement, flow: Flow,
+        slots: MutableMap<String, String>): StepResult.Stop? {
         // The bar's centre can be empty space; tap the short address name shown inside it.
         val b = bar.bounds
         val name = snap.appElements().filter { e ->
-            e.visible && e.index != bar.index && (e.label?.length ?: 99) <= 24 &&
+            e.visible && e.enabled && onScreen(snap, e) && e.index != bar.index && (e.label?.length ?: 99) <= 24 &&
                 e.bounds.left >= b.left && e.bounds.right <= b.right && e.bounds.top >= b.top - 60 && e.bounds.bottom <= b.bottom + 120
         }.minByOrNull { it.bounds.top * 10 + it.bounds.left } ?: bar
         val o = act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, name.index)), GateContext(explicitlyTaught = true, resolverConfidence = 0.9), snap)
         if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't open the delivery address list (${describe(o)}).")
-        var list = readable(host.awaitSettled(snap.id, 3_000) ?: host.current()) ?: return null
+        var list = readable(host.awaitSettled(snap.id, 3_000) ?: host.current())
+            ?: return StepResult.Stop(RunStatus.HALTED, "I couldn't read the delivery address list.")
         val started = host.nowMs()
         while (addressOptions(list).isEmpty() && host.nowMs() - started < 4_000) {
-            list = readable(host.awaitSettled(list.id, 1_000) ?: host.current()) ?: return null
+            list = readable(host.awaitSettled(list.id, 1_000) ?: host.current())
+                ?: return StepResult.Stop(RunStatus.HALTED, "I couldn't read the delivery address list.")
         }
         if (addressOptions(list).isEmpty()) return StepResult.Stop(RunStatus.HALTED, "I opened the address list but couldn't read the saved addresses.")
         addressHandled = true
@@ -1046,8 +1236,48 @@ class ReplayEngine(
         val now = host.current() ?: snap
         val freshRow = addressOptions(now)[name] ?: row.takeIf { now.id == snap.id }
             ?: return StepResult.Stop(RunStatus.HALTED, "The address list closed before I could pick $name.")
+        val source = listOf(freshRow) + now.descendants(freshRow.index).filter { it.visible }.toList()
+        val descriptors = source.map { Descriptors.describe(now, it.index) }
         val o = act(PlannedAction.Click(now.id, freshRow.index), GateContext(explicitlyTaught = true, resolverConfidence = 1.0), now)
-        return if (o is ActionOutcome.Performed) null else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't select the address $name.")
+        return if (o is ActionOutcome.Performed) {
+            // The accepted click can leave several captures of the disappearing sheet.
+            // Wait for its removal before resolving the taught Home/Work step again.
+            // An ignored click must stop here, rather than repeatedly tapping the row.
+            val started = host.nowMs()
+            var after = host.current() ?: now
+            while (addressOptions(after).isNotEmpty()) {
+                val remaining = ADDRESS_SETTLE_MS - (host.nowMs() - started)
+                if (remaining <= 0) return StepResult.Stop(RunStatus.HALTED,
+                    "I selected the address $name, but the address list stayed open, so I stopped without tapping it again.")
+                after = host.awaitSettled(after.id, minOf(1_000L, remaining)) ?: host.current()
+                    ?: return StepResult.Stop(RunStatus.HALTED, "I couldn't see the screen after selecting the address $name.")
+            }
+            selectedAddressTap = SelectedAddressTap(name, now.packageName, descriptors)
+            null
+        } else tripped() ?: StepResult.Stop(RunStatus.HALTED, "I couldn't select the address $name.")
+    }
+
+    /** A matching address name alone cannot turn a Home navigation button into an address tap. */
+    private fun completedAddressTap(step: Step, snap: ScreenSnapshot, slots: Map<String, String>): SelectedAddressTap? {
+        if (step !is Step.Tap || step.pick != null || step.slot !in setOf(null, "address")) return null
+        val selected = selectedAddressTap ?: return null
+        // An accepted click that leaves the address sheet open has not completed this step.
+        if (snap.packageName != selected.packageName || addressOptions(snap).isNotEmpty()) return null
+        val target = step.target.fill(slots)
+        if (target.packageName != null && target.packageName != selected.packageName) return null
+        val name = TextNormalizer.normalize(selected.name)
+        val labels = listOfNotNull(target.text, target.contentDescription).map(TextNormalizer::normalize)
+        val context = target.context.map(TextNormalizer::normalize).filter { it.isNotBlank() && it != name }.toSet()
+        if (name !in labels && name !in target.context.map(TextNormalizer::normalize)) return null
+        if (context.isEmpty()) return null
+        return selected.takeIf { evidence ->
+            evidence.descriptors.any { actual ->
+                val sameStructure = target.className == actual.className &&
+                    (!target.viewId.isNullOrBlank() && target.viewId == actual.viewId ||
+                        !target.parentSignature.isNullOrBlank() && target.parentSignature == actual.parentSignature)
+                sameStructure && actual.context.map(TextNormalizer::normalize).any { it in context }
+            }
+        }
     }
 
     /**
@@ -1130,7 +1360,7 @@ class ReplayEngine(
         }
     }
 
-    private suspend fun handleCustomisation(snap: ScreenSnapshot, slots: Map<String, String>): StepResult.Stop? {
+    private suspend fun handleCustomisation(snap: ScreenSnapshot, slots: Map<String, String>, stepIndex: Int? = null): StepResult.Stop? {
         val button = customisationSheet(snap) ?: return null
         val item = slots["item"] ?: "This item"
         if (customisationHandled) {
@@ -1156,10 +1386,15 @@ class ReplayEngine(
         return if (customisationSheet(after) != null) {
             StepResult.Stop(RunStatus.HALTED, "$item needs you to pick some options, like size or type. I've left them open for you to choose.")
         } else {
+            if (stepIndex != null) completedItemOptions = CompletedItemOptions(stepIndex, TextNormalizer.normalize(item), snap.packageName)
             notes += "I added $item with the options that were already selected" + (price?.let { ", $it" } ?: "") + "."
             null
         }
     }
+
+    private fun isItemOptionsConfirmation(step: Step): Boolean = step is Step.Tap && step.slot == null &&
+        step.pick == null && step.target.className.endsWith("Button") &&
+        TextNormalizer.normalize(step.target.text ?: step.target.contentDescription).let { it == "add item" || it.startsWith("add item ") }
 
     /**
      * A taught "ADD" tap may only land on something that says add (the button, or a clickable
@@ -1194,10 +1429,39 @@ class ReplayEngine(
         return "search" in words
     }
 
+    /** A focus tap immediately before typing a restaurant/item search into that same field. */
+    private fun isTaughtSearchFieldTap(step: Step, next: Step?): Boolean {
+        if (step !is Step.Tap || step.slot != null || step.pick != null || next !is Step.TypeText) return false
+        val t = step.target
+        if (!t.className.endsWith("EditText") || t.className != next.target.className) return false
+        val fieldWords = listOfNotNull(t.text, t.contentDescription).flatMap(TextNormalizer::tokens) +
+            TextNormalizer.viewIdTokens(t.viewId)
+        if (fieldWords.any { it in LOCATION_WORDS }) return false
+        if (next.slot !in SourceSlots.names + "item" && "search" !in fieldWords) return false
+        return t == next.target || !t.viewId.isNullOrBlank() && t.viewId == next.target.viewId
+    }
+
+    /** Food delivery recovery must not switch into a separate dining or diet destination. */
+    private fun isUnrelatedDeliveryMode(flow: Flow, snap: ScreenSnapshot, index: Int): Boolean {
+        if (flow.slots.none { it.name == "restaurant" } || flow.slots.none { it.name == "item" }) return false
+        fun mode(label: String?): String? = TextNormalizer.normalize(label).let { l ->
+            DELIVERY_OTHER_MODES.firstOrNull { l == it || l.startsWith("$it tab ") || it == "healthy mode" && l.startsWith("$it ") }
+        }
+        val actionIndex = Descriptors.clickableFor(snap, index)
+        val labels = listOfNotNull(snap.elements[index].label, snap.elements[actionIndex].label) +
+            snap.descendants(actionIndex, maxDepth = 2).mapNotNull { it.label }.toList()
+        val destination = labels.firstNotNullOfOrNull(::mode) ?: return false
+        // An explicitly taught visit remains valid; only autonomous detours are refused.
+        return flow.steps.none { taught ->
+            taught is Step.Tap && listOfNotNull(taught.target.text, taught.target.contentDescription).any { mode(it) == destination }
+        }
+    }
+
     /** A non-editable "Search" box/button (upper part of the screen) that opens the search field. */
     private fun searchOpener(snap: ScreenSnapshot): UiElement? {
         val hit = snap.appElements()
-            .filter { it.visible && !it.editable && it.bounds.top < snap.screenHeight / 2 }
+            .filter { it.visible && it.enabled && onScreen(snap, it) && !it.editable && it.bounds.top < snap.screenHeight / 2 }
+            .filter { !isLocationBox(it) && !isLocationBox(snap.elements[Descriptors.clickableFor(snap, it.index)]) }
             .filter { e ->
                 val l = TextNormalizer.normalize(e.label)
                 l == "search" || l.startsWith("search for") || l.startsWith("search or") || l.contains("open search") ||
@@ -1211,13 +1475,47 @@ class ReplayEngine(
             .minByOrNull { if (it.clickable) 0 else 1 }
             // No search box up top: a "Search" tab in the bottom navigation bar (Play Store).
             ?: snap.appElements().firstOrNull { e ->
-                e.visible && !e.editable && e.bounds.top > snap.screenHeight * 3 / 4 &&
+                e.visible && e.enabled && onScreen(snap, e) && !e.editable && e.bounds.top > snap.screenHeight * 3 / 4 &&
                     TextNormalizer.normalize(e.label).let { it == "search" || it.startsWith("search tab") } &&
                     snap.elements[Descriptors.clickableFor(snap, e.index)].clickable
             }
             ?: return null
         if (snap.elements[Descriptors.clickableFor(snap, hit.index)].clickable) return hit
-        return snap.descendants(hit.index).filter { it.visible && it.clickable }.maxByOrNull { it.bounds.area } ?: hit
+        return snap.descendants(hit.index).filter { it.visible && it.enabled && it.clickable && onScreen(snap, it) }
+            .maxByOrNull { it.bounds.area } ?: hit
+    }
+
+    /** A unique native bottom Home/Delivery tab, never an address name or another mode. */
+    private fun deliveryHomeTab(snap: ScreenSnapshot): UiElement? = snap.appElements().filter { e ->
+        if (!e.visible || !e.enabled || !onScreen(snap, e) || e.bounds.top <= snap.screenHeight * 3 / 4 ||
+            TextNormalizer.normalize(e.label) !in setOf("home", "delivery")) return@filter false
+        val row = snap.elements[Descriptors.clickableFor(snap, e.index)]
+        if (!row.clickable || !onScreen(snap, row) || row.bounds.width > snap.screenWidth / 2 ||
+            row.bounds.height > snap.screenHeight / 5) return@filter false
+        generateSequence(e.parent.takeIf { it >= 0 }) { p -> snap.elements[p].parent.takeIf { it >= 0 } }
+            .take(5).any { p -> TextNormalizer.viewIdTokens(snap.elements[p].viewId).any { it in setOf("navigation", "nav") } }
+    }.toList().singleOrNull()
+
+    private suspend fun returnToDeliveryHome(snap: ScreenSnapshot, home: UiElement): StepResult.Stop? {
+        if (risk.assess(snap, home).risk != com.echoflow.core.safety.ActionRisk.SAFE ||
+            GestureSafety.blocker(snap, home.index) != null) return StepResult.Stop(RunStatus.HALTED,
+                "I couldn't safely return to the delivery Home tab.")
+        events += "returned directly to the delivery Home tab"
+        val o = act(PlannedAction.Click(snap.id, home.index, gesture = true),
+            GateContext(explicitlyTaught = true, resolverConfidence = 0.9), snap)
+        if (o !is ActionOutcome.Performed) return tripped() ?: StepResult.Stop(RunStatus.HALTED,
+            "I couldn't open the delivery Home tab (${describe(o)}).")
+        val started = host.nowMs()
+        var after = host.current() ?: snap
+        while (searchOpener(after) == null && after.appElements().none {
+                it.visible && it.enabled && it.editable && !it.password && !isLocationBox(it) && onScreen(after, it) }) {
+            tripped()?.let { return it }
+            if (after.packageName != snap.packageName || host.nowMs() - started >= ADDRESS_SETTLE_MS)
+                return StepResult.Stop(RunStatus.HALTED, "The delivery Home search didn't appear after the single Home tap.")
+            after = host.awaitSettled(after.id, 1_000) ?: host.current()
+                ?: return StepResult.Stop(RunStatus.HALTED, "I couldn't see the delivery Home screen.")
+        }
+        return null
     }
 
     /**
@@ -1636,6 +1934,7 @@ class ReplayEngine(
         /** How long after pressing enter to wait for a searched value before asking (T10: < 30 s). */
         const val QUICK_ASK_MS = 4_000L
         const val ADD_EFFECT_WAIT_MS = 3_000L
+        private const val SOURCE_EFFECT_WAIT_MS = 2_000L
         private val STAR_RATING = Regex("[1-5]\\.[0-9]")
         private val NAV_TAB = Regex("\\btab \\d+ of \\d+\\b")
         private val ADDRESS_ALIASES = mapOf(
@@ -1674,6 +1973,7 @@ class ReplayEngine(
         const val LOOKAHEAD_SCORE = 0.85
         const val MAX_SCROLLS = 3
         const val OPAQUE_GRACE_MS = 6_000L
+        private const val ADDRESS_SETTLE_MS = 4_000L
         const val LOOKAHEAD_AFTER_MS = 2_500L
         private val ADDRESS_HEADINGS = listOf("select a saved address", "select delivery address","select a delivery address", "choose a delivery address",
             "choose delivery address", "select address", "saved addresses", "deliver to", "choose address", "select delivery location")
@@ -1689,6 +1989,7 @@ class ReplayEngine(
         private val PINCODE = Regex("(?<!\\d)\\d{6}(?!\\d)")
         private val SIZE_CONFIRM = setOf("done", "add to bag", "add to cart", "confirm", "continue")
         private val LOCATION_WORDS = setOf("location", "address", "pincode", "pin", "area", "locality", "city")
+        private val DELIVERY_OTHER_MODES = setOf("dining", "dine out", "dineout", "healthy mode")
         private val CUSTOMISE_WORDS = listOf(
             "customization", "customisation", "customize", "customise", "choose your", "add ons", "addons",
             "choose from variant", "select any", "select up to", "choose any", "required",

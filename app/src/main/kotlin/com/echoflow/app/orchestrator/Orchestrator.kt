@@ -546,7 +546,7 @@ class Orchestrator(context: Context) {
 
     private companion object {
         val FORGET = Regex("^(?:please )?(?:forget|delete|remove|unlearn)(?: how to)? (.+)$")
-        val RELAY_WORDS = setOf("record my taps", "record taps", "record the taps", "you missed my tap", "you are missing my taps", "youre missing my taps")
+        val RELAY_WORDS = setOf("record my taps", "record taps", "record the taps", "record my tabs", "record tabs", "you missed my tap", "you are missing my taps", "youre missing my taps")
         val UNDO_WORDS = setOf("undo", "undo that", "undo it", "undo last step", "undo the last step", "remove last step", "remove the last step", "scratch that", "go back one step")
         const val TAG = "EchoOrchestrator"
     }

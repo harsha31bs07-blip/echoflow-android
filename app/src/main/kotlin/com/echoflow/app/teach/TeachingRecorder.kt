@@ -8,6 +8,7 @@ import com.echoflow.core.safety.ActionRiskClassifier
 import com.echoflow.core.teach.Fingerprints
 import com.echoflow.core.teach.RawAction
 import com.echoflow.core.teach.RawKind
+import com.echoflow.core.teach.RelayHitTest
 
 /**
  * Records the teacher's taps and typing while teach mode is on. Runs on the main thread (events
@@ -127,10 +128,9 @@ class TeachingRecorder(
      */
     fun recordRelayTap(snap: ScreenSnapshot, x: Int, y: Int): RelayTap {
         lastInputAt = clock()
-        val under = snap.appElements()
-            .filter { it.visible && it.bounds.area > 0 && x in it.bounds.left..it.bounds.right && y in it.bounds.top..it.bounds.bottom }
-            .minByOrNull { it.bounds.area } ?: return RelayTap.NOTHING_THERE
-        val target = snap.elements[com.echoflow.core.flow.Descriptors.clickableFor(snap, under.index)]
+        val hit = RelayHitTest.at(snap, x, y) ?: return RelayTap.NOTHING_THERE
+        val under = snap.elements[hit.index]
+        val target = snap.elements[hit.actionIndex]
         if (risk.assess(snap, under).risk == ActionRisk.COMMIT || risk.assess(snap, target).risk == ActionRisk.COMMIT) {
             onCommitTap(risk.assess(snap, under).evidence ?: risk.assess(snap, target).evidence ?: "pay")
             return RelayTap.PAY

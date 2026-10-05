@@ -201,10 +201,15 @@ class FlowCompiler {
         // "from Domino's": its own slot, so the restaurant search isn't mistaken for the item.
         val sourceName = SourceSlots.nameFor(appPackage)
         val source = (llm[sourceName] ?: parsed.source)?.let { spoken -> typedPart(spoken, typed) ?: spoken }
+        val itemTyped = typed.filter { t -> source == null || !sameValue(t, source) }
+        val spokenItemMatch = if (llm["item"] == null && parsed.item != null) {
+            closeTypedPart(parsed.item, itemTyped, allowFusedArticle = true)
+        } else null
         val item = llm["item"]
-            ?: typed.filter { t -> source == null || !sameValue(t, source) }
+            ?: itemTyped
                 .firstOrNull { t -> parsed.item != null && (sameValue(t, parsed.item) || contains(parsed.item, t) || contains(t, parsed.item)) }
                 ?.let { t -> if (contains(parsed.item!!, t)) t else parsed.item }
+            ?: spokenItemMatch?.typed
             ?: parsed.item
         item?.let { v ->
             val norm = TextNormalizer.normalize(v)
@@ -213,6 +218,9 @@ class FlowCompiler {
                 if (spoken != null && norm != TextNormalizer.normalize(spoken) && contains(spoken, norm)) {
                     // Typed "margherita" for spoken "margherita pizza": "pizza" is a qualifier.
                     norm to adjacentWords(parsed.tokens, TextNormalizer.tokens(norm), TextNormalizer.tokens(spoken))
+                } else if (spokenItemMatch != null && sameValue(norm, spokenItemMatch.typed)) {
+                    // The native field supplies the spelling; retain adjacent spoken qualifiers.
+                    norm to adjacentWords(parsed.tokens, spokenItemMatch.words, TextNormalizer.tokens(spoken))
                 } else {
                     refineItem(norm, actions, source)
                 }
@@ -228,6 +236,49 @@ class FlowCompiler {
     private fun typedPart(spoken: String, typed: List<String>): String? {
         val words = TextNormalizer.tokens(spoken)
         return typed.firstOrNull { t -> sameValue(t, spoken) || TextNormalizer.tokens(t).let { tw -> tw.isNotEmpty() && words.containsAll(tw) } }
+            ?: closeTypedPart(spoken, typed)?.typed
+    }
+
+    private data class TypedPart(val typed: String, val words: List<String>)
+
+    /**
+     * Ground a small ASR spelling difference in the text the teacher actually entered.
+     * Use the replay matcher's per-word edit bounds, and decline ambiguous recorded values.
+     * The leading value must match, so a generic trailing qualifier cannot supply the item.
+     */
+    private fun closeTypedPart(spoken: String, typed: List<String>, allowFusedArticle: Boolean = false): TypedPart? {
+        val words = TextNormalizer.tokens(spoken)
+        val matches = typed.distinctBy(TextNormalizer::normalize).mapNotNull { value ->
+            val native = TextNormalizer.tokens(value)
+            if (native.isEmpty() || native.size > words.size) return@mapNotNull null
+            val said = words.take(native.size)
+            val close = said.zip(native).mapIndexed { i, (a, b) ->
+                nearWord(a, b) || (allowFusedArticle && i == 0 && a.length >= 8 && b.length >= 8 &&
+                    listOf("a", "an", "the").any { article ->
+                        a.startsWith(article) && nearWord(a.removePrefix(article), b)
+                    })
+            }.all { it }
+            if (close) TypedPart(value, said) else null
+        }
+        return matches.singleOrNull()
+    }
+
+    private fun nearWord(a: String, b: String): Boolean {
+        if (a == b) return true
+        if (minOf(a.length, b.length) < 4) return false
+        val limit = if (b.length >= 8) 2 else 1
+        if (kotlin.math.abs(a.length - b.length) > limit) return false
+        var previous = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val current = IntArray(b.length + 1)
+            current[0] = i
+            for (j in 1..b.length) {
+                current[j] = minOf(previous[j] + 1, current[j - 1] + 1,
+                    previous[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            }
+            previous = current
+        }
+        return previous[b.length] <= limit
     }
 
     /**
@@ -277,9 +328,14 @@ class FlowCompiler {
         slots.firstOrNull { it.name == "address" }?.let { t = replaceIgnoringCase(t, it.taughtValue, "{address}") }
         // The whole spoken source phrase, even if only part of it was typed.
         slots.firstOrNull { it.name in SourceSlots.names }?.let { s ->
-            t = replaceIgnoringCase(t, parsed.source?.takeIf { p -> contains(p, s.taughtValue) } ?: s.taughtValue, "{${s.name}}")
+            t = replaceIgnoringCase(t, parsed.source?.takeIf { p ->
+                contains(p, s.taughtValue) || closeTypedPart(p, listOf(s.taughtValue)) != null
+            } ?: s.taughtValue, "{${s.name}}")
         }
-        slots.firstOrNull { it.name == "item" }?.let { t = replaceIgnoringCase(t, it.taughtValue, "{item}") }
+        slots.firstOrNull { it.name == "item" }?.let { s ->
+            val spoken = parsed.item?.let { closeTypedPart(it, listOf(s.taughtValue), allowFusedArticle = true) }
+            t = replaceIgnoringCase(t, spoken?.words?.joinToString(" ") ?: s.taughtValue, "{item}")
+        }
         parsed.quantityToken?.let { q -> t = t.split(' ').joinToString(" ") { if (it == q) "{qty}" else it } }
         return t
     }

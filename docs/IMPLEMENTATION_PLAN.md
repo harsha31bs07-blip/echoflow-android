@@ -1,5 +1,7 @@
 # EchoFlow: implementation plan to the finale shortlist
 
+> **Demo-video update, 5 October 2026:** The current plan is the [V7 demo implementation plan](DEMO_INDUSTRY_IMPLEMENTATION_PLAN_V7.md); the delivered V7 video and its captions are in `demo-production/final-v7/`. Earlier demo versions, raw recordings and production files were deleted at the user's request. The milestones below remain historical project context.
+
 **Deadline:** 30 Sept 2026. **Today:** 28 Sept (evening). **Team:** 4 people, plus Claude doing the coding.
 **Goal:** a top-15 shortlist. That means **most of T1–T14 passing reliably on a real phone, zero T11 failures, a clean ≤5-minute demo video, and a correct tagged submission.**
 

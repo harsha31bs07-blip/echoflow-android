@@ -202,16 +202,21 @@ class EchoBubble(
             EchoRuntime.prefs.handleY = handleY
             root?.let { wm.updateViewLayout(it, params()) }
         }
-        // Main actions on the left, the two small helpers pushed to the right edge.
-        val spacer = View(service).apply { layoutParams = LinearLayout.LayoutParams(0, 1, 1f) }
-        val controls = kit.row(speak, done, stop, spacer, home, move).apply {
+        // Keep the primary actions together. Putting all five controls on one row overflows
+        // the capped panel while teaching, making its movement control unreachable.
+        val controls = kit.row(speak, done, stop).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = kit.dp(10)
             }
         }
+        val helpers = kit.row(home, move, gravity = Gravity.END or Gravity.CENTER_VERTICAL).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = kit.dp(4)
+            }
+        }
 
         panel = object : LinearLayout(service) {
-            // Never wider than ~300dp, so the panel can't cover the app's own buttons.
+            // Keep the card compact; the movement control can move it away from app buttons.
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val cap = kit.dp(MAX_WIDTH_DP)
                 val size = MeasureSpec.getSize(widthMeasureSpec)
@@ -233,6 +238,7 @@ class EchoBubble(
             addView(status)
             addView(choiceScroll)
             addView(controls)
+            addView(helpers)
         }
 
         handle = buildHandle()
@@ -326,8 +332,8 @@ class EchoBubble(
         }
 
         done.visibility = if (s.mode == Mode.TEACHING) View.VISIBLE else View.GONE
-        // Speak, Done, Stop and Open EchoFlow fill the panel while teaching; "move" waits.
-        move.visibility = if (s.mode == Mode.TEACHING) View.GONE else View.VISIBLE
+        // Movement stays available during teaching so native controls can be uncovered.
+        move.visibility = View.VISIBLE
         // Questions are shown in full (they're also spoken); status lines stay short.
         status.maxLines = if (s.mode == Mode.ASKING) 6 else 2
         stop.visibility = if (s.mode == Mode.RUNNING || s.mode == Mode.TEACHING || s.mode == Mode.ASKING) View.VISIBLE else View.GONE

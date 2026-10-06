@@ -10,7 +10,7 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 |---|---|
 | **Team** | *Cryzen* |
 | **Demo video** | *[EchoFlow_Demo_v8.mp4](https://github.com/harsha31bs07-blip/echoflow-android/releases/download/PRISM_GENAI_HACKATHON_Y2026/EchoFlow_Demo_v8.mp4) (4:36, one continuous recording, captions: [SRT](demo-production/final-v8/EchoFlow_Demo_v8.srt)); previous cut: [v6](https://github.com/user-attachments/assets/abfc6597-f622-482b-9c0c-f10a52606f19)* |
-| **Presentation** | *[EchoFlow_Hackathon_Submission.pptx](https://github.com/user-attachments/files/32884004/EchoFlow_Hackathon_Submission.pptx)* |
+| **Presentation** | *[EchoFlow_Hackathon_Submission.pptx](docs/EchoFlow_Hackathon_Submission.pptx)* (12 slides, v1.2.3) |
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
 | **AI_Disclosure** | *[LangAI3_0_AI_Disclosure.docx](https://github.com/user-attachments/files/32884109/LangAI3_0_AI_Disclosure.docx)* |
 

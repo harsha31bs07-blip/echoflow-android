@@ -193,7 +193,7 @@ class VoiceIO(context: Context) {
                     return
                 }
                 Log.i(TtsPolicy.TAG, "asr event=final session=$session confidence=${confidence ?: "unavailable"} " +
-                    "text=${text.orEmpty()} ${summary()}")
+                    "text=${TtsPolicy.shown(text)} ${summary()}")
                 text?.let { onSpeechUi(SpeechUi.Partial(it)) }
                 source?.close("recognition_result")
                 result.complete(text)
@@ -202,7 +202,7 @@ class VoiceIO(context: Context) {
                 if (source == null) return
                 val text = segmentResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()?.takeIf { it.isNotBlank() }
-                Log.i(TtsPolicy.TAG, "asr event=segment session=$session text=${text.orEmpty()} ${summary()}")
+                Log.i(TtsPolicy.TAG, "asr event=segment session=$session text=${TtsPolicy.shown(text)} ${summary()}")
                 if (text != null) {
                     completedSegments.add(text)
                     onSpeechUi(SpeechUi.Partial(completedSegments.joinToString(" ")))
@@ -212,14 +212,14 @@ class VoiceIO(context: Context) {
                 if (source == null) return
                 val text = completedSegments.joinToString(" ").takeIf { it.isNotBlank() }
                 Log.i(TtsPolicy.TAG, "asr event=final session=$session callback=segmented_final " +
-                    "segments=${completedSegments.size} text=${text.orEmpty()} ${summary()}")
+                    "segments=${completedSegments.size} text=${TtsPolicy.shown(text)} ${summary()}")
                 source.close("segmented_session_end")
                 result.complete(text)
             }
             override fun onPartialResults(partial: Bundle?) {
                 partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let {
                     if (it != lastPartial) {
-                        Log.i(TtsPolicy.TAG, "asr event=partial session=$session text=$it")
+                        Log.i(TtsPolicy.TAG, "asr event=partial session=$session text=${TtsPolicy.shown(it)}")
                         lastPartial = it
                     }
                     onStatus("“$it”")

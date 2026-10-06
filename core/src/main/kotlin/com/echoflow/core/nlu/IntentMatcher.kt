@@ -103,7 +103,9 @@ class IntentMatcher {
         // Swiggy flow), nor does one naming a restaurant when the flow has no place for it.
         val mentioned = p.appMention?.let { Utterances.appNames[it] }
         val flowSource = flow.slots.firstOrNull { it.name in SourceSlots.names }?.name
-        val shapeOk = (mentioned == null || mentioned == flow.appPackage) && (p.source == null || flowSource != null)
+        // "from dominos" for a flow taught "… on dominos": the same fixed place, not a new restaurant.
+        val sourceIsTaughtPlace = p.source?.let { src -> TextNormalizer.tokens(src).all { it in placeWords(flow) } } == true
+        val shapeOk = (mentioned == null || mentioned == flow.appPackage) && (p.source == null || flowSource != null || sourceIsTaughtPlace)
         // 2. Template regex: same shape, different values (T4–T6).
         if (shapeOk) templateRegex(flow.template)?.let { (regex, names) ->
             regex.matchEntire(norm)?.let { m ->
@@ -193,7 +195,7 @@ class IntentMatcher {
             i++
         }
         pattern.append("$")
-        val said = " " + relax(p.core).joinToString(" ")
+        val said = " " + dropPlacePreps(relax(p.core), placeWords(flow)).joinToString(" ")
         val m = runCatching { Regex(pattern.toString()) }.getOrNull()?.matchEntire(said) ?: return null
         val slots = mutableMapOf<String, String>()
         names.forEachIndexed { k, n ->
@@ -224,8 +226,22 @@ class IntentMatcher {
             }
             i++
         }
-        return relax(out).map { w -> Regex("^\\{(\\w+)\\}$").matchEntire(w)?.let { Tok(w, it.groupValues[1]) } ?: Tok(w) }
+        return dropPlacePreps(relax(out), placeWords(flow)).map { w -> Regex("^\\{(\\w+)\\}$").matchEntire(w)?.let { Tok(w, it.groupValues[1]) } ?: Tok(w) }
     }
+
+    /**
+     * Fixed words of the template that follow "on/from/at/in": where the task happens ("on dominos").
+     * Said with any of those prepositions it's the same place.
+     */
+    private fun placeWords(flow: Flow): Set<String> {
+        val raw = flow.template.trim().split(Regex("\\s+")).map { if (it.startsWith("{")) it else TextNormalizer.normalize(it) }
+        return raw.indices.filter { i ->
+            i > 0 && raw[i - 1] in PLACE_PREPS && !raw[i].startsWith("{") && raw[i] !in PLACE_PREPS && verbGroup(raw[i]) == null
+        }.map { raw[it] }.toSet()
+    }
+
+    private fun dropPlacePreps(tokens: List<String>, places: Set<String>): List<String> =
+        tokens.filterIndexed { i, t -> !(t in PLACE_PREPS && tokens.getOrNull(i + 1) in places) }
 
     /** Drop articles and politeness, map verbs to their group, collapse repeats ("want to order"). */
     private fun relax(tokens: List<String>): List<String> {
@@ -264,6 +280,13 @@ class IntentMatcher {
             val closePlural = i == words.lastIndex && word.endsWith("s") && base.length >= 5 &&
                 q.any { qualifier -> qualifier.length >= 5 && editDistance(base, qualifier) == 1 }
             !exact && !closePlural
+        }
+        // "two choco lava cakes": the app lists one "Choco Lava Cake", and its search may not match the plural.
+        val many = (slots["qty"]?.toIntOrNull() ?: 1) > 1
+        val last = words.lastOrNull()
+        if (many && last != null && last.length > 4 && last.endsWith("s") && !last.endsWith("ss") && !last.endsWith("ies")) {
+            val one = if (Regex("(?:sh|ch|x|z|o)es$").containsMatchIn(last)) last.dropLast(2) else last.dropLast(1)
+            words = words.dropLast(1) + one
         }
         if (words.isEmpty() || words.all { it in ARTICLES }) null else k to soundsLikeTaught(words.joinToString(" "), def?.taughtValue)
     }.toMap()
@@ -304,6 +327,7 @@ class IntentMatcher {
         private val OPTIONAL_PREPS = setOf("from", "at", "in", "to")
         private val APP_PREPS = setOf("on", "from", "in", "using", "via")
         private val STRUCTURAL = setOf("from", "on")
+        private val PLACE_PREPS = setOf("on", "from", "at", "in")
 
         private fun plural(word: String) = Regex.escape(word) + "(?:s|es)?"
         fun singular(w: String) = when {

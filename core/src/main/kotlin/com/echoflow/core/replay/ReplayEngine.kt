@@ -252,6 +252,7 @@ class ReplayEngine(
         var started = host.nowMs()
         var scrolls = 0
         var triedIme = false
+        var closedKeyboard = false
         var triedDismiss = 0
         var askedAboutValue = false
         var staleRetries = 0
@@ -533,6 +534,18 @@ class ReplayEngine(
                     act(PlannedAction.Click(snap.id, Descriptors.clickableFor(snap, dismiss)), GateContext(isRecovery = true), snap)
                     continue
                 }
+            }
+
+            // A tap after the search (the cart bar) can sit under the keyboard that typing opened:
+            // close the keyboard once before anything else. Right after typing, "enter" comes first.
+            if (!closedKeyboard && step is Step.Tap && i > 0 && steps[i - 1] !is Step.TypeText &&
+                snap.windows.any { it.type == WindowType.INPUT_METHOD && it.bounds.height > 200 }
+            ) {
+                closedKeyboard = true
+                events += "closed the keyboard"
+                act(PlannedAction.Back, GateContext(isRecovery = true), snap)
+                host.awaitSettled(snap.id, 1_500)
+                continue
             }
 
             // Typed text but the app wants "enter" before showing results.
@@ -1340,7 +1353,7 @@ class ReplayEngine(
         fun isPlus(e: UiElement) = e.label?.trim() == "+" || TextNormalizer.normalize(e.label).let { it.contains("add one more") || it.contains("increase") } ||
             idSays(e, setOf("add", "plus", "increment", "increase", "inc"))
         fun isMinus(e: UiElement) = e.label?.trim() in setOf("−", "-") || TextNormalizer.normalize(e.label).let { it.contains("remove one") || it.contains("decrease") } ||
-            idSays(e, setOf("remove", "minus", "decrement", "decrease", "subtract", "dec"))
+            idSays(e, setOf("remove", "minus", "decrement", "decrease", "subtract", "dec", "reduce"))
         val pluses = els.filter(::isPlus)
         val anchor = item?.let { i -> els.firstOrNull { ElementResolver.valueMatch(i, it.label, emptyList()) >= 0.8 } }
         val plus = if (anchor != null) pluses.minByOrNull { kotlin.math.abs(cy(it) - cy(anchor)) } else pluses.singleOrNull()
@@ -1417,7 +1430,11 @@ class ReplayEngine(
     private fun isAddTap(step: Step): Boolean {
         if (step !is Step.Tap || step.pick != null) return false
         val label = TextNormalizer.normalize(step.target.text ?: step.target.contentDescription)
-        return label == "add" || label == "add to cart" || label == "add item" || label == "add to bag"
+        if (label == "add" || label == "add to cart" || label == "add item" || label == "add to bag") return true
+        // An unlabelled add button known by its view id: Domino's "btnAdd", "add_button", "addToCart".
+        if (label.isNotBlank()) return false
+        val words = TextNormalizer.viewIdTokens(step.target.viewId).filter { it !in setOf("btn", "button", "bt", "iv", "tv", "view", "cta") }
+        return "add" in words && words.all { it in setOf("add", "to", "cart", "item", "bag") }
     }
 
     /** A taught tap whose target is a search button or box (by its label, row text or view id). */

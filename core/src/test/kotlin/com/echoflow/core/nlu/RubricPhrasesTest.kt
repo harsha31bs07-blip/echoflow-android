@@ -123,6 +123,23 @@ class RubricPhrasesTest {
         assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos", "qty" to "2"), d.candidate.slots)
     }
 
+    @Test fun `the acknowledgement names an apostrophe app once`() {
+        val dominos = flow.copy(appPackage = "com.Dominos", appLabel = "Domino's", template = "order a {item} pizza on dominos")
+        val c = Candidate(dominos, 1.0, mapOf("item" to "farmhouse"), "exact")
+        assertEquals("order a farmhouse pizza on dominos", DecisionLayer.describe(c))
+    }
+
+    @Test fun `several of an item search for the singular`() {
+        val d = assertIs<Decision.Proceed>(decide("Order two choco lava cakes from Domino's on Zomato."))
+        assertEquals("choco lava cake", d.candidate.slots["item"])
+        assertEquals("2", d.candidate.slots["qty"])
+    }
+
+    @Test fun `T5 two heard as to by speech recognition`() {
+        val d = assertIs<Decision.Proceed>(decide("order to Margherita pizzas from Domino's"))
+        assertEquals(mapOf("item" to "margherita", "restaurant" to "dominos", "qty" to "2"), d.candidate.slots)
+    }
+
     @Test fun `T5 confirmation wording puts the number in place of the article`() {
         val c = m.match("Order two Margherita pizzas from Domino's.", listOf(flow)).first()
         assertEquals("order 2 margherita pizza from dominos on zomato", DecisionLayer.describe(c))

@@ -308,9 +308,11 @@ class Orchestrator(context: Context) {
         }
     }
 
-    /** An installed app whose name the command mentions (longest match), as package to label. */
+    /**
+     * The installed app the command names, as package to label: "… on Zomato" beats a restaurant that
+     * also has an app ("from Domino's"), then the longest name wins.
+     */
     private fun appNamedIn(utterance: String): Pair<String, String>? {
-        val said = " ${TextNormalizer.normalize(utterance)} "
         val pm = app.packageManager
         val launcher = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
         return runCatching { pm.queryIntentActivities(launcher, 0) }.getOrDefault(emptyList())
@@ -321,7 +323,8 @@ class Orchestrator(context: Context) {
                 val full = TextNormalizer.normalize(label)
                 // "Google Play Store" is said "play store"; single short words ("Phone") are too common.
                 val names = listOf(full, full.removePrefix("google ")).filter { it.length >= 4 }.distinct()
-                names.filter { said.contains(" $it ") }.maxByOrNull { it.length }?.let { Triple(pkg, label, it.length) }
+                names.mapNotNull { n -> Utterances.appMentionRank(utterance, n)?.let { rank -> Triple(pkg, label, rank * 100 + n.length) } }
+                    .maxByOrNull { it.third }
             }
             .maxByOrNull { it.third }
             ?.let { it.first to it.second }

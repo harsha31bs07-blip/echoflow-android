@@ -1,0 +1,143 @@
+1
+00:00:00,550 --> 00:00:04,781
+Narration: Meet EchoFlow. Teach it once, then just ask.
+
+2
+00:00:06,040 --> 00:00:09,224
+Request: Order a Garlic Bread on Domino's.
+
+3
+00:00:10,451 --> 00:00:17,235
+EchoFlow: I don't know how to "order a garlic bread on Domino's" yet. Want to teach me? Say yes, then show me.
+
+4
+00:00:17,615 --> 00:00:19,287
+Request: Yes.
+
+5
+00:00:21,768 --> 00:00:27,033
+EchoFlow: Okay, show me in Domino's. Tap Done when you're finished. I never pay.
+
+6
+00:00:28,650 --> 00:00:33,753
+Narration: We show it once: search for garlic bread, add it, and open the cart.
+
+7
+00:00:51,130 --> 00:00:56,463
+EchoFlow: Learned: order a garlic bread on dominos. I saved 4 steps. You can change the item.
+
+8
+00:00:56,463 --> 00:00:58,712
+EchoFlow: You can see it in the EchoFlow app.
+
+9
+00:00:59,450 --> 00:01:05,570
+Narration: One demonstration, saved as a lesson. Now, the exact same request.
+
+10
+00:01:07,573 --> 00:01:10,757
+Request: Order a Garlic Bread on Domino's.
+
+11
+00:01:11,917 --> 00:01:14,580
+EchoFlow: Okay, order a garlic bread on dominos.
+
+12
+00:01:16,250 --> 00:01:22,900
+Narration: It replays the lesson by itself, and stops at payment. Paying is always up to you.
+
+13
+00:01:35,748 --> 00:01:41,567
+EchoFlow: Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+14
+00:01:49,450 --> 00:01:52,066
+Narration: Now different words, for the same task.
+
+15
+00:01:54,631 --> 00:01:57,695
+Request: Get me garlic bread from Domino's.
+
+16
+00:01:58,842 --> 00:02:01,527
+EchoFlow: Okay, order a garlic bread on dominos.
+
+17
+00:02:03,050 --> 00:02:09,122
+Narration: It understands the new wording on the phone, and sees the garlic bread is already in the cart.
+
+18
+00:02:21,540 --> 00:02:26,300
+EchoFlow: Garlic bread was already in your cart, so I didn't add another one. Your turn.
+
+19
+00:02:26,300 --> 00:02:31,548
+EchoFlow: Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+20
+00:02:37,050 --> 00:02:40,994
+Narration: Next, a new item, and a quantity it was never shown.
+
+21
+00:02:43,867 --> 00:02:47,315
+Request: Order two Choco Lava Cakes on Domino's.
+
+22
+00:02:48,521 --> 00:02:51,514
+EchoFlow: Okay, order 2 choco lava cake on dominos.
+
+23
+00:02:53,250 --> 00:03:00,336
+Narration: Two choco lava cakes, from a single garlic bread lesson. It sets the quantity in the cart itself.
+
+24
+00:03:14,208 --> 00:03:20,031
+EchoFlow: Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+25
+00:03:27,650 --> 00:03:30,170
+Narration: Finally, a dish that doesn't exist.
+
+26
+00:03:32,916 --> 00:03:36,340
+Request: Order a unicorn pizza on Domino's.
+
+27
+00:03:37,575 --> 00:03:40,551
+EchoFlow: Okay, order a unicorn pizza on dominos.
+
+28
+00:03:52,946 --> 00:03:57,826
+EchoFlow: I searched for "unicorn pizza" but couldn't find it. What should I get instead?
+
+29
+00:03:58,190 --> 00:03:59,862
+Request: Nothing.
+
+30
+00:04:01,100 --> 00:04:07,154
+EchoFlow: I searched for "unicorn pizza" but couldn't find it. So I stopped at step 3 without adding anything.
+
+31
+00:04:08,650 --> 00:04:13,237
+Narration: It asks, instead of guessing, and stops without adding anything.
+
+32
+00:04:19,136 --> 00:04:21,600
+Request: Did the last run succeed?
+
+33
+00:04:22,806 --> 00:04:24,941
+EchoFlow: No, the last run didn't succeed.
+
+34
+00:04:24,941 --> 00:04:29,743
+EchoFlow: Order a unicorn pizza on dominos stopped at step 3 of 4 (Tap "btn add").
+
+35
+00:04:29,743 --> 00:04:36,414
+EchoFlow: I searched for "unicorn pizza" but couldn't find it. So I stopped at step 3 without adding anything.
+
+36
+00:04:37,450 --> 00:04:42,362
+Narration: Teach once. Ask any way. Payment stays with you.

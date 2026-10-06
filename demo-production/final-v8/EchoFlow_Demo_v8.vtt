@@ -1,0 +1,109 @@
+WEBVTT
+
+00:00:00.550 --> 00:00:04.781
+<v Narration>Meet EchoFlow. Teach it once, then just ask.
+
+00:00:06.040 --> 00:00:09.224
+<v Request>Order a Garlic Bread on Domino's.
+
+00:00:10.451 --> 00:00:17.235
+<v EchoFlow>I don't know how to "order a garlic bread on Domino's" yet. Want to teach me? Say yes, then show me.
+
+00:00:17.615 --> 00:00:19.287
+<v Request>Yes.
+
+00:00:21.768 --> 00:00:27.033
+<v EchoFlow>Okay, show me in Domino's. Tap Done when you're finished. I never pay.
+
+00:00:28.650 --> 00:00:33.753
+<v Narration>We show it once: search for garlic bread, add it, and open the cart.
+
+00:00:51.130 --> 00:00:56.463
+<v EchoFlow>Learned: order a garlic bread on dominos. I saved 4 steps. You can change the item.
+
+00:00:56.463 --> 00:00:58.712
+<v EchoFlow>You can see it in the EchoFlow app.
+
+00:00:59.450 --> 00:01:05.570
+<v Narration>One demonstration, saved as a lesson. Now, the exact same request.
+
+00:01:07.573 --> 00:01:10.757
+<v Request>Order a Garlic Bread on Domino's.
+
+00:01:11.917 --> 00:01:14.580
+<v EchoFlow>Okay, order a garlic bread on dominos.
+
+00:01:16.250 --> 00:01:22.900
+<v Narration>It replays the lesson by itself, and stops at payment. Paying is always up to you.
+
+00:01:35.748 --> 00:01:41.567
+<v EchoFlow>Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+00:01:49.450 --> 00:01:52.066
+<v Narration>Now different words, for the same task.
+
+00:01:54.631 --> 00:01:57.695
+<v Request>Get me garlic bread from Domino's.
+
+00:01:58.842 --> 00:02:01.527
+<v EchoFlow>Okay, order a garlic bread on dominos.
+
+00:02:03.050 --> 00:02:09.122
+<v Narration>It understands the new wording on the phone, and sees the garlic bread is already in the cart.
+
+00:02:21.540 --> 00:02:26.300
+<v EchoFlow>Garlic bread was already in your cart, so I didn't add another one. Your turn.
+
+00:02:26.300 --> 00:02:31.548
+<v EchoFlow>Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+00:02:37.050 --> 00:02:40.994
+<v Narration>Next, a new item, and a quantity it was never shown.
+
+00:02:43.867 --> 00:02:47.315
+<v Request>Order two Choco Lava Cakes on Domino's.
+
+00:02:48.521 --> 00:02:51.514
+<v EchoFlow>Okay, order 2 choco lava cake on dominos.
+
+00:02:53.250 --> 00:03:00.336
+<v Narration>Two choco lava cakes, from a single garlic bread lesson. It sets the quantity in the cart itself.
+
+00:03:14.208 --> 00:03:20.031
+<v EchoFlow>Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself.
+
+00:03:27.650 --> 00:03:30.170
+<v Narration>Finally, a dish that doesn't exist.
+
+00:03:32.916 --> 00:03:36.340
+<v Request>Order a unicorn pizza on Domino's.
+
+00:03:37.575 --> 00:03:40.551
+<v EchoFlow>Okay, order a unicorn pizza on dominos.
+
+00:03:52.946 --> 00:03:57.826
+<v EchoFlow>I searched for "unicorn pizza" but couldn't find it. What should I get instead?
+
+00:03:58.190 --> 00:03:59.862
+<v Request>Nothing.
+
+00:04:01.100 --> 00:04:07.154
+<v EchoFlow>I searched for "unicorn pizza" but couldn't find it. So I stopped at step 3 without adding anything.
+
+00:04:08.650 --> 00:04:13.237
+<v Narration>It asks, instead of guessing, and stops without adding anything.
+
+00:04:19.136 --> 00:04:21.600
+<v Request>Did the last run succeed?
+
+00:04:22.806 --> 00:04:24.941
+<v EchoFlow>No, the last run didn't succeed.
+
+00:04:24.941 --> 00:04:29.743
+<v EchoFlow>Order a unicorn pizza on dominos stopped at step 3 of 4 (Tap "btn add").
+
+00:04:29.743 --> 00:04:36.414
+<v EchoFlow>I searched for "unicorn pizza" but couldn't find it. So I stopped at step 3 without adding anything.
+
+00:04:37.450 --> 00:04:42.362
+<v Narration>Teach once. Ask any way. Payment stays with you.

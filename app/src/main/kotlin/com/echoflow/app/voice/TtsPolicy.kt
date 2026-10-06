@@ -1,14 +1,20 @@
 package com.echoflow.app.voice
 
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.util.Log
+import com.echoflow.app.BuildConfig
 import java.util.Locale
 
 /** One speech configuration for command replies and background announcements. */
 internal object TtsPolicy {
     const val TAG = "EchoVoice"
-    const val RATE = 1.38f
+    /** The engine's natural pace. Faster rates sounded rushed and clipped on the phone speaker. */
+    const val RATE = 1.0f
     private val locale = Locale("en", "IN")
+
+    /** What the user said, for logs: the words only in debug builds, a length in release builds. */
+    fun shown(text: String?): String = if (BuildConfig.DEBUG) text.orEmpty() else "<${text?.length ?: 0} chars>"
 
     /** Returns whether the engine can speak the requested language. */
     fun configure(tts: TextToSpeech, owner: String): Boolean {
@@ -16,20 +22,16 @@ internal object TtsPolicy {
         val voices = tts.voices.orEmpty().sortedBy { it.name }
         Log.i(TAG, "tts event=inventory owner=$owner defaultEngine=${tts.defaultEngine} " +
             "installedEngines=${tts.engines.joinToString(",") { it.name }} count=${voices.size}")
-        voices.forEach { voice ->
+        if (BuildConfig.DEBUG) voices.forEach { voice ->
             Log.i(TAG, "tts event=available_voice owner=$owner name=${voice.name} " +
                 "locale=${voice.locale.toLanguageTag()} network=${voice.isNetworkConnectionRequired} " +
                 "quality=${voice.quality} latency=${voice.latency}")
         }
 
-        // Edge's narration voice is not automatically a voice installed in Android's engine.
-        // Select Prabhat/Prabhath only when the engine actually exposes an Indian English voice.
-        val preferred = voices.firstOrNull {
-            it.locale.language.equals("en", ignoreCase = true) &&
-                it.locale.country.equals("IN", ignoreCase = true) &&
-                (it.name.contains("Prabhat", ignoreCase = true) ||
-                    it.name.contains("Prabhath", ignoreCase = true))
-        }
+        // Keep the engine's own Indian English voice when it is installed on the phone; otherwise take an
+        // installed (offline, high quality) one, so replies never wait on the network or sound degraded.
+        val current = tts.voice
+        val preferred = if (current != null && isGood(current)) null else voices.firstOrNull(::isGood)
         val voiceResult = if (languageResult >= TextToSpeech.LANG_AVAILABLE && preferred != null) {
             tts.setVoice(preferred)
         } else null
@@ -49,6 +51,13 @@ internal object TtsPolicy {
         }
         return languageResult >= TextToSpeech.LANG_AVAILABLE
     }
+
+    private fun isGood(voice: Voice): Boolean =
+        voice.locale.language.equals("en", ignoreCase = true) &&
+            voice.locale.country.equals("IN", ignoreCase = true) &&
+            !voice.isNetworkConnectionRequired &&
+            TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in voice.features.orEmpty() &&
+            voice.quality >= Voice.QUALITY_HIGH
 
     private fun languageStatus(result: Int): String = when (result) {
         TextToSpeech.LANG_AVAILABLE -> "LANG_AVAILABLE"

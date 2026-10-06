@@ -82,7 +82,10 @@ object DecisionLayer {
         val app = c.targetApp?.let(::appLabel) ?: c.flow.appLabel ?: c.flow.appPackage.substringAfterLast('.')
         // "…on play store" already names "Google Play Store".
         val short = app.lowercase().removePrefix("google ").trim()
-        return if (s.contains(app, ignoreCase = true) || s.contains(short, ignoreCase = true)) s else "$s on $app"
+        // Compare normalised words: "on dominos" already names "Domino's".
+        val said = " ${com.echoflow.core.text.TextNormalizer.normalize(s)} "
+        val named = listOf(app, short).map { com.echoflow.core.text.TextNormalizer.normalize(it) }.filter { it.isNotBlank() }
+        return if (named.any { said.contains(" $it ") }) s else "$s on $app"
     }
 
     /** "com.myntra.android" -> "Myntra". */

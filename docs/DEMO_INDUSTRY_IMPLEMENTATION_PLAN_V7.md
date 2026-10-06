@@ -1,6 +1,6 @@
 # EchoFlow V7: researched demo improvement plan
 
-Date: 4 October 2026. **Status: plan only; no video editing, rendering, recording or tool installation started.**
+Date: 4 October 2026. **Status (5 October 2026): implemented as V7.1 from the V7 master; see [§9](#9-v71-implementation-record-5-october-2026).**
 
 > **Cleanup, 5 October 2026:** the V7 video was delivered (music and no-music versions, 4:15, technical checks passed; visual review still pending) and is kept in [`demo-production/final-v7/`](../demo-production/final-v7/) with its SRT/VTT captions. At the user's request every other demo file was deleted: V1–V6 videos, raw recordings, audio stems, build scripts and review records. Links below to `demo-production/output/` or `audio/` are historical and no longer resolve, and V7 can't be re-rendered from source.
 
@@ -114,3 +114,24 @@ Use durable checkpoints and logs at each stage. Give progress updates every 30�
 Planned delivery: **V7 music master**, **V7 voice-only master**, accurate **SRT/VTT**, review player, edit/timing manifest and a concise validation report. Retain V5/V6. Target the current delivery format, **2560×1440, 30fps H.264 with 48kHz stereo AAC**, unless the organizer specifies otherwise. Record any remaining limitation, particularly source-image resolution and any listening check that could not be performed.
 
 Local evidence reviewed: [V6 manifest](../demo-production/output/edit-v6-voice-samaya/manifest.json), [V6 contact sheet](../demo-production/output/edit-v6-voice-samaya/final-contact-sheet.jpg), [V6 delivery record](../demo-production/output/delivery-voice-v6.json), [cleanup manifest](../demo-production/output/video-cleanup-20261004.json), [original demo script](DEMO_SCRIPT.md), and retained audio/timing records. **This document is the implementation plan; the V7 work described here has not begun.**
+
+## 9. V7.1 implementation record (5 October 2026)
+
+The user found V7 incomplete. Checked against §3 and §8, V7's main failure was its focus panel: an automatic zoom that for long stretches showed the keyboard, black transitions or location pop-ups instead of the search, saved lesson, cart and report. It also cut off text ("Add a note for the r…"), and its cut labels and disclosures were about 16–18 px.
+
+Only the V7 master survived the cleanup, so V7.1 recomposes it on V7's own timeline. The native phone screen (x166–734, y54–1278) is cut back out, and all other graphics are rebuilt. The audio streams are copied unchanged, and their hashes match V7, so sync, loudness (−17.3 LUFS integrated, −1.6 dBFS peak) and mix are exactly V7's.
+
+| Plan item | V7.1 |
+| --- | --- |
+| P0 focused crops of real evidence | 31 hand-authored zoom shots tied to Windows-OCR timings of the app's own text: request transcripts, EchoFlow messages, search, menu, options, carts, payment bar, question, "Nothing", report. Eased 0.5 s transitions. |
+| P0 readable result beats | Margherita ×1 (teach, exact, paraphrase) and Farmhouse ×2 + Margherita ×1 are outlined on the native cart for 10 s; the payment bar ("Stops before payment · you pay") is shown for 4–6 s per run. |
+| P0 teaching/replay mapped | New lesson tracker. Steps appear as the app reports them ("Got it: … · n steps so far"); each replay highlights the app's "Step n/10". Steps cut from the footage stay neutral; values that changed (farmhouse, ×2, unicorn) are orange. Unicorn and report runs end on "stopped at step 8 of 10", which matches the app's report. |
+| P1 one explanation at a time | One chapter heading, one zoom label or proof pill, one caption. |
+| P1 captions | 50 px (43 px for long lines) bottom captions with speaker labels (Narrator / Spoken request / EchoFlow reply), kept clear of the phone. EchoFlow fragments merged into whole sentences: 45 cues, verbatim from V7's captions, same timings. Matching SRT/VTT supplied. |
+| P1 disclosure | 30 px disclosure on every frame, the intro and the outro: "Recorded phone sections, edited for length · Prerecorded speech supplied to Android speech recognition". V7's 11 edit markers are shown as "Edited for length · waiting removed". |
+| Privacy strips (user request, 5 Oct) | V7's solid RGB(16,34,56) cover strips over the address rows, the home-screen address line, the restaurant/cart header and the parts of EchoFlow's bubble they crossed are detected on every frame and filled from the surrounding UI. The covered pixels no longer exist, so nothing under them is restored: those lines read as empty. The colour match is exact (±4), so Zomato's similar navy Gold and "Special prices" banners are left untouched. |
+| P2 listening pass | Not possible to improve: no stems survive. Audio is V7's. |
+
+Delivered in `demo-production/final-v7/`: `EchoFlow_Demo_Premium_Voice_v7.1.mp4` (music) and `_v7.1_NoMusic.mp4`. Both are 2560×1440, 30 fps H.264 with V7's 48 kHz stereo AAC copied in, 255.000 s and 7,650 frames, about 51 MB, with a clean full decode. Also delivered: `.srt`/`.vtt` and the recompose script (`v7.1_recompose.py` + `v7.1_ocr.ps1`, which re-renders V7.1 from the V7 master). V7 is kept until V7.1 is approved.
+
+Limitations: the native footage is V7's compressed phone image (568 px wide), so zooms of 2–2.9× are soft but readable. V7's cut points and timing are unchanged, because cutting further would also cut the mixed music. The organizer rules in §4 are still unverified.

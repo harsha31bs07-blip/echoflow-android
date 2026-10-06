@@ -96,6 +96,23 @@ object Utterances {
     private val CUSTOMISATION = Regex("\\s+(?:with\\s+(?:extra|no|less|more|double|added)|without)\\s+[a-z]+(?:\\s+[a-z]+)?(?=\\s+(?:from|on|to|and)\\b|$)")
     private val NEGATION = Regex("^(?:please\\s+)?(?:i\\s+)?(?:dont|do not|never|no need to|nevermind|never mind)\\b")
 
+    /**
+     * How strongly a command means [name] as the app to use, or null when it isn't said. "… from
+     * Domino's on Zomato" means Zomato: the app follows "on/in/using/via/with", while a name after
+     * "from/at" is the restaurant or store. Without either it's a plain mention.
+     */
+    fun appMentionRank(utterance: String, name: String): Int? {
+        val said = TextNormalizer.tokens(utterance)
+        val wanted = TextNormalizer.tokens(name)
+        if (wanted.isEmpty() || wanted.size > said.size) return null
+        val at = (0..said.size - wanted.size).firstOrNull { i -> wanted.indices.all { said[i + it] == wanted[it] } } ?: return null
+        return when (said.getOrNull(at - 1)) {
+            "on", "in", "using", "via", "with" -> 2
+            "from", "at" -> 0
+            else -> 1
+        }
+    }
+
     fun stripTeachPrefix(utterance: String): String {
         val tokens = TextNormalizer.tokens(utterance)
         val p = teachPrefixes.firstOrNull { pre -> pre.size <= tokens.size && pre.indices.all { tokens[it] == pre[it] } }
@@ -107,8 +124,23 @@ object Utterances {
         "on", "in", "to", "at", "and", "please", "deliver", "delivered", "delivery", "for", "with", "using", "via", "now",
     )
 
+    /** Verbs a quantity directly follows ("order two …"). */
+    private val quantityVerbs = setOf("order", "get", "buy", "add", "book", "bring", "send")
+    /** Words that make "to" a real destination: "order to home", "add to cart". */
+    private val destinationWords = setOf("home", "work", "office", "my", "the", "cart", "bag", "basket", "me", "us")
+
+    /**
+     * Speech recognition often writes a spoken "two" as "to" or "too" ("order to farmhouse pizzas").
+     * Right after an ordering verb, and not before a destination, it can only be the number.
+     */
+    private fun fixHeardTwo(tokens: List<String>): List<String> = tokens.mapIndexed { i, t ->
+        if ((t == "to" || t == "too") && i >= 1 && tokens[i - 1] in quantityVerbs &&
+            tokens.getOrNull(i + 1)?.let { it !in destinationWords && it !in appNames } == true
+        ) "two" else t
+    }
+
     fun parse(utterance: String): Parsed {
-        val tokens = TextNormalizer.tokens(utterance)
+        val tokens = fixHeardTwo(TextNormalizer.tokens(utterance))
         var qty: Int? = null
         var qtyToken: String? = null
         var address: String? = null

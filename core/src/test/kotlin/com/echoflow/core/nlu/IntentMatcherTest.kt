@@ -36,6 +36,23 @@ class IntentMatcherTest {
         listOf("search for lofi music on youtube"), listOf(SlotDef("item", SlotType.TEXT, "lofi music")), emptyList(),
     )
 
+    // Taught in a store's own app: "on dominos" is a fixed place in the template, not a slot.
+    private val dominos = Flow(
+        "dominos", "order a {item} on dominos", "com.Dominos", "Domino's", "order a {item} on dominos",
+        listOf("order a garlic bread on dominos"), listOf(SlotDef("item", SlotType.TEXT, "garlic bread")), emptyList(),
+    )
+
+    @Test fun `from the taught place is the same place (T3 on a store app)`() {
+        val d = assertIs<Decision.Proceed>(decide("Get me garlic bread from Domino's.", listOf(dominos)))
+        assertEquals("garlic bread", d.candidate.slots["item"])
+        val two = assertIs<Decision.Proceed>(decide("order to choco lava cakes on Domino's", listOf(dominos)))
+        assertEquals(mapOf("item" to "choco lava cake", "qty" to "2"), two.candidate.slots)
+    }
+
+    @Test fun `a different restaurant is still not the taught place`() {
+        assertTrue(decide("get me garlic bread from pizza hut", listOf(dominos)) !is Decision.Proceed)
+    }
+
     @Test fun `extras and a payment request are split off, not glued onto a name`() {
         val a = Utterances.splitExtras("Order a farmhouse pizza from Brik Oven with extra cheese")
         assertEquals("order a farmhouse pizza from brik oven", a.command)

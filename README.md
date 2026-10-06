@@ -8,10 +8,11 @@ It uses **only Android Accessibility Service APIs**: no app SDKs, deep links or 
 
 | | |
 |---|---|
-| **Team** | *(add team name and members here)* |
-| **Demo video** | *(add link here)* |
-| **Presentation** | *(add link or file here)* |
+| **Team** | *Cryzen* |
+| **Demo video** | *https://github.com/user-attachments/assets/abfc6597-f622-482b-9c0c-f10a52606f19* |
+| **Presentation** | *[EchoFlow_Hackathon_Submission.pptx](https://github.com/user-attachments/files/32884004/EchoFlow_Hackathon_Submission.pptx)* |
 | **APK** | [`release/EchoFlow.apk`](release/EchoFlow.apk) |
+| **AI_Disclosure** | *[LangAI3_0_AI_Disclosure.docx](https://github.com/user-attachments/files/32884109/LangAI3_0_AI_Disclosure.docx)* |
 
 ## Judges' quick start (3 minutes)
 1. Install [`release/EchoFlow.apk`](release/EchoFlow.apk) (Android 11+). Open **EchoFlow → Turn on EchoFlow** and switch on **EchoFlow automation** (the app says where it is on your phone's brand, and comes back by itself when it's on). On Android 13+, if the toggle is greyed out, see [the steps below](#enable-the-accessibility-service-judges-read-this).

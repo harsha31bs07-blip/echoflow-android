@@ -1,0 +1,109 @@
+{
+ "delay": -0.9151400947570814,
+ "base": 1791297423.11886,
+ "cmds": [
+  {
+   "key": "a1",
+   "feed": 5.771
+  },
+  {
+   "key": "a2",
+   "feed": 17.476
+  },
+  {
+   "key": "b1",
+   "feed": 66.254
+  },
+  {
+   "key": "c1",
+   "feed": 114.344
+  },
+  {
+   "key": "d1",
+   "feed": 156.599
+  },
+  {
+   "key": "e1",
+   "feed": 201.133
+  },
+  {
+   "key": "e2",
+   "feed": 226.325
+  },
+  {
+   "key": "f1",
+   "feed": 250.412
+  }
+ ],
+ "replies": [
+  {
+   "start": 10.655,
+   "end": 17.438,
+   "text": "I don't know how to \"order a garlic bread on Domino's\" yet. Want to teach me? Say yes, then show me."
+  },
+  {
+   "start": 22.06,
+   "end": 26.677,
+   "text": "Okay, show me in Domino's. Tap Done when you're finished. I never pay."
+  },
+  {
+   "start": 50.401,
+   "end": 57.987,
+   "text": "Learned: order a garlic bread on dominos. I saved 4 steps. You can change the item. You can see it in the EchoFlow app."
+  },
+  {
+   "start": 71.131,
+   "end": 73.784,
+   "text": "Okay, order a garlic bread on dominos."
+  },
+  {
+   "start": 93.793,
+   "end": 99.605,
+   "text": "Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself."
+  },
+  {
+   "start": 118.98,
+   "end": 121.641,
+   "text": "Okay, order a garlic bread on dominos."
+  },
+  {
+   "start": 140.875,
+   "end": 150.927,
+   "text": "Garlic bread was already in your cart, so I didn't add another one. Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself."
+  },
+  {
+   "start": 161.7,
+   "end": 164.698,
+   "text": "Okay, order 2 choco lava cake on dominos."
+  },
+  {
+   "start": 186.948,
+   "end": 192.758,
+   "text": "Your turn. Everything is ready for payment. I won't pay. Please check the order and pay yourself."
+  },
+  {
+   "start": 206.278,
+   "end": 209.265,
+   "text": "Okay, order a unicorn pizza on dominos."
+  },
+  {
+   "start": 221.419,
+   "end": 226.29,
+   "text": "I searched for \"unicorn pizza\" but couldn't find it. What should I get instead?"
+  },
+  {
+   "start": 229.67,
+   "end": 235.746,
+   "text": "I searched for \"unicorn pizza\" but couldn't find it. So I stopped at step 3 without adding anything."
+  },
+  {
+   "start": 254.528,
+   "end": 268.172,
+   "text": "No, the last run didn't succeed. Order a unicorn pizza on dominos stopped at step 3 of 4 (Tap \"btn add\"). I searched for \"unicorn pizza\" but couldn't find it. So I stopped at step 3 without adding anything."
+  }
+ ],
+ "teach": [
+  38.93,
+  45.249
+ ]
+}

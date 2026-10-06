@@ -1,0 +1,68 @@
+[
+ {
+  "key": "n0",
+  "at": 0.5,
+  "dur": 4.331333,
+  "text": "Meet EchoFlow. Teach it once, then just ask."
+ },
+ {
+  "key": "n1",
+  "at": 28.24,
+  "dur": 5.203458,
+  "text": "We show it once: search for garlic bread, add it, and open the cart."
+ },
+ {
+  "key": "n2",
+  "at": 58.67,
+  "dur": 6.21975,
+  "text": "One demonstration, saved as a lesson. Now, the exact same request."
+ },
+ {
+  "key": "n3",
+  "at": 75.4,
+  "dur": 6.749625,
+  "text": "It replays the lesson by itself, and stops at payment. Paying is always up to you."
+ },
+ {
+  "key": "n4",
+  "at": 107.44,
+  "dur": 2.715833,
+  "text": "Now different words, for the same task."
+ },
+ {
+  "key": "nC",
+  "at": 123.11,
+  "dur": 6.17175,
+  "text": "It understands the new wording on the phone, and sees the garlic bread is already in the cart."
+ },
+ {
+  "key": "n5",
+  "at": 152.41,
+  "dur": 4.044292,
+  "text": "Next, a new item, and a quantity it was never shown."
+ },
+ {
+  "key": "n6",
+  "at": 166.38,
+  "dur": 7.186417,
+  "text": "Two choco lava cakes, from a single garlic bread lesson. It sets the quantity in the cart itself."
+ },
+ {
+  "key": "n7",
+  "at": 198.43,
+  "dur": 2.620167,
+  "text": "Finally, a dish that doesn't exist."
+ },
+ {
+  "key": "n8",
+  "at": 237.19,
+  "dur": 4.687375,
+  "text": "It asks, instead of guessing, and stops without adding anything."
+ },
+ {
+  "key": "n9",
+  "at": 269.17,
+  "dur": 5.011583,
+  "text": "Teach once. Ask any way. Payment stays with you."
+ }
+]

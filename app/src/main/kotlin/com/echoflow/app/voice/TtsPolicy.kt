@@ -11,6 +11,11 @@ internal object TtsPolicy {
     const val TAG = "EchoVoice"
     /** The engine's natural pace. Faster rates sounded rushed and clipped on the phone speaker. */
     const val RATE = 1.0f
+    /**
+     * Normal pitch, always set: otherwise the phone's text-to-speech settings apply, and a low system
+     * pitch (one test phone had 25%) makes every reply sound like a breathy whisper.
+     */
+    const val PITCH = 1.0f
     private val locale = Locale("en", "IN")
 
     /** What the user said, for logs: the words only in debug builds, a length in release builds. */
@@ -36,18 +41,19 @@ internal object TtsPolicy {
             tts.setVoice(preferred)
         } else null
         val rateResult = tts.setSpeechRate(RATE)
+        val pitchResult = tts.setPitch(PITCH)
         val selected = tts.voice
         Log.i(TAG, "tts event=configured owner=$owner requestedLocale=${locale.toLanguageTag()} " +
             "languageResult=$languageResult languageStatus=${languageStatus(languageResult)} " +
             "preferred=${preferred?.name ?: "unavailable"} voiceResult=${voiceResult ?: "engine_default"} " +
             "actualVoice=${selected?.name ?: "unavailable"} " +
             "actualLocale=${selected?.locale?.toLanguageTag() ?: "unavailable"} " +
-            "rate=$RATE rateResult=$rateResult")
+            "rate=$RATE rateResult=$rateResult pitch=$PITCH pitchResult=$pitchResult")
         if (languageResult < TextToSpeech.LANG_AVAILABLE) {
             Log.w(TAG, "tts event=configuration_error owner=$owner reason=language_unavailable code=$languageResult")
         }
-        if (voiceResult == TextToSpeech.ERROR || rateResult == TextToSpeech.ERROR) {
-            Log.w(TAG, "tts event=configuration_error owner=$owner voiceResult=$voiceResult rateResult=$rateResult")
+        if (voiceResult == TextToSpeech.ERROR || rateResult == TextToSpeech.ERROR || pitchResult == TextToSpeech.ERROR) {
+            Log.w(TAG, "tts event=configuration_error owner=$owner voiceResult=$voiceResult rateResult=$rateResult pitchResult=$pitchResult")
         }
         return languageResult >= TextToSpeech.LANG_AVAILABLE
     }

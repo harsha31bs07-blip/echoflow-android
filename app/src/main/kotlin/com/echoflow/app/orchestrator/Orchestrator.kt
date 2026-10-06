@@ -479,10 +479,11 @@ class Orchestrator(context: Context) {
 
     private suspend fun listFlows() {
         val all = flows.all()
+        // Said with the taught values ("order a garlic bread on dominos"), never as "{item}", plus what can change.
         say(if (all.isEmpty()) "I haven't learned anything yet." else "I know ${all.size}: " + all.joinToString("; ") { f ->
-            val app = f.appLabel ?: f.appPackage
-            // "…on zomato" already names the app.
-            if (f.template.lowercase().contains(app.lowercase())) f.template else "${f.template} on $app"
+            val taught = DecisionLayer.describe(Candidate(f, 1.0, f.slots.associate { it.name to it.taughtValue }, "list"))
+            val change = f.slots.map { it.name }.filter { it != "qty" }
+            if (change.isEmpty()) taught else "$taught (you can change the ${change.joinToString(" and ")})"
         })
     }
 

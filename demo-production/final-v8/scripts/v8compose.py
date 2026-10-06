@@ -33,7 +33,8 @@ F_CAP, F_CAP2, F_SPK, F_SMALL, F_PILL = font("segoeuib.ttf", 50), font("segoeuib
 F_ROW, F_ROWB, F_HDR, F_NUM = font("segoeui.ttf", 34), font("segoeuib.ttf", 34), font("segoeuib.ttf", 28), font("segoeuib.ttf", 28)
 
 # ---- layout ----
-DEV = (92, 84, 696, 1344)
+SCR_R, BEZEL = 60, 18                # screen corner radius = the phone's own (EchoFlow's edge glow follows it)
+DEV = (102 - BEZEL, 102 - BEZEL, 102 + 565 + BEZEL, 102 + 1224 + BEZEL)   # even bezel all round
 SCR_W, SCR_H = 565, 1224
 SCR_X, SCR_Y = 102, 102
 COL_X = 780
@@ -204,10 +205,11 @@ def background():
     return (np.array(BG1) * (1 - g) + np.array(BG2) * g).astype(np.uint8)
 BASE_BG = background()
 
-def rounded_mask(w, h, r):
-    m = Image.new("L", (w, h), 0); ImageDraw.Draw(m).rounded_rectangle((0, 0, w - 1, h - 1), r, fill=255)
-    return np.array(m, dtype=np.float32)[..., None] / 255.0
-SCR_MASK = rounded_mask(SCR_W, SCR_H, 48)
+def rounded_mask(w, h, r, ss=4):
+    """Anti-aliased rounded rectangle (drawn 4x larger, then reduced)."""
+    m = Image.new("L", (w * ss, h * ss), 0); ImageDraw.Draw(m).rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), r * ss, fill=255)
+    return np.array(m.resize((w, h), Image.LANCZOS), dtype=np.float32)[..., None] / 255.0
+SCR_MASK = rounded_mask(SCR_W, SCR_H, SCR_R)
 
 _cache = {}
 def static_layer(t):
@@ -216,7 +218,10 @@ def static_layer(t):
     if key in _cache: return _cache[key]
     im = Image.fromarray(BASE_BG.copy()); d = ImageDraw.Draw(im)
     d.text((COL_X, 40), "EchoFlow", font=F_BRAND, fill=NAVY)
-    d.rounded_rectangle(DEV, 70, fill=(14, 27, 51))
+    # The device frame, anti-aliased and concentric with the screen corners.
+    dw, dh = DEV[2] - DEV[0], DEV[3] - DEV[1]
+    dm = (rounded_mask(dw, dh, SCR_R + BEZEL)[..., 0] * 255).astype(np.uint8)
+    im.paste(Image.new("RGB", (dw, dh), (14, 27, 51)), (DEV[0], DEV[1]), Image.fromarray(dm, "L"))
     d.text((COL_X, 112), ch[1], font=F_CHAP, fill=BLUE)
     d.text((COL_X, 150), ch[2], font=F_TITLE, fill=NAVY)
     d.text((COL_X + 4, 262), ch[3], font=F_SUB, fill=MUTED)
